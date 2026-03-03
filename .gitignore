@@ -1,0 +1,66 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Python / MicroPython tooling
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+
+# MicroPython runtime artifacts (if mirrored locally)
+boot_state.json
+app_prev/
+app_staging/
+
+# Node / TypeScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# .NET / C#
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+
+# Common package artifacts
+*.egg-info/
+*.whl
+*.zip
+*.tar.gz
