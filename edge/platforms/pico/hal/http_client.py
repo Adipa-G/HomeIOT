@@ -1,6 +1,4 @@
-from edge.shared.hal.interfaces import IHttpClient
+from edge.shared.hal.http_client import MicroPythonHttpClient as PicoHttpClient
 
 
-class PicoHttpClient(IHttpClient):
-    def __init__(self):
-        raise NotImplementedError("PicoHttpClient is not implemented yet")
+__all__ = ["PicoHttpClient"]

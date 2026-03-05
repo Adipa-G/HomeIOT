@@ -1,6 +1,4 @@
-from edge.shared.hal.interfaces import IFileSystem
+from edge.shared.hal.filesystem import MicroPythonFileSystem as PicoFileSystem
 
 
-class PicoFileSystem(IFileSystem):
-    def __init__(self):
-        raise NotImplementedError("PicoFileSystem is not implemented yet")
+__all__ = ["PicoFileSystem"]

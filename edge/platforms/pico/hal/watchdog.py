@@ -1,6 +1,4 @@
-from edge.shared.hal.interfaces import IWatchdog
+from edge.shared.hal.watchdog import MicroPythonWatchdog as PicoWatchdog
 
 
-class PicoWatchdog(IWatchdog):
-    def __init__(self):
-        raise NotImplementedError("PicoWatchdog is not implemented yet")
+__all__ = ["PicoWatchdog"]

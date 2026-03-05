@@ -1,6 +1,4 @@
-from edge.shared.hal.interfaces import ISystem
+from edge.shared.hal.system import MicroPythonSystem as PicoSystem
 
 
-class PicoSystem(ISystem):
-    def __init__(self):
-        raise NotImplementedError("PicoSystem is not implemented yet")
+__all__ = ["PicoSystem"]

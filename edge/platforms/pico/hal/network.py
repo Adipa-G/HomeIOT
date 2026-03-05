@@ -1,6 +1,4 @@
-from edge.shared.hal.interfaces import INetwork
+from edge.shared.hal.network import MicroPythonNetwork as PicoNetwork
 
 
-class PicoNetwork(INetwork):
-    def __init__(self):
-        raise NotImplementedError("PicoNetwork is not implemented yet")
+__all__ = ["PicoNetwork"]
