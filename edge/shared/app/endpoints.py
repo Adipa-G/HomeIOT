@@ -1,0 +1,5 @@
+REGISTER_DEVICE_PATH = "/api/devices/register"
+HEARTBEAT_PATH = "/api/devices/heartbeat"
+OTA_CHECK_PATH = "/api/ota/check"
+OTA_FILE_PATH = "/api/ota/file"
+LOGS_PATH = "/api/devices/logs"

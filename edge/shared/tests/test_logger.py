@@ -1,0 +1,111 @@
+from edge.shared.app.config import LoggingConfig
+from edge.shared.app.endpoints import LOGS_PATH
+from edge.shared.app.logger import EdgeLogger
+from edge.shared.tests.mocks.mock_http_client import MockHttpClient
+
+
+class ControlledSystem:
+    def __init__(self):
+        self.now = 0
+
+    def reset(self):
+        return None
+
+    def unique_id(self):
+        return "mock-device-id"
+
+    def time_ms(self):
+        self.now += 100
+        return self.now
+
+    def sleep_ms(self, milliseconds):
+        self.now += milliseconds
+
+
+def test_logger_flushes_on_threshold():
+    system = ControlledSystem()
+    http = MockHttpClient()
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=120,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=http,
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("event-1")
+    logger.info("event-2")
+    logger.info("event-3")
+
+    post_calls = [call for call in http.calls if call[0] == "POST" and call[1].endswith(LOGS_PATH)]
+    assert len(post_calls) >= 1
+
+
+def test_logger_flushes_on_interval_tick():
+    system = ControlledSystem()
+    http = MockHttpClient()
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=4096,
+        flush_interval_ms=150,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=http,
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("single-event")
+    logger.tick()
+
+    post_calls = [call for call in http.calls if call[0] == "POST" and call[1].endswith(LOGS_PATH)]
+    assert len(post_calls) == 1
+
+
+def test_logger_drops_newest_when_buffer_full_and_reports_truncation():
+    system = ControlledSystem()
+    http = MockHttpClient()
+
+    http.add_json_response("POST", "http://localhost:8000" + LOGS_PATH, 500, {"ok": False})
+
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=300,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=http,
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("A" * 120)
+    logger.info("B" * 120)
+    logger.info("C" * 120)
+    logger.info("D" * 120)
+
+    # Switch endpoint to success and flush; payload should include truncation metadata.
+    http.add_json_response("POST", "http://localhost:8000" + LOGS_PATH, 200, {"ok": True})
+    ok = logger.flush("manual")
+
+    assert ok is True
+    method, url, data, _headers = http.calls[-1]
+    assert method == "POST"
+    assert url == "http://localhost:8000" + LOGS_PATH
+    assert data["truncated"] is True
+    assert data["dropped_count"] > 0

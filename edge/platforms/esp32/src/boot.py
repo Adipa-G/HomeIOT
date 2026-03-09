@@ -1,12 +1,14 @@
 import json
 
 from edge.shared.app.boot_manager import BootManager
+from edge.shared.app.config import CONFIG_PATH, LoggingConfig
+from edge.shared.app.logger import EdgeLogger
 from edge.platforms.esp32.hal.filesystem import MicroPythonFileSystem
 from edge.platforms.esp32.hal.system import MicroPythonSystem
 from edge.platforms.esp32.hal.watchdog import MicroPythonWatchdog
 
 
-def _load_max_attempts(fs, path="config.json", default_value=3):
+def _load_max_attempts(fs, path=CONFIG_PATH, default_value=3):
     if not fs.exists(path):
         return default_value
     try:
@@ -20,11 +22,16 @@ def run_boot() -> None:
     fs = MicroPythonFileSystem()
     system = MicroPythonSystem()
     watchdog = MicroPythonWatchdog()
+    logger = EdgeLogger(system=system, logging_config=LoggingConfig(enabled_uplink=False))
 
+    logger.info("Boot sequence started")
     watchdog.init(timeout_ms=30000)
+    logger.info("Watchdog initialized", {"timeout_ms": 30000})
     max_attempts = _load_max_attempts(fs)
+    logger.info("Boot config loaded", {"max_boot_attempts": max_attempts})
 
-    boot_manager = BootManager(fs=fs, system=system, max_attempts=max_attempts)
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=max_attempts, logger=logger)
+    logger.info("Running boot manager")
     boot_manager.on_boot()
 
 

@@ -6,5 +6,11 @@
   "wifi_password": "replace-with-password",
   "heartbeat_interval_ms": 30000,
   "max_boot_attempts": 3,
-  "current_version": "0.0.0"
+  "current_version": "0.0.0",
+  "logging": {
+    "enabled_uplink": true,
+    "buffer_max_bytes": 4096,
+    "flush_interval_ms": 30000,
+    "min_level": "INFO"
+  }
 }

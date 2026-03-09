@@ -13,6 +13,12 @@ import json
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from edge.shared.app.secret_crypto import SCHEME, encrypt_secret
+
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -77,12 +83,25 @@ def main(argv: list[str]) -> int:
 
     template["device_id"] = args.device_id
     template["api_url"] = args.api_url.rstrip("/")
-    template["api_key"] = args.api_key
+    template.pop("api_key", None)
+    template.pop("wifi_password", None)
+    template["api_key_enc"] = encrypt_secret(args.api_key, args.device_id, "api_key")
     template["wifi_ssid"] = args.wifi_ssid
-    template["wifi_password"] = args.wifi_password
+    template["wifi_password_enc"] = encrypt_secret(args.wifi_password, args.device_id, "wifi_password")
     template["heartbeat_interval_ms"] = int(args.heartbeat_interval_ms)
     template["max_boot_attempts"] = int(args.max_boot_attempts)
     template["current_version"] = args.current_version
+    if not isinstance(template.get("logging"), dict):
+        template["logging"] = {
+            "enabled_uplink": True,
+            "buffer_max_bytes": 4096,
+            "flush_interval_ms": 30000,
+            "min_level": "INFO",
+        }
+    template["security"] = {
+        "binding": "unique_id",
+        "scheme": SCHEME,
+    }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(template, indent=2) + "\n", encoding="utf-8")
