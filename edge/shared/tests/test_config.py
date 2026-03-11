@@ -32,6 +32,31 @@ def test_load_valid_config():
     assert config.device_id == "esp32-001"
     assert config.api_url == "http://localhost:8000"
     assert config.max_boot_attempts == 3
+    assert config.dev_poll_interval_ms == 2000
+    assert config.module_assignment_poll_interval_ms == 60000
+
+
+def test_load_control_polling_config_with_bounds():
+    fs = MockFileSystem()
+    _write_config(
+        fs,
+        {
+            "device_id": "esp32-001",
+            "api_url": "http://localhost:8000",
+            "api_key": "key",
+            "wifi_ssid": "ssid",
+            "wifi_password": "pass",
+            "heartbeat_interval_ms": 5000,
+            "max_boot_attempts": 3,
+            "dev_poll_interval_ms": 100,
+            "module_assignment_poll_interval_ms": 500,
+        },
+    )
+
+    config = Config.load(fs)
+
+    assert config.dev_poll_interval_ms == 500
+    assert config.module_assignment_poll_interval_ms == 1000
 
 
 def test_load_missing_field_raises():

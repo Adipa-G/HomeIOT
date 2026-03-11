@@ -63,13 +63,25 @@ def _load_and_validate_config(config_path: Path) -> None:
         missing_text = ", ".join(missing)
         raise DeployError(f"Config template missing required keys: {missing_text}")
 
+    _validate_placeholder_value(payload, "wifi_ssid")
     _validate_secret_payload(payload, "api_key")
     _validate_secret_payload(payload, "wifi_password")
     _validate_logging_payload(payload.get("logging"))
 
 
+def _validate_placeholder_value(payload: dict, key_name: str) -> None:
+    value = payload.get(key_name)
+    if value is None:
+        return
+    if not isinstance(value, str) or not value.strip():
+        raise DeployError(f"Config field must be a non-empty string: {key_name}")
+    if value.strip().lower().startswith("replace-with-"):
+        raise DeployError(f"Config field still contains placeholder value: {key_name}")
+
+
 def _validate_secret_payload(payload: dict, key_name: str) -> None:
     if key_name in payload:
+        _validate_placeholder_value(payload, key_name)
         return
 
     enc_key = key_name + "_enc"
@@ -164,6 +176,8 @@ def _verify_remote_imports(port: str, platform: str) -> None:
         "import edge.shared.app.endpoints\n"
         "import edge.shared.app.config\n"
         "import edge.shared.app.boot_manager\n"
+        "import edge.shared.app.control_loop\n"
+        "import edge.shared.app.module_runtime\n"
         f"import edge.platforms.{platform}.hal.filesystem\n"
         f"import edge.platforms.{platform}.hal.network\n"
         "print('IMPORTS_OK')\n"

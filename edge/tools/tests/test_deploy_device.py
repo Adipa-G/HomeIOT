@@ -15,6 +15,33 @@ def test_validate_logging_payload_rejects_small_buffer():
         deploy_device._validate_logging_payload({"buffer_max_bytes": 256})
 
 
+def test_load_and_validate_config_rejects_placeholder_plaintext_values(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        '{"device_id":"esp32-001","api_url":"http://localhost:8000","api_key":"replace-with-device-api-key","wifi_ssid":"replace-with-ssid","wifi_password":"replace-with-password","heartbeat_interval_ms":30000,"max_boot_attempts":3}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(deploy_device.DeployError):
+        deploy_device._load_and_validate_config(config_path)
+
+
+def test_verify_remote_imports_checks_shared_control_modules(monkeypatch):
+    calls = []
+
+    def fake_run_mpremote(port: str, args, phase: str):
+        calls.append((port, list(args), phase))
+        return types.SimpleNamespace(returncode=0, stdout="IMPORTS_OK\n")
+
+    monkeypatch.setattr(deploy_device, "_run_mpremote", fake_run_mpremote)
+
+    deploy_device._verify_remote_imports("COM5", "esp32")
+
+    assert calls[0][2] == "remote import verification"
+    assert "import edge.shared.app.control_loop" in calls[0][1][1]
+    assert "import edge.shared.app.module_runtime" in calls[0][1][1]
+
+
 def test_maybe_copy_config_backs_up_existing_config(monkeypatch):
     calls = []
 

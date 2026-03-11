@@ -1,0 +1,97 @@
+from edge.shared.app.dev_command_runtime import execute_dev_command
+from edge.shared.tests.mocks.mock_system import MockSystem
+
+
+class _FakeDeviceControl:
+    def __init__(self, report_ok=True):
+        self.report_ok = report_ok
+        self.calls = []
+
+    def report_dev_command_result(self, command_id, payload):
+        self.calls.append((command_id, payload))
+        return self.report_ok
+
+
+class _FakeLogger:
+    def __init__(self):
+        self.warn_calls = 0
+
+    def warn(self, *_args, **_kwargs):
+        self.warn_calls += 1
+
+
+def test_execute_dev_command_success_reports_result():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={
+            "command_id": "cmd-1",
+            "revision_hash": "r1",
+            "dedupe_token": "cmd-1:r1",
+            "code": "print('hello')",
+            "timeout_ms": 5000,
+        },
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    assert result["status"] == "success"
+    assert result["reported"] is True
+    assert len(device_control.calls) == 1
+    payload = device_control.calls[0][1]
+    assert payload["status"] == "success"
+    assert payload["stdout"] == "hello"
+    assert payload["stderr"] == ""
+
+
+def test_execute_dev_command_error_reports_stderr():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-2", "code": "raise ValueError('boom')", "timeout_ms": 5000},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    assert result["status"] == "error"
+    payload = device_control.calls[0][1]
+    assert payload["status"] == "error"
+    assert "ValueError: boom" in payload["stderr"]
+
+
+def test_execute_dev_command_timeout_sets_timeout_status():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-3", "code": "print('slow')", "timeout_ms": 1},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    assert result["status"] == "timeout"
+    payload = device_control.calls[0][1]
+    assert payload["status"] == "timeout"
+    assert payload["exit_code"] == 124
+
+
+def test_execute_dev_command_logs_warn_when_report_fails():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=False)
+    logger = _FakeLogger()
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-4", "code": "print('x')"},
+        logger=logger,
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    assert result["reported"] is False
+    assert logger.warn_calls >= 1

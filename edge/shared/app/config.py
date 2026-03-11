@@ -28,6 +28,8 @@ class Config:
     wifi_password: str
     heartbeat_interval_ms: int
     max_boot_attempts: int
+    dev_poll_interval_ms: int = 2000
+    module_assignment_poll_interval_ms: int = 60000
     current_version: str = "0.0.0"
     logging: LoggingConfig = field(default_factory=LoggingConfig)
 
@@ -58,6 +60,8 @@ class Config:
             wifi_password=wifi_password,
             heartbeat_interval_ms=int(data["heartbeat_interval_ms"]),
             max_boot_attempts=int(data["max_boot_attempts"]),
+            dev_poll_interval_ms=max(500, int(data.get("dev_poll_interval_ms", 2000))),
+            module_assignment_poll_interval_ms=max(1000, int(data.get("module_assignment_poll_interval_ms", 60000))),
             current_version=data.get("current_version", "0.0.0"),
             logging=cls._load_logging_config(data.get("logging")),
         )

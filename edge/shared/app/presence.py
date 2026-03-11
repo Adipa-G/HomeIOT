@@ -1,3 +1,5 @@
+import json
+
 from edge.shared.app.config import Config
 from edge.shared.app.endpoints import HEARTBEAT_PATH, REGISTER_DEVICE_PATH
 from edge.shared.hal.interfaces import IHttpClient, INetwork, ISystem
@@ -31,6 +33,24 @@ class PresenceService:
         return ok
 
     def heartbeat(self) -> bool:
+        response = self._post_heartbeat()
+        ok = response.status_code == 200
+        if not ok:
+            self._log_warn("Heartbeat failed", {"status_code": response.status_code})
+        return ok
+
+    def heartbeat_with_metadata(self):
+        response = self._post_heartbeat()
+        if response.status_code != 200:
+            self._log_warn("Heartbeat failed", {"status_code": response.status_code})
+            return None
+        try:
+            return json.loads(response.text) if response.text else {}
+        except Exception:
+            self._log_warn("Heartbeat metadata parse failed")
+            return {}
+
+    def _post_heartbeat(self):
         url = self._config.api_url + HEARTBEAT_PATH
         payload = {
             "device_id": self._config.device_id,
@@ -38,12 +58,7 @@ class PresenceService:
         }
 
         self._log_info("Sending heartbeat", {"url": url})
-
-        response = self._http.post(url, payload, headers=self._auth_headers())
-        ok = response.status_code == 200
-        if not ok:
-            self._log_warn("Heartbeat failed", {"status_code": response.status_code})
-        return ok
+        return self._http.post(url, payload, headers=self._auth_headers())
 
     def run_heartbeat_loop(self, interval_ms: int, max_iterations=None) -> None:
         count = 0

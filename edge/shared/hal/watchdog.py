@@ -2,16 +2,21 @@ from edge.shared.hal.interfaces import IWatchdog
 
 
 class MicroPythonWatchdog(IWatchdog):
+    _shared_wdt = None
+
     def __init__(self):
-        self._wdt = None
+        self._wdt = self.__class__._shared_wdt
 
     def init(self, timeout_ms: int) -> None:
-        try:
-            import machine
-        except ImportError as exc:  # pragma: no cover - desktop fallback
-            raise RuntimeError("machine module is not available") from exc
-        self._wdt = machine.WDT(timeout=timeout_ms)
+        if self.__class__._shared_wdt is None:
+            try:
+                import machine  # pyright: ignore[reportMissingImports]
+            except ImportError as exc:  # pragma: no cover - desktop fallback
+                raise RuntimeError("machine module is not available") from exc
+            self.__class__._shared_wdt = machine.WDT(timeout=timeout_ms)
+        self._wdt = self.__class__._shared_wdt
 
     def feed(self) -> None:
-        if self._wdt is not None:
-            self._wdt.feed()
+        target = self._wdt or self.__class__._shared_wdt
+        if target is not None:
+            target.feed()

@@ -32,6 +32,7 @@ def test_register_sends_expected_payload_and_headers():
     assert url == "http://localhost:8000/api/devices/register"
     assert data["device_id"] == "esp32-001"
     assert data["ip"] == "192.168.1.30"
+    assert headers["X-Device-ID"] == "esp32-001"
     assert headers["X-Api-Key"] == "secret"
 
 
@@ -49,6 +50,20 @@ def test_heartbeat_posts_device_identity():
     assert url == "http://localhost:8000/api/devices/heartbeat"
     assert data["device_id"] == "esp32-001"
     assert headers["X-Device-ID"] == "esp32-001"
+    assert headers["X-Api-Key"] == "secret"
+
+
+def test_heartbeat_with_metadata_returns_payload():
+    http = MockHttpClient()
+    network = MockNetwork()
+    system = MockSystem()
+    service = PresenceService(http=http, network=network, system=system, config=_config())
+
+    http.add_json_response("POST", "http://localhost:8000/api/devices/heartbeat", 200, {"mode": "development"})
+
+    payload = service.heartbeat_with_metadata()
+
+    assert payload["mode"] == "development"
 
 
 def test_heartbeat_loop_runs_multiple_iterations():
