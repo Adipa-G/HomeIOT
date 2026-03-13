@@ -25,8 +25,8 @@ def run_boot() -> None:
     logger = EdgeLogger(system=system, logging_config=LoggingConfig(enabled_uplink=False))
 
     logger.info("Boot sequence started")
-    watchdog.init(timeout_ms=30000)
-    logger.info("Watchdog initialized", {"timeout_ms": 30000})
+    watchdog.init(timeout_ms=120000)
+    logger.info("Watchdog initialized", {"timeout_ms": 120000})
     max_attempts = _load_max_attempts(fs)
     logger.info("Boot config loaded", {"max_boot_attempts": max_attempts})
 

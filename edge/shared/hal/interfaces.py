@@ -49,6 +49,12 @@ class INetwork:
     def get_ip(self) -> str:
         raise NotImplementedError()
 
+    def set_power_save(self, mode: str) -> None:
+        raise NotImplementedError()
+
+    def interface_active(self, enable: bool) -> None:
+        raise NotImplementedError()
+
 
 class HttpResponse:
     def __init__(self, status_code: int, text: str, content: bytes = b""):

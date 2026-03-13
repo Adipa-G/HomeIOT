@@ -4,13 +4,25 @@
   "api_key": "replace-with-device-api-key",
   "wifi_ssid": "replace-with-ssid",
   "wifi_password": "replace-with-password",
-  "heartbeat_interval_ms": 30000,
+  "heartbeat_interval_ms": 60000,
   "max_boot_attempts": 3,
   "current_version": "0.0.0",
   "logging": {
     "enabled_uplink": true,
     "buffer_max_bytes": 4096,
-    "flush_interval_ms": 30000,
+    "flush_interval_ms": 60000,
     "min_level": "INFO"
+  },
+  "power": {
+    "enabled": true,
+    "production_sleep_min_ms": 60000,
+    "production_sleep_max_ms": 60000,
+    "development_sleep_min_ms": 50,
+    "development_sleep_max_ms": 1000,
+    "network_retry_base_ms": 5000,
+    "network_retry_max_ms": 60000,
+    "wifi_power_save_enabled": true,
+    "wifi_power_save_production_mode": "modem",
+    "wifi_power_save_development_mode": "none"
   }
 }

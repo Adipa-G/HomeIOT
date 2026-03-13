@@ -1,5 +1,9 @@
 from edge.shared.app.config import Config
-from edge.shared.app.control_loop import run_control_loop
+from edge.shared.app.control_loop import (
+    _ensure_network_connected,
+    _requested_network_power_mode,
+    run_control_loop,
+)
 
 
 class _FakeSystem:
@@ -45,6 +49,15 @@ class _FakeNetwork:
 
     def get_ip(self):
         return "192.168.1.20"
+
+
+class _FakePowerNetwork(_FakeNetwork):
+    def __init__(self, connected=True, fail_connect=False):
+        super().__init__(connected=connected, fail_connect=fail_connect)
+        self.power_modes = []
+
+    def set_power_save(self, mode):
+        self.power_modes.append(mode)
 
 
 class _FakeWatchdog:
@@ -356,3 +369,284 @@ def test_control_loop_handles_module_status_flush_exception_and_continues():
 
     assert logger.warn_calls >= 1
     assert module_runtime.tick_calls == 2
+
+
+def test_control_loop_uses_longer_idle_sleep_in_production_mode():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        max_iterations=3,
+    )
+
+    assert all(ms >= 500 for ms in system.sleep_calls)
+
+
+def test_control_loop_applies_exponential_reconnect_backoff_when_wifi_down():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    network = _FakeNetwork(connected=False, fail_connect=True)
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        network=network,
+        max_iterations=120,
+    )
+
+    # With now advancing by 100ms per loop, 120 loops reaches 12s:
+    # retries should occur at ~0s and ~5s (next at ~15s is out of range).
+    assert network.connect_calls == 2
+
+
+def test_ensure_network_connected_backoff_sequence_and_cap():
+    class _StaticConfig:
+        wifi_ssid = "ssid"
+        wifi_password = "pass"
+
+    logger = _FakeLogger()
+    network = _FakeNetwork(connected=False, fail_connect=True)
+
+    state = _ensure_network_connected(
+        network=network,
+        config=_StaticConfig(),
+        logger=logger,
+        now_ms=0,
+        next_retry_ms=0,
+        retry_interval_ms=5000,
+        retry_base_ms=5000,
+        retry_max_ms=60000,
+    )
+    assert state["connected"] is False
+    assert state["next_retry_ms"] == 5000
+    assert state["retry_interval_ms"] == 10000
+
+    state = _ensure_network_connected(
+        network=network,
+        config=_StaticConfig(),
+        logger=logger,
+        now_ms=5000,
+        next_retry_ms=5000,
+        retry_interval_ms=10000,
+        retry_base_ms=5000,
+        retry_max_ms=60000,
+    )
+    assert state["next_retry_ms"] == 15000
+    assert state["retry_interval_ms"] == 20000
+
+    state = _ensure_network_connected(
+        network=network,
+        config=_StaticConfig(),
+        logger=logger,
+        now_ms=15000,
+        next_retry_ms=15000,
+        retry_interval_ms=20000,
+        retry_base_ms=5000,
+        retry_max_ms=60000,
+    )
+    assert state["next_retry_ms"] == 35000
+    assert state["retry_interval_ms"] == 40000
+
+    state = _ensure_network_connected(
+        network=network,
+        config=_StaticConfig(),
+        logger=logger,
+        now_ms=35000,
+        next_retry_ms=35000,
+        retry_interval_ms=40000,
+        retry_base_ms=5000,
+        retry_max_ms=60000,
+    )
+    assert state["next_retry_ms"] == 75000
+    assert state["retry_interval_ms"] == 60000
+
+    state = _ensure_network_connected(
+        network=network,
+        config=_StaticConfig(),
+        logger=logger,
+        now_ms=36000,
+        next_retry_ms=75000,
+        retry_interval_ms=60000,
+        retry_base_ms=5000,
+        retry_max_ms=60000,
+    )
+    assert state["next_retry_ms"] == 75000
+    assert state["retry_interval_ms"] == 60000
+
+
+def test_ensure_network_connected_resets_retry_interval_after_success():
+    class _StaticConfig:
+        wifi_ssid = "ssid"
+        wifi_password = "pass"
+
+    logger = _FakeLogger()
+    network = _FakeNetwork(connected=False, fail_connect=False)
+
+    state = _ensure_network_connected(
+        network=network,
+        config=_StaticConfig(),
+        logger=logger,
+        now_ms=10000,
+        next_retry_ms=10000,
+        retry_interval_ms=60000,
+        retry_base_ms=5000,
+        retry_max_ms=60000,
+    )
+
+    assert state["connected"] is True
+    assert state["next_retry_ms"] == 10000
+    assert state["retry_interval_ms"] == 5000
+
+
+def test_control_loop_applies_wifi_power_modes_by_mode_when_enabled():
+    system = _FakeSystem()
+    presence = _FakePresence(
+        {
+            "mode": "production",
+            "next_heartbeat_ms": 1000,
+            "dev_poll_interval_ms": 2000,
+            "module_assignment_poll_interval_ms": 60000,
+        }
+    )
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    network = _FakePowerNetwork(connected=True)
+    config = _config()
+    config.power.wifi_power_save_enabled = True
+    config.power.wifi_power_save_production_mode = "modem"
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        network=network,
+        max_iterations=3,
+    )
+
+    assert network.power_modes == ["modem"]
+
+
+def test_requested_network_power_mode_uses_development_override():
+    config = _config()
+    config.power.wifi_power_save_enabled = True
+    config.power.wifi_power_save_production_mode = "modem"
+    config.power.wifi_power_save_development_mode = "none"
+
+    assert _requested_network_power_mode(config, "production") == "modem"
+    assert _requested_network_power_mode(config, "development") == "none"
+
+
+def _config_60s():
+    from edge.shared.app.config import PowerConfig
+    cfg = _config()
+    cfg.heartbeat_interval_ms = 60000
+    cfg.power = PowerConfig(
+        enabled=True,
+        production_sleep_min_ms=60000,
+        production_sleep_max_ms=60000,
+        development_sleep_min_ms=50,
+        development_sleep_max_ms=1000,
+        network_retry_base_ms=5000,
+        network_retry_max_ms=60000,
+        wifi_power_save_enabled=True,
+        wifi_power_save_production_mode="modem",
+        wifi_power_save_development_mode="none",
+    )
+    return cfg
+
+
+def test_production_60s_cadence_sleep_is_exactly_60000():
+    """Production loop should sleep exactly 60s when all timers are aligned."""
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 60000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config_60s(),
+        max_iterations=3,
+    )
+
+    # After first heartbeat the scheduler should reach ~60000ms sleep.
+    # System advances by 100ms per call so only first iteration fires immediately;
+    # subsequent ones must wait full window — all sleeps should be 60000ms.
+    assert all(ms == 60000 for ms in system.sleep_calls[1:])
+
+
+def test_development_mode_sleep_remains_short_with_60s_config():
+    """Switching to development keeps sleep under 1000ms regardless of 60s power config."""
+    system = _FakeSystem()
+    presence = _FakePresence(
+        {
+            "mode": "development",
+            "next_heartbeat_ms": 60000,
+            "dev_poll_interval_ms": 2000,
+            "module_assignment_poll_interval_ms": 60000,
+        }
+    )
+    device_control = _FakeDeviceControl(
+        assignment=None,
+        command={"command_id": "cmd-1", "revision_hash": "r1"},
+    )
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config_60s(),
+        max_iterations=10,
+    )
+
+    assert all(ms <= 1000 for ms in system.sleep_calls)
+    assert device_control.dev_calls >= 1
+
+
+def test_production_mode_does_not_poll_dev_commands_with_60s_config():
+    """Production mode must not touch the dev command endpoint, even with 60s config."""
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 60000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config_60s(),
+        max_iterations=5,
+    )
+
+    assert device_control.dev_calls == 0

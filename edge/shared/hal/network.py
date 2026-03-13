@@ -39,6 +39,25 @@ class MicroPythonNetwork(INetwork):
     def get_ip(self) -> str:
         return self._get_wlan().ifconfig()[0]
 
+    def set_power_save(self, mode: str) -> None:
+        wlan = self._get_wlan()
+        normalized = str(mode or "none").lower()
+        pm_value = {
+            "none": 0,
+            "modem": 1,
+            "light": 2,
+        }.get(normalized, 0)
+
+        if hasattr(wlan, "config"):
+            try:
+                wlan.config(pm=pm_value)
+            except Exception:
+                # Not all MicroPython ports expose pm config.
+                pass
+
+    def interface_active(self, enable: bool) -> None:
+        self._get_wlan().active(bool(enable))
+
     @staticmethod
     def _ticks_ms(time_mod):
         if hasattr(time_mod, "ticks_ms"):

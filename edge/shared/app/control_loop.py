@@ -1,6 +1,15 @@
 from edge.shared.app.dev_command_runtime import execute_dev_command
 
 
+NETWORK_RETRY_BASE_MS = 5000
+NETWORK_RETRY_MAX_MS = 60000
+
+PRODUCTION_SLEEP_MIN_MS = 500
+PRODUCTION_SLEEP_MAX_MS = 5000
+DEVELOPMENT_SLEEP_MIN_MS = 50
+DEVELOPMENT_SLEEP_MAX_MS = 1000
+
+
 def run_control_loop(
     system,
     presence,
@@ -16,7 +25,16 @@ def run_control_loop(
     heartbeat_interval_ms = config.heartbeat_interval_ms
     dev_poll_interval_ms = config.dev_poll_interval_ms
     module_poll_interval_ms = config.module_assignment_poll_interval_ms
-    network_retry_interval_ms = 5000
+    power_cfg = getattr(config, "power", None)
+    production_sleep_min_ms = getattr(power_cfg, "production_sleep_min_ms", PRODUCTION_SLEEP_MIN_MS)
+    production_sleep_max_ms = getattr(power_cfg, "production_sleep_max_ms", PRODUCTION_SLEEP_MAX_MS)
+    development_sleep_min_ms = getattr(power_cfg, "development_sleep_min_ms", DEVELOPMENT_SLEEP_MIN_MS)
+    development_sleep_max_ms = getattr(power_cfg, "development_sleep_max_ms", DEVELOPMENT_SLEEP_MAX_MS)
+    network_retry_base_ms = getattr(power_cfg, "network_retry_base_ms", NETWORK_RETRY_BASE_MS)
+    network_retry_max_ms = getattr(power_cfg, "network_retry_max_ms", NETWORK_RETRY_MAX_MS)
+
+    network_retry_interval_ms = network_retry_base_ms
+    last_applied_power_mode = None
 
     next_heartbeat_ms = 0
     next_dev_poll_ms = 0
@@ -43,9 +61,14 @@ def run_control_loop(
             now_ms=now,
             next_retry_ms=next_network_retry_ms,
             retry_interval_ms=network_retry_interval_ms,
+            retry_base_ms=network_retry_base_ms,
+            retry_max_ms=network_retry_max_ms,
         )
         if network is not None and not network_ready["connected"]:
             next_network_retry_ms = network_ready["next_retry_ms"]
+            network_retry_interval_ms = network_ready["retry_interval_ms"]
+        elif network is not None and network_ready["connected"]:
+            network_retry_interval_ms = network_retry_base_ms
 
         if network is None or network_ready["connected"]:
             if hasattr(module_runtime, "flush_pending_timeout_result"):
@@ -117,6 +140,12 @@ def run_control_loop(
                     )
                 next_dev_poll_ms = now + dev_poll_interval_ms
 
+        if network is not None and network_ready["connected"]:
+            requested_power_mode = _requested_network_power_mode(config, mode)
+            if requested_power_mode != last_applied_power_mode:
+                if _try_apply_network_power_mode(network, requested_power_mode, logger):
+                    last_applied_power_mode = requested_power_mode
+
         runtime_tick = module_runtime.tick(now_ms=now)
         if runtime_tick.get("reset_requested"):
             return
@@ -130,14 +159,51 @@ def run_control_loop(
             sleep_candidates.append(next_dev_poll_ms)
 
         sleep_until = min(sleep_candidates)
-        sleep_ms = max(50, min(1000, sleep_until - now))
+        if mode == "development":
+            sleep_ms = max(development_sleep_min_ms, min(development_sleep_max_ms, sleep_until - now))
+        else:
+            sleep_ms = max(production_sleep_min_ms, min(production_sleep_max_ms, sleep_until - now))
         system.sleep_ms(sleep_ms)
         iterations += 1
 
 
-def _ensure_network_connected(network, config, logger, now_ms, next_retry_ms, retry_interval_ms):
+def _requested_network_power_mode(config, mode):
+    power_cfg = getattr(config, "power", None)
+    if power_cfg is None or not getattr(power_cfg, "wifi_power_save_enabled", False):
+        return "none"
+    if mode == "development":
+        return str(getattr(power_cfg, "wifi_power_save_development_mode", "none") or "none").lower()
+    return str(getattr(power_cfg, "wifi_power_save_production_mode", "modem") or "modem").lower()
+
+
+def _try_apply_network_power_mode(network, mode, logger):
+    if not hasattr(network, "set_power_save"):
+        return False
+    try:
+        network.set_power_save(mode)
+        logger.info("WiFi power mode applied", {"mode": mode})
+        return True
+    except Exception as exc:
+        logger.warn("WiFi power mode apply failed", {"mode": mode, "error": str(exc)})
+        return False
+
+
+def _ensure_network_connected(
+    network,
+    config,
+    logger,
+    now_ms,
+    next_retry_ms,
+    retry_interval_ms,
+    retry_base_ms,
+    retry_max_ms,
+):
     if network is None:
-        return {"connected": True, "next_retry_ms": next_retry_ms}
+        return {
+            "connected": True,
+            "next_retry_ms": next_retry_ms,
+            "retry_interval_ms": retry_base_ms,
+        }
 
     try:
         connected = network.is_connected()
@@ -146,18 +212,35 @@ def _ensure_network_connected(network, config, logger, now_ms, next_retry_ms, re
         connected = False
 
     if connected:
-        return {"connected": True, "next_retry_ms": now_ms}
+        return {
+            "connected": True,
+            "next_retry_ms": now_ms,
+            "retry_interval_ms": retry_base_ms,
+        }
 
     if now_ms < next_retry_ms:
-        return {"connected": False, "next_retry_ms": next_retry_ms}
+        return {
+            "connected": False,
+            "next_retry_ms": next_retry_ms,
+            "retry_interval_ms": retry_interval_ms,
+        }
 
     try:
         network.connect(config.wifi_ssid, config.wifi_password)
         logger.info("WiFi connected", {"ip": network.get_ip()})
-        return {"connected": True, "next_retry_ms": now_ms}
+        return {
+            "connected": True,
+            "next_retry_ms": now_ms,
+            "retry_interval_ms": retry_base_ms,
+        }
     except Exception as exc:
         logger.warn("WiFi reconnect failed", {"error": str(exc)})
-        return {"connected": False, "next_retry_ms": now_ms + retry_interval_ms}
+        next_interval = min(retry_max_ms, max(retry_base_ms, retry_interval_ms * 2))
+        return {
+            "connected": False,
+            "next_retry_ms": now_ms + retry_interval_ms,
+            "retry_interval_ms": next_interval,
+        }
 
 
 def _safe_watchdog_feed(watchdog, logger):

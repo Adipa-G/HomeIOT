@@ -20,6 +20,20 @@ class LoggingConfig:
 
 
 @dataclass
+class PowerConfig:
+    enabled: bool = True
+    production_sleep_min_ms: int = 500
+    production_sleep_max_ms: int = 5000
+    development_sleep_min_ms: int = 50
+    development_sleep_max_ms: int = 1000
+    network_retry_base_ms: int = 5000
+    network_retry_max_ms: int = 60000
+    wifi_power_save_enabled: bool = False
+    wifi_power_save_production_mode: str = "modem"
+    wifi_power_save_development_mode: str = "none"
+
+
+@dataclass
 class Config:
     device_id: str
     api_url: str
@@ -32,6 +46,7 @@ class Config:
     module_assignment_poll_interval_ms: int = 60000
     current_version: str = "0.0.0"
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    power: PowerConfig = field(default_factory=PowerConfig)
 
     @classmethod
     def load(cls, fs: IFileSystem, path: str = CONFIG_PATH, system: Optional[ISystem] = None):
@@ -64,6 +79,7 @@ class Config:
             module_assignment_poll_interval_ms=max(1000, int(data.get("module_assignment_poll_interval_ms", 60000))),
             current_version=data.get("current_version", "0.0.0"),
             logging=cls._load_logging_config(data.get("logging")),
+            power=cls._load_power_config(data.get("power")),
         )
 
     @staticmethod
@@ -78,6 +94,34 @@ class Config:
             buffer_max_bytes=max(512, int(payload.get("buffer_max_bytes", 4096))),
             flush_interval_ms=max(1000, int(payload.get("flush_interval_ms", 30000))),
             min_level=str(payload.get("min_level", "INFO")).upper(),
+        )
+
+    @staticmethod
+    def _load_power_config(payload: Optional[dict]) -> PowerConfig:
+        if payload is None:
+            return PowerConfig()
+        if not isinstance(payload, dict):
+            raise ValueError("power config must be an object")
+
+        production_sleep_min_ms = max(50, int(payload.get("production_sleep_min_ms", 500)))
+        production_sleep_max_ms = max(production_sleep_min_ms, int(payload.get("production_sleep_max_ms", 5000)))
+        development_sleep_min_ms = max(10, int(payload.get("development_sleep_min_ms", 50)))
+        development_sleep_max_ms = max(development_sleep_min_ms, int(payload.get("development_sleep_max_ms", 1000)))
+
+        network_retry_base_ms = max(1000, int(payload.get("network_retry_base_ms", 5000)))
+        network_retry_max_ms = max(network_retry_base_ms, int(payload.get("network_retry_max_ms", 60000)))
+
+        return PowerConfig(
+            enabled=bool(payload.get("enabled", True)),
+            production_sleep_min_ms=production_sleep_min_ms,
+            production_sleep_max_ms=production_sleep_max_ms,
+            development_sleep_min_ms=development_sleep_min_ms,
+            development_sleep_max_ms=development_sleep_max_ms,
+            network_retry_base_ms=network_retry_base_ms,
+            network_retry_max_ms=network_retry_max_ms,
+            wifi_power_save_enabled=bool(payload.get("wifi_power_save_enabled", False)),
+            wifi_power_save_production_mode=str(payload.get("wifi_power_save_production_mode", "modem")).lower(),
+            wifi_power_save_development_mode=str(payload.get("wifi_power_save_development_mode", "none")).lower(),
         )
 
     @staticmethod
