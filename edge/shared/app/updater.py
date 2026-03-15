@@ -1,6 +1,4 @@
 import json
-from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.config import CONFIG_PATH, CONFIG_STAGING_PATH, Config
@@ -9,11 +7,11 @@ from edge.shared.app.safe_io import atomic_write_bytes
 from edge.shared.hal.interfaces import IFileSystem, IHttpClient, ISystem
 
 
-@dataclass
 class UpdateInfo:
-    available: bool
-    version: str
-    manifest: List[Dict]
+    def __init__(self, available, version, manifest):
+        self.available = bool(available)
+        self.version = str(version)
+        self.manifest = list(manifest)
 
 
 class Updater:
@@ -35,7 +33,7 @@ class Updater:
         self._staging_root = staging_root
         self._logger = logger
 
-    def check(self) -> Optional[UpdateInfo]:
+    def check(self):
         url = self._config.api_url + OTA_CHECK_PATH
         headers = self._auth_headers()
         headers["X-Current-Version"] = self._config.current_version
@@ -105,7 +103,7 @@ class Updater:
             raise RuntimeError("Failed to download update file: " + path)
         return response.content
 
-    def _auth_headers(self) -> Dict[str, str]:
+    def _auth_headers(self):
         return {
             "X-Device-ID": self._config.device_id,
             "X-Api-Key": self._config.api_key,

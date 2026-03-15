@@ -1,5 +1,4 @@
 import json
-from typing import Dict
 
 from edge.shared.app.config import CONFIG_PATH, CONFIG_PREV_PATH, CONFIG_STAGING_PATH
 from edge.shared.hal.interfaces import IFileSystem, ISystem
@@ -33,7 +32,7 @@ class BootManager:
         self._config_staging_path = config_staging_path
         self._logger = logger
 
-    def on_boot(self) -> Dict:
+    def on_boot(self):
         state = self._load_state()
         state["boot_count"] += 1
         state["boot_succeeded"] = False
@@ -44,11 +43,20 @@ class BootManager:
         )
 
         if state["boot_count"] > self._max_attempts:
-            self.rollback()
+            if state.get("pending_app_changed") or state.get("pending_config_changed"):
+                self.rollback()
+            else:
+                state["boot_count"] = 0
+                state["boot_succeeded"] = False
+                self._save_state(state)
+                self._log_warn(
+                    "Boot counter reset without rollback target",
+                    {"boot_count": state["boot_count"], "max_attempts": self._max_attempts},
+                )
 
         return state
 
-    def get_state(self) -> Dict:
+    def get_state(self):
         return self._load_state()
 
     def mark_success(self) -> None:
@@ -135,7 +143,7 @@ class BootManager:
         if self._logger is not None:
             self._logger.warn(message, context)
 
-    def _load_state(self) -> Dict:
+    def _load_state(self):
         if not self._fs.exists(self._state_path):
             default_state = {
                 "boot_count": 0,
@@ -170,7 +178,7 @@ class BootManager:
             self._save_state(state)
         return state
 
-    def _save_state(self, state: Dict) -> None:
+    def _save_state(self, state) -> None:
         atomic_write_text(self._fs, self._state_path, json.dumps(state))
 
     def _promote_config(self) -> None:

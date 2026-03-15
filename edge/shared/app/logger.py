@@ -68,7 +68,10 @@ class EdgeLogger:
             "X-Device-ID": self._device_id,
             "X-Api-Key": self._api_key,
         }
-        response = self._http.post(url, payload, headers=headers)
+        try:
+            response = self._http.post(url, payload, headers=headers)
+        except Exception:
+            return False
         if response.status_code not in (200, 201):
             return False
 
@@ -124,7 +127,7 @@ class EdgeLogger:
                             "dropped_count": self._dropped_count,
                         },
                     }
-                )
+                ),
             )
             return
 
@@ -144,7 +147,7 @@ class EdgeLogger:
         context = event.get("context") or {}
         ctx = ""
         if context:
-            ctx = " | " + json.dumps(context, separators=(",", ":"), sort_keys=True)
+            ctx = " | " + json.dumps(context)
         return "[{ts}] {level} {message}{ctx}".format(
             ts=event.get("ts"),
             level=event.get("level"),
@@ -154,4 +157,4 @@ class EdgeLogger:
 
     @staticmethod
     def _event_size(event):
-        return len(json.dumps(event, separators=(",", ":")).encode("utf-8"))
+        return len(json.dumps(event).encode("utf-8"))

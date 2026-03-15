@@ -14,6 +14,8 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import Iterable
 
@@ -116,14 +118,41 @@ def _require_local_files(paths: dict[str, Path]) -> None:
             raise DeployError(f"Required path for {key} does not exist: {path}")
 
 
+def _progress(step: int, total: int, label: str) -> None:
+    print(f"  [{step}/{total}] {label}")
+
+
 def _run_mpremote(port: str, args: Iterable[str], phase: str) -> subprocess.CompletedProcess[str]:
-    cmd = ["mpremote", "connect", port, *args]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    args_list = list(args)
+    cmd = ["mpremote", "connect", port, *args_list]
+
+    # Large recursive copies can take a while on MicroPython links, so print a
+    # heartbeat line periodically to show the deploy has not stalled.
+    show_heartbeat = bool(args_list) and args_list[0] == "cp"
+    start = time.monotonic()
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    next_tick = start + 2.0
+    while process.poll() is None:
+        if show_heartbeat and time.monotonic() >= next_tick:
+            elapsed = int(time.monotonic() - start)
+            print(f"     ... {phase} in progress ({elapsed}s)")
+            next_tick += 2.0
+        time.sleep(0.1)
+
+    stdout, stderr = process.communicate()
+    result = subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
+
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
         stdout = (result.stdout or "").strip()
         details = stderr or stdout or "unknown mpremote error"
         raise DeployError(f"{phase} failed: {details}")
+
+    if show_heartbeat:
+        elapsed = time.monotonic() - start
+        print(f"     ... {phase} done ({elapsed:.1f}s)")
+
     return result
 
 
@@ -187,23 +216,92 @@ def _verify_remote_imports(port: str, platform: str) -> None:
         raise DeployError("remote import verification failed: marker not found")
 
 
-def _copy_runtime_essentials(port: str, paths: dict[str, Path]) -> None:
-    _run_mpremote(port, ["cp", "-r", str(paths["edge_dir"]), ":/"], "copy edge package")
-    _run_mpremote(port, ["cp", str(paths["boot"]), ":/boot.py"], "copy boot.py")
-    _run_mpremote(port, ["cp", str(paths["main"]), ":/main.py"], "copy main.py")
+def _copy_runtime_essentials(port: str, paths: dict[str, Path], platform: str, root: Path) -> None:
+    staging = _build_staging_tree(root, platform)
+    try:
+        staged_edge = staging / "edge"
+        copies = [
+            (staged_edge, ":/", f"edge/ (shared + {platform} HAL only, no tests or pycache)"),
+            (paths["boot"], ":/boot.py", "boot.py"),
+            (paths["main"], ":/main.py", "main.py"),
+        ]
+        total = len(copies)
+        for i, (src, dst, label) in enumerate(copies, 1):
+            _progress(i, total, label)
+            args = ["cp", "-r", str(src), dst] if src.is_dir() else ["cp", str(src), dst]
+            _run_mpremote(port, args, f"copy {label}")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def _build_staging_tree(root: Path, platform: str) -> Path:
+    """Return a temp directory containing only the files the device needs."""
+    staging = Path(tempfile.mkdtemp(prefix="homeiot_deploy_"))
+    edge_root = root / "edge"
+
+    # edge/__init__.py
+    _stage_file(edge_root / "__init__.py", staging / "edge" / "__init__.py")
+
+    # edge/platforms/__init__.py  +  target platform only
+    _stage_file(
+        edge_root / "platforms" / "__init__.py",
+        staging / "edge" / "platforms" / "__init__.py",
+    )
+    plat = edge_root / "platforms" / platform
+    _stage_file(plat / "__init__.py", staging / "edge" / "platforms" / platform / "__init__.py")
+    _stage_dir(plat / "hal", staging / "edge" / "platforms" / platform / "hal")
+
+    # edge/shared  (app + hal only, no tests)
+    shared = edge_root / "shared"
+    _stage_file(shared / "__init__.py", staging / "edge" / "shared" / "__init__.py")
+    _stage_dir(shared / "app", staging / "edge" / "shared" / "app")
+    _stage_dir(shared / "hal", staging / "edge" / "shared" / "hal")
+
+    return staging
+
+
+def _stage_file(src: Path, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+
+
+def _stage_dir(src: Path, dst: Path) -> None:
+    """Recursively stage a directory, skipping __pycache__ and .pyc files."""
+    for item in sorted(src.rglob("*")):
+        if "__pycache__" in item.parts or item.suffix == ".pyc":
+            continue
+        rel = item.relative_to(src)
+        target = dst / rel
+        if item.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
 
 
 def _maybe_copy_config(port: str, config_path: Path, force_config: bool, config_only: bool) -> str:
     exists = _device_has_config(port)
     if exists and not force_config:
+        _progress(1, 1, "config.json preserved (use --force-config to overwrite)")
         return "preserved-existing"
 
     config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    step_total = 3 if (config_only and exists) else (2 if exists else 1)
+    current_step = 1
+
     if exists:
+        _progress(current_step, step_total, "backing up existing config.json -> config_prev.json")
         _backup_device_config(port)
+        current_step += 1
+
+    _progress(current_step, step_total, f"uploading {config_path.name}")
     _run_mpremote(port, ["cp", str(config_path), ":/config.json"], "copy config.json")
+    current_step += 1
+
     if config_only and exists:
+        _progress(current_step, step_total, "marking pending config change in boot_state.json")
         _mark_pending_config_update(port, str(config_payload.get("current_version", "0.0.0")))
+
     return "overwritten" if exists else "created"
 
 
@@ -266,10 +364,10 @@ def main(argv: list[str]) -> int:
             return 0
 
         if args.config_only:
-            print("[2/5] Config-only mode: skipping runtime upload")
+            print("[2/5] Skipping runtime upload (--config-only)")
         else:
-            print("[2/5] Upload runtime essentials")
-            _copy_runtime_essentials(args.port, paths)
+            print("[2/5] Upload runtime essentials (3 items)")
+            _copy_runtime_essentials(args.port, paths, args.platform, root)
 
         print("[3/5] Apply config policy")
         config_status = _maybe_copy_config(args.port, config_path, args.force_config, args.config_only)

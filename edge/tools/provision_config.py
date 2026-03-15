@@ -99,7 +99,7 @@ def main(argv: list[str]) -> int:
             "min_level": "INFO",
         }
     template["security"] = {
-        "binding": "unique_id",
+        "binding": "device_id",
         "scheme": SCHEME,
     }
 

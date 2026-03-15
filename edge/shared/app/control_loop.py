@@ -87,6 +87,13 @@ def run_control_loop(
             if now >= next_heartbeat_ms:
                 try:
                     metadata = presence.heartbeat_with_metadata()
+                    logger.info(
+                        "Heartbeat sent",
+                        {
+                            "mode": mode,
+                            "interval_ms": heartbeat_interval_ms,
+                        },
+                    )
                 except Exception as exc:
                     logger.warn("Heartbeat poll threw exception", {"error": str(exc)})
                     metadata = None

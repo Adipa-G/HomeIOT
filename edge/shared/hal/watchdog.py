@@ -13,7 +13,7 @@ class MicroPythonWatchdog(IWatchdog):
                 import machine  # pyright: ignore[reportMissingImports]
             except ImportError as exc:  # pragma: no cover - desktop fallback
                 raise RuntimeError("machine module is not available") from exc
-            self.__class__._shared_wdt = machine.WDT(timeout=timeout_ms)
+            self.__class__._shared_wdt = machine.WDT(timeout_ms)
         self._wdt = self.__class__._shared_wdt
 
     def feed(self) -> None:

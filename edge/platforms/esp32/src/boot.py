@@ -19,14 +19,18 @@ def _load_max_attempts(fs, path=CONFIG_PATH, default_value=3):
 
 
 def run_boot() -> None:
+    print("[boot] boot.py start")
     fs = MicroPythonFileSystem()
     system = MicroPythonSystem()
     watchdog = MicroPythonWatchdog()
     logger = EdgeLogger(system=system, logging_config=LoggingConfig(enabled_uplink=False))
 
     logger.info("Boot sequence started")
-    watchdog.init(timeout_ms=120000)
-    logger.info("Watchdog initialized", {"timeout_ms": 120000})
+    try:
+        watchdog.init(120000)
+        logger.info("Watchdog initialized", {"timeout_ms": 120000})
+    except Exception as exc:
+        logger.warn("Watchdog initialization skipped", {"error": str(exc)})
     max_attempts = _load_max_attempts(fs)
     logger.info("Boot config loaded", {"max_boot_attempts": max_attempts})
 

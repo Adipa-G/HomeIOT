@@ -109,3 +109,46 @@ def test_logger_drops_newest_when_buffer_full_and_reports_truncation():
     assert url == "http://localhost:8000" + LOGS_PATH
     assert data["truncated"] is True
     assert data["dropped_count"] > 0
+
+
+def test_logger_prints_console_event_with_context(capsys):
+    system = ControlledSystem()
+    cfg = LoggingConfig(
+        enabled_uplink=False,
+        buffer_max_bytes=4096,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(system=system, logging_config=cfg)
+
+    logger.warn("boot warning", {"reason": "watchdog unavailable", "attempts": 8})
+
+    captured = capsys.readouterr().out.strip()
+    assert "boot warning" in captured
+    assert "watchdog unavailable" in captured
+
+
+def test_logger_flush_returns_false_on_transport_exception():
+    class FailingHttpClient:
+        def post(self, url, data, headers=None):
+            raise OSError(113)
+
+    system = ControlledSystem()
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=4096,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=FailingHttpClient(),
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("startup")
+
+    assert logger.flush("startup") is False

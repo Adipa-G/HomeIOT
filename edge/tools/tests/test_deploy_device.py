@@ -6,6 +6,82 @@ import pytest
 import edge.tools.deploy_device as deploy_device
 
 
+def _build_fake_edge_root(tmp_path: Path, platform: str = "esp32") -> Path:
+    root = tmp_path / "project"
+    edge = root / "edge"
+    # shared
+    for sub in ("app", "hal"):
+        d = edge / "shared" / sub
+        d.mkdir(parents=True)
+        (d / "__init__.py").write_text("")
+        (d / "module.py").write_text("")
+        (d / "__pycache__").mkdir()
+        (d / "__pycache__" / "module.cpython-312.pyc").write_bytes(b"\x00")
+    (edge / "shared" / "__init__.py").write_text("")
+    (edge / "shared" / "tests").mkdir()
+    (edge / "shared" / "tests" / "test_something.py").write_text("")
+    # target platform
+    plat = edge / "platforms" / platform / "hal"
+    plat.mkdir(parents=True)
+    (edge / "platforms" / "__init__.py").write_text("")
+    (edge / "platforms" / platform / "__init__.py").write_text("")
+    (plat / "__init__.py").write_text("")
+    (plat / "network.py").write_text("")
+    # other platform (should be excluded)
+    other = "pico" if platform == "esp32" else "esp32"
+    other_hal = edge / "platforms" / other / "hal"
+    other_hal.mkdir(parents=True)
+    (edge / "platforms" / other / "__init__.py").write_text("")
+    (other_hal / "network.py").write_text("")
+    # tools (should be excluded)
+    tools_dir = edge / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "deploy_device.py").write_text("")
+    # top-level __init__
+    (edge / "__init__.py").write_text("")
+    return root
+
+
+def test_build_staging_tree_excludes_wrong_platform(tmp_path):
+    root = _build_fake_edge_root(tmp_path, platform="esp32")
+    staging = deploy_device._build_staging_tree(root, "esp32")
+
+    staged = {str(p.relative_to(staging)) for p in staging.rglob("*") if p.is_file()}
+
+    assert any("esp32" in p for p in staged), "esp32 HAL must be present"
+    assert not any("pico" in p for p in staged), "pico files must be excluded"
+
+
+def test_build_staging_tree_excludes_pycache_and_pyc(tmp_path):
+    root = _build_fake_edge_root(tmp_path, platform="esp32")
+    staging = deploy_device._build_staging_tree(root, "esp32")
+
+    staged = {str(p.relative_to(staging)) for p in staging.rglob("*")}
+
+    assert not any("__pycache__" in p for p in staged)
+    assert not any(p.endswith(".pyc") for p in staged)
+
+
+def test_build_staging_tree_excludes_tests_and_tools(tmp_path):
+    root = _build_fake_edge_root(tmp_path, platform="esp32")
+    staging = deploy_device._build_staging_tree(root, "esp32")
+
+    staged = {str(p.relative_to(staging)) for p in staging.rglob("*") if p.is_file()}
+
+    assert not any("tests" in p for p in staged), "test files must be excluded"
+    assert not any("tools" in p for p in staged), "tools must be excluded"
+
+
+def test_build_staging_tree_includes_shared_app_and_hal(tmp_path):
+    root = _build_fake_edge_root(tmp_path, platform="esp32")
+    staging = deploy_device._build_staging_tree(root, "esp32")
+
+    staged = {str(p.relative_to(staging)) for p in staging.rglob("*") if p.is_file()}
+
+    assert any(p.replace("\\", "/").startswith("edge/shared/app/") for p in staged)
+    assert any(p.replace("\\", "/").startswith("edge/shared/hal/") for p in staged)
+
+
 def test_validate_logging_payload_accepts_defaults():
     deploy_device._validate_logging_payload({"enabled_uplink": True, "buffer_max_bytes": 4096, "flush_interval_ms": 30000})
 

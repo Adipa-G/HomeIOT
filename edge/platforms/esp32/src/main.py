@@ -14,6 +14,7 @@ from edge.platforms.esp32.hal.watchdog import MicroPythonWatchdog
 
 
 def run_main() -> None:
+    print("[main] main.py start")
     fs = MicroPythonFileSystem()
     system = MicroPythonSystem()
     http = MicroPythonHttpClient()

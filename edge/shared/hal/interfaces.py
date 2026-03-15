@@ -1,6 +1,3 @@
-from typing import Any, Dict, List, Optional
-
-
 class IFileSystem:
     def read_text(self, path: str) -> str:
         raise NotImplementedError()
@@ -20,7 +17,7 @@ class IFileSystem:
     def is_dir(self, path: str) -> bool:
         raise NotImplementedError()
 
-    def listdir(self, path: str) -> List[str]:
+    def listdir(self, path: str):
         raise NotImplementedError()
 
     def mkdir(self, path: str) -> None:
@@ -64,14 +61,14 @@ class HttpResponse:
 
 
 class IHttpClient:
-    def get(self, url: str, headers: Optional[Dict[str, str]] = None) -> HttpResponse:
+    def get(self, url: str, headers=None) -> HttpResponse:
         raise NotImplementedError()
 
     def post(
         self,
         url: str,
-        data: Dict[str, Any],
-        headers: Optional[Dict[str, str]] = None,
+        data,
+        headers=None,
     ) -> HttpResponse:
         raise NotImplementedError()
 

@@ -1,18 +1,26 @@
-﻿from dataclasses import dataclass
 import json
 
 from edge.shared.app.safe_io import atomic_write_text
 
 
-@dataclass
 class ModuleSchedule:
-    module_id: str
-    version: str
-    interval_ms: int
-    timeout_ms: int
-    entrypoint: str = "run"
-    next_due_ms: int = 0
-    run_seq: int = 0
+    def __init__(
+        self,
+        module_id,
+        version,
+        interval_ms,
+        timeout_ms,
+        entrypoint="run",
+        next_due_ms=0,
+        run_seq=0,
+    ):
+        self.module_id = str(module_id)
+        self.version = str(version)
+        self.interval_ms = int(interval_ms)
+        self.timeout_ms = int(timeout_ms)
+        self.entrypoint = str(entrypoint)
+        self.next_due_ms = int(next_due_ms)
+        self.run_seq = int(run_seq)
 
 
 class ModuleRuntime:

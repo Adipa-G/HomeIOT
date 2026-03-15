@@ -164,6 +164,30 @@ def test_load_encrypted_secrets_with_matching_unique_id():
     assert config.wifi_password == "pass"
 
 
+def test_load_encrypted_secrets_with_device_id_binding_without_system():
+    fs = MockFileSystem()
+    api_enc = encrypt_secret("key", "esp32-001", "api_key")
+    wifi_enc = encrypt_secret("pass", "esp32-001", "wifi_password")
+
+    _write_config(
+        fs,
+        {
+            "device_id": "esp32-001",
+            "api_url": "http://localhost:8000",
+            "wifi_ssid": "ssid",
+            "heartbeat_interval_ms": 5000,
+            "max_boot_attempts": 3,
+            "api_key_enc": api_enc,
+            "wifi_password_enc": wifi_enc,
+        },
+    )
+
+    config = Config.load(fs)
+
+    assert config.api_key == "key"
+    assert config.wifi_password == "pass"
+
+
 def test_load_encrypted_secret_without_system_raises():
     fs = MockFileSystem()
     api_enc = encrypt_secret("key", "mock-device-id", "api_key")

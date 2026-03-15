@@ -175,6 +175,37 @@ def test_on_boot_triggers_rollback_when_attempts_exceeded():
     assert state["pending_config_changed"] is False
 
 
+def test_on_boot_resets_counter_without_rollback_target():
+    fs = MockFileSystem()
+    system = MockSystem()
+    manager = BootManager(fs=fs, system=system, max_attempts=1)
+
+    fs.write_text(
+        "boot_state.json",
+        json.dumps(
+            {
+                "boot_count": 1,
+                "boot_succeeded": False,
+                "current_version": "2.0.0",
+                "previous_version": "1.0.0",
+                "config_version": "2.0.0",
+                "previous_config_version": "1.0.0",
+                "pending_app_changed": False,
+                "pending_config_changed": False,
+            }
+        ),
+    )
+
+    state = manager.on_boot()
+
+    assert system.reset_calls == 0
+    assert state["boot_count"] == 0
+    persisted = json.loads(fs.read_text("boot_state.json"))
+    assert persisted["boot_count"] == 0
+    assert persisted["pending_app_changed"] is False
+    assert persisted["pending_config_changed"] is False
+
+
 def test_on_boot_restores_config_when_only_config_backup_exists():
     fs = MockFileSystem()
     system = MockSystem()
