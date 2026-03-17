@@ -54,7 +54,6 @@ Request body example:
 ```json
 {
   "device_id": "esp32-001",
-  "platform": "esp32",
   "version": "1.0.0",
   "ip": "192.168.1.30",
   "timestamp": 1716890000
@@ -74,6 +73,7 @@ Notes:
 
 - Must require X-Device-ID and X-Api-Key.
 - If device_id in body differs from X-Device-ID, return 400.
+- platform may be accepted by the server, but current edge clients do not send it.
 
 ### POST /api/devices/heartbeat
 
@@ -119,6 +119,10 @@ Purpose:
 Query example:
 
 - /api/ota/check?version=1.0.0
+
+Notes:
+
+- Current edge clients also send X-Current-Version as an optional header hint.
 
 Response 200 example:
 
@@ -312,6 +316,7 @@ Request body example:
 
 ```json
 {
+  "device_id": "esp32-001",
   "module_id": "temp-sensor",
   "module_version": "2.0.0",
   "run_id": "run-123",
@@ -322,6 +327,37 @@ Request body example:
   "output": {"temperature": 23.1},
   "error_message": null,
   "metrics": {"memory_peak_bytes": 45000}
+}
+```
+
+### POST /api/devices/modules/status
+
+Purpose:
+
+- Submit module quarantine or re-enable state from the device.
+
+Request body example:
+
+```json
+{
+  "device_id": "esp32-001",
+  "module_id": "temp-sensor",
+  "module_version": "2.0.0",
+  "disabled": true,
+  "disabled_reason": "Failed start count exceeded threshold (3 consecutive failures)",
+  "failed_start_count": 3,
+  "disabled_at_utc": "2026-05-28T14:30:00Z"
+}
+```
+
+Re-enable acknowledgement example:
+
+```json
+{
+  "device_id": "esp32-001",
+  "module_id": "temp-sensor",
+  "module_version": "2.0.0",
+  "disabled": false
 }
 ```
 

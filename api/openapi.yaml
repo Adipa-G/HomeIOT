@@ -91,6 +91,12 @@ paths:
       summary: Check OTA availability
       operationId: checkOta
       parameters:
+        - name: X-Current-Version
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional client hint mirroring the current firmware version.
         - name: version
           in: query
           required: true
@@ -387,6 +393,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/devices/modules/status:
+    post:
+      summary: Submit module quarantine or re-enable status
+      operationId: submitModuleStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleStatusRequest'
+      responses:
+        '200':
+          description: Status recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     DeviceIdHeader:
@@ -431,7 +467,7 @@ components:
           type: string
         timestamp:
           type: integer
-      required: [device_id, platform, version]
+      required: [device_id, version]
 
     RegisterResponse:
       type: object
@@ -594,6 +630,8 @@ components:
           type: string
         signature:
           type: string
+        enabled:
+          type: boolean
       required: [module_id, version, interval_ms, timeout_ms, package_hash, signature]
 
     ModuleAssignmentResponse:
@@ -610,6 +648,8 @@ components:
     ModuleResultRequest:
       type: object
       properties:
+        device_id:
+          type: string
         module_id:
           type: string
         module_version:
@@ -635,4 +675,24 @@ components:
         metrics:
           type: object
           additionalProperties: true
-      required: [module_id, module_version, run_id, started_at_utc, finished_at_utc, elapsed_ms, status]
+      required: [device_id, module_id, module_version, run_id, started_at_utc, finished_at_utc, elapsed_ms, status]
+
+    ModuleStatusRequest:
+      type: object
+      properties:
+        device_id:
+          type: string
+        module_id:
+          type: string
+        module_version:
+          type: string
+        disabled:
+          type: boolean
+        disabled_reason:
+          type: string
+        failed_start_count:
+          type: integer
+        disabled_at_utc:
+          type: string
+          format: date-time
+      required: [device_id, module_id, module_version, disabled]
