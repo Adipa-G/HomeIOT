@@ -1,0 +1,10 @@
+# Edge-specific overrides (inherits from repository .editorconfig)
+
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 88
+
+# Keep trailing spaces in markdown for intentional line breaks.
+[*.md]
+trim_trailing_whitespace = false
