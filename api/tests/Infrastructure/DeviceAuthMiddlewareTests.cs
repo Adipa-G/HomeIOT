@@ -11,6 +11,36 @@ namespace HomeIOT.Api.Tests.Infrastructure;
 public class DeviceAuthMiddlewareTests
 {
     [Fact]
+    public async Task PingEndpoint_WithoutHeaders_AllowsRequest()
+    {
+        await using var dbContext = CreateDbContext();
+        var wasNextCalled = false;
+        var middleware = new DeviceAuthMiddleware(_ =>
+        {
+            wasNextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = "/api/ping",
+                Method = HttpMethods.Get,
+            },
+            Response =
+            {
+                Body = new MemoryStream(),
+            },
+        };
+
+        await middleware.InvokeAsync(httpContext, dbContext);
+
+        Assert.True(wasNextCalled);
+        Assert.NotEqual(StatusCodes.Status401Unauthorized, httpContext.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task MissingHeaders_Returns401Unauthorized()
     {
         await using var dbContext = CreateDbContext();

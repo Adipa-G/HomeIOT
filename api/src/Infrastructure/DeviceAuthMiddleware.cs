@@ -14,6 +14,12 @@ public sealed class DeviceAuthMiddleware(RequestDelegate next)
             return;
         }
 
+        if (context.Request.Path.Equals("/api/ping", StringComparison.OrdinalIgnoreCase))
+        {
+            await next(context);
+            return;
+        }
+
         var deviceId = context.Request.Headers["X-Device-ID"].ToString().Trim();
         var apiKey = context.Request.Headers["X-Api-Key"].ToString().Trim();
 
