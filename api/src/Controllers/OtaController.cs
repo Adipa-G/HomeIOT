@@ -1,7 +1,21 @@
+using Microsoft.AspNetCore.Mvc;
+
 namespace HomeIOT.Api.Controllers;
 
+[
+ApiController]
+[Route("api/ota")]
 public sealed class OtaController : ApiControllerBase
 {
-    // TODO: Implement GET /api/ota/check
-    // TODO: Implement GET /api/ota/file/{fileName}
+    [HttpGet("check")]
+    public IActionResult Check()
+    {
+        return Ok(new { available = false });
+    }
+
+    [HttpGet("file")]
+    public IActionResult GetFile()
+    {
+        return NotFound();
+    }
 }

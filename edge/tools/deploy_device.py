@@ -221,7 +221,7 @@ def _copy_runtime_essentials(port: str, paths: dict[str, Path], platform: str, r
     try:
         staged_edge = staging / "edge"
         copies = [
-            (staged_edge, ":/", f"edge/ (shared + {platform} HAL only, no tests or pycache)"),
+            (staged_edge, ":/", f"edge/ (shared + {platform} HAL)"),
             (paths["boot"], ":/boot.py", "boot.py"),
             (paths["main"], ":/main.py", "main.py"),
         ]

@@ -1,7 +1,21 @@
+using Microsoft.AspNetCore.Mvc;
+
 namespace HomeIOT.Api.Controllers;
 
+[
+ApiController]
+[Route("api/devices/dev-commands")]
 public sealed class DevCommandController : ApiControllerBase
 {
-    // TODO: Implement GET /api/devices/dev-commands/next
-    // TODO: Implement POST /api/devices/dev-commands/{commandId}/result
+    [HttpGet("next")]
+    public IActionResult GetNext()
+    {
+        return NoContent();
+    }
+
+    [HttpPost("{commandId}/result")]
+    public IActionResult ReportResult(string commandId)
+    {
+        return Accepted(new { command_id = commandId, status = "accepted" });
+    }
 }
