@@ -1,3 +1,7 @@
+import json
+
+from edge.shared.app.secret_crypto import encrypt_secret
+
 import pytest
 
 from edge.shared.app.boot_manager import BootManager
@@ -30,7 +34,7 @@ def test_check_returns_none_when_no_update():
 
     http.add_json_response(
         "GET",
-        "http://localhost:8000/api/ota/check",
+        "http://localhost:8000/api/ota/check?version=1.0.0",
         200,
         {"available": False},
     )
@@ -38,6 +42,8 @@ def test_check_returns_none_when_no_update():
     update = updater.check()
 
     assert update is None
+    assert http.calls[0][1] == "http://localhost:8000/api/ota/check?version=1.0.0"
+    assert http.calls[0][3]["X-Platform"] == "esp32"
 
 
 def test_apply_downloads_and_swaps_version():
@@ -57,7 +63,10 @@ def test_apply_downloads_and_swaps_version():
 
     new_file = b"print('new-version')"
     expected_hash = updater._digest_bytes(new_file)
-    new_config = b"{\"device_id\":\"esp32-001\",\"api_url\":\"http://localhost:8000\",\"api_key\":\"new-secret\",\"wifi_ssid\":\"ssid\",\"wifi_password\":\"new-pass\",\"heartbeat_interval_ms\":2000,\"max_boot_attempts\":4,\"current_version\":\"1.1.0\"}"
+    # Staged config: placeholders for device secrets (should be preserved from active),
+    # real values for non-secret fields (should be taken from the new release),
+    # and a real api_url (should override the active value).
+    new_config = b"{\"device_id\":\"replace-with-device-id\",\"api_url\":\"replace-with-api-url\",\"api_key\":\"replace-with-device-api-key\",\"wifi_ssid\":\"replace-with-ssid\",\"wifi_password\":\"replace-with-password\",\"heartbeat_interval_ms\":2000,\"max_boot_attempts\":4,\"current_version\":\"1.1.0\"}"
     expected_config_hash = updater._digest_bytes(new_config)
 
     http.add_bytes_response(
@@ -86,9 +95,149 @@ def test_apply_downloads_and_swaps_version():
 
     assert fs.read_bytes("app/main.py") == new_file
     assert fs.read_bytes("app_prev/main.py") == b"old-version"
-    assert fs.read_text("config.json") == new_config.decode("utf-8")
+    merged_config = json.loads(fs.read_text("config.json"))
+    assert merged_config["device_id"] == "esp32-001"            # placeholder → preserved from active
+    assert merged_config["api_key"] == "old-secret"              # placeholder → preserved from active
+    assert merged_config["wifi_password"] == "old-pass"          # placeholder → preserved from active
+    assert merged_config["api_url"] == "http://localhost:8000"   # placeholder → preserved from active
+    assert merged_config["heartbeat_interval_ms"] == 2000
+    assert merged_config["max_boot_attempts"] == 4
+    assert merged_config["current_version"] == "1.1.0"
     assert fs.read_text("config_prev.json").startswith("{\"device_id\":\"esp32-001\"")
     assert system.reset_calls == 1
+
+
+def test_apply_preserves_enc_credentials_when_absent_from_staged():
+    """Devices using encrypted credentials (api_key_enc / wifi_password_enc) must not
+    lose those fields after OTA — the artifact template never contains enc objects."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    # Use properly encrypted fixtures so staged config validation (Config.load) can decrypt them.
+    # Config.load tries device_id as binding first.
+    device_id = "esp32-001"
+    api_key_enc = encrypt_secret("real-api-key", device_id, "api_key")
+    wifi_password_enc = encrypt_secret("real-wifi-pass", device_id, "wifi_password")
+
+    fs.write_bytes("app/main.py", b"old-version")
+    fs.write_text(
+        "config.json",
+        json.dumps({
+            "device_id": device_id,
+            "api_url": "http://localhost:8000",
+            "api_key_enc": api_key_enc,
+            "wifi_ssid": "ssid",
+            "wifi_password_enc": wifi_password_enc,
+            "heartbeat_interval_ms": 1000,
+            "max_boot_attempts": 3,
+            "current_version": "1.0.0",
+        }, separators=(",", ":")),
+    )
+
+    new_file = b"print('new-version')"
+    # Staged config has no api_key_enc / wifi_password_enc — they must be copied from active.
+    new_config = json.dumps({
+        "device_id": "replace-with-device-id",
+        "api_url": "replace-with-api-url",
+        "api_key": "replace-with-device-api-key",
+        "wifi_ssid": "replace-with-ssid",
+        "wifi_password": "replace-with-password",
+        "heartbeat_interval_ms": 2000,
+        "max_boot_attempts": 4,
+        "current_version": "1.1.0",
+    }, separators=(",", ":")).encode("utf-8")
+
+    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py", 200, new_file)
+    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=config.json", 200, new_config)
+
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[
+                {"path": "main.py", "hash": updater._digest_bytes(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": updater._digest_bytes(new_config), "size": len(new_config)},
+            ],
+        )
+    )
+
+    merged_config = json.loads(fs.read_text("config.json"))
+    assert merged_config["device_id"] == device_id
+    assert merged_config["api_url"] == "http://localhost:8000"
+    assert "api_key" not in merged_config                          # placeholder removed, enc used instead
+    assert merged_config["api_key_enc"] == api_key_enc             # absent from staged → preserved from active
+    assert merged_config["wifi_password_enc"] == wifi_password_enc # absent from staged → preserved from active
+    assert "wifi_password" not in merged_config                    # placeholder removed, enc used instead
+    assert merged_config["heartbeat_interval_ms"] == 2000
+    assert merged_config["current_version"] == "1.1.0"
+
+
+def test_apply_encrypts_new_plaintext_credentials_from_release():
+    """If a release ships a real plaintext api_key or wifi_password (key rotation),
+    the device must encrypt it before writing — never store secrets as plaintext."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    device_id = "esp32-001"
+    old_api_key_enc = encrypt_secret("old-api-key", device_id, "api_key")
+    old_wifi_password_enc = encrypt_secret("old-wifi-pass", device_id, "wifi_password")
+
+    fs.write_bytes("app/main.py", b"old-version")
+    fs.write_text(
+        "config.json",
+        json.dumps({
+            "device_id": device_id,
+            "api_url": "http://localhost:8000",
+            "api_key_enc": old_api_key_enc,
+            "wifi_ssid": "ssid",
+            "wifi_password_enc": old_wifi_password_enc,
+            "heartbeat_interval_ms": 1000,
+            "max_boot_attempts": 3,
+            "current_version": "1.0.0",
+        }, separators=(",", ":")),
+    )
+
+    new_file = b"print('new-version')"
+    # Release ships a new plaintext api_key (key rotation) — device must encrypt it.
+    new_config = json.dumps({
+        "device_id": "replace-with-device-id",
+        "api_url": "replace-with-api-url",
+        "api_key": "rotated-api-key",
+        "wifi_ssid": "replace-with-ssid",
+        "wifi_password": "replace-with-password",
+        "heartbeat_interval_ms": 2000,
+        "max_boot_attempts": 4,
+        "current_version": "1.1.0",
+    }, separators=(",", ":")).encode("utf-8")
+
+    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py", 200, new_file)
+    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=config.json", 200, new_config)
+
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[
+                {"path": "main.py", "hash": updater._digest_bytes(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": updater._digest_bytes(new_config), "size": len(new_config)},
+            ],
+        )
+    )
+
+    merged_config = json.loads(fs.read_text("config.json"))
+    assert "api_key" not in merged_config                   # plaintext must never be stored
+    assert "api_key_enc" in merged_config                   # must be encrypted
+    assert merged_config["api_key_enc"] != old_api_key_enc  # new key, new enc object
+    # wifi_password was a placeholder → old enc preserved
+    assert "wifi_password" not in merged_config
+    assert merged_config["wifi_password_enc"] == old_wifi_password_enc
+    assert merged_config["current_version"] == "1.1.0"
 
 
 def test_apply_raises_on_hash_mismatch_and_cleans_staging():

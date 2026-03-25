@@ -123,6 +123,8 @@ Query example:
 Notes:
 
 - Current edge clients also send X-Current-Version as an optional header hint.
+- Clients can send X-Platform (for example, esp32) to select platform-specific artifacts.
+- If X-Platform is omitted, the API falls back to the registered device platform.
 
 Response 200 example:
 
@@ -150,6 +152,11 @@ Response 200 no update example:
 Purpose:
 
 - Download OTA file by version/path.
+
+Notes:
+
+- File selection is platform-aware via X-Platform header or registered device platform fallback.
+- Server only serves files listed in the release manifest for that version.
 
 Query example:
 

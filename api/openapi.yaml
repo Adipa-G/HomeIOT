@@ -91,6 +91,12 @@ paths:
       summary: Check OTA availability
       operationId: checkOta
       parameters:
+        - name: X-Platform
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional platform override (e.g. esp32). If omitted, server falls back to the registered device platform.
         - name: X-Current-Version
           in: header
           required: false
@@ -127,6 +133,12 @@ paths:
       summary: Download OTA file
       operationId: downloadOtaFile
       parameters:
+        - name: X-Platform
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional platform override (e.g. esp32). If omitted, server falls back to the registered device platform.
         - name: version
           in: query
           required: true
