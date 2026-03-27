@@ -68,6 +68,18 @@ class EdgeLogger:
             "X-Device-ID": self._device_id,
             "X-Api-Key": self._api_key,
         }
+        # Console-level info about dispatch (does not enqueue into the uplink buffer)
+        try:
+            console_event = {
+                "ts": self._system.time_ms(),
+                "level": "INFO",
+                "message": "Sending log batch",
+                "context": {"url": url, "reason": reason, "count": len(payload.get("logs", [])), "dropped_count": self._dropped_count},
+            }
+            print(self._format_console_event(console_event))
+        except Exception:
+            # Fail silently; logging should not break normal flow
+            pass
         try:
             response = self._http.post(url, payload, headers=headers)
         except Exception:

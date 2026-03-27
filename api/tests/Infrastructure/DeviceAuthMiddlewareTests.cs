@@ -169,6 +169,36 @@ public class DeviceAuthMiddlewareTests
         Assert.Equal(device.Id, requestContext.Device!.Id);
     }
 
+    [Fact]
+    public async Task AdminPath_WithoutHeaders_AllowsRequest()
+    {
+        await using var dbContext = CreateDbContext();
+        var wasNextCalled = false;
+        var middleware = new DeviceAuthMiddleware(_ =>
+        {
+            wasNextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = "/api/admin/auth/token",
+                Method = HttpMethods.Post,
+            },
+            Response =
+            {
+                Body = new MemoryStream(),
+            },
+        };
+
+        await middleware.InvokeAsync(httpContext, dbContext);
+
+        Assert.True(wasNextCalled);
+        Assert.NotEqual(StatusCodes.Status401Unauthorized, httpContext.Response.StatusCode);
+    }
+
     private static ApiDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ApiDbContext>()

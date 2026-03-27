@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace HomeIOT.Api.Tests.Controllers;
@@ -207,7 +208,8 @@ public class DevicesControllerTests
             ModuleAssignmentPollIntervalMs = 60000,
         });
 
-        var controller = new DevicesController(dbContext, optionsMock.Object)
+        var loggerMock = new Mock<ILogger<DevicesController>>();
+        var controller = new DevicesController(dbContext, optionsMock.Object, loggerMock.Object)
         {
             ControllerContext = new ControllerContext
             {

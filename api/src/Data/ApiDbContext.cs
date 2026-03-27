@@ -8,6 +8,7 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
     public DbSet<DeviceRecord> Devices => Set<DeviceRecord>();
     public DbSet<HeartbeatRecord> Heartbeats => Set<HeartbeatRecord>();
     public DbSet<LogBatchRecord> LogBatches => Set<LogBatchRecord>();
+    public DbSet<UserRecord> Users => Set<UserRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +45,15 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
                 .WithMany(x => x.LogBatches)
                 .HasForeignKey(x => x.DeviceRecordId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserRecord>(entity =>
+        {
+            entity.ToTable("users");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Username).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
+            entity.HasIndex(x => x.Username).IsUnique();
         });
     }
 }

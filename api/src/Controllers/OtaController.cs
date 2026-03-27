@@ -6,7 +6,7 @@ namespace HomeIOT.Api.Controllers;
 
 [ApiController]
 [Route("api/ota")]
-public sealed class OtaController : ApiControllerBase
+public sealed class OtaController : EdgeApiControllerBase
 {
     private readonly IOtaReleaseService _otaReleaseService;
 

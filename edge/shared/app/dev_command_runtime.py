@@ -20,8 +20,8 @@ def execute_dev_command(system, device_control, command, logger=None, utc_now_is
         stdout_lines.append(" ".join(str(value) for value in args))
 
     code = str(command.get("code") or "")
+    scope = {"print": _capture_print}
     try:
-        scope = {"print": _capture_print}
         exec(code, scope, scope)
     except Exception as exc:
         status = "error"
@@ -29,6 +29,7 @@ def execute_dev_command(system, device_control, command, logger=None, utc_now_is
         stderr_text = _format_exception(exc)
 
     stdout_text = "\n".join(stdout_lines)
+    data = _extract_result(scope)
 
     finish_ms = system.time_ms()
     finished_at_utc = utc_now()
@@ -58,6 +59,7 @@ def execute_dev_command(system, device_control, command, logger=None, utc_now_is
         "exit_code": exit_code,
         "stdout": _truncate(stdout_text, 4000),
         "stderr": _truncate(stderr_text, 4000),
+        "data": data,
     }
 
     reported = False
@@ -96,6 +98,17 @@ def _truncate(text, max_len):
     if len(value) <= max_len:
         return value
     return value[:max_len] + "..."
+
+
+def _extract_result(scope):
+    if "result" not in scope:
+        return None
+    value = scope["result"]
+    # Accept dicts, lists, strings, numbers, booleans, None as-is.
+    if isinstance(value, (dict, list, str, int, float, bool, type(None))):
+        return value
+    # Fallback: coerce to string so the payload is always serialisable.
+    return str(value)
 
 
 def _default_utc_now_iso():

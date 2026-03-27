@@ -5,7 +5,7 @@ namespace HomeIOT.Api.Controllers;
 [
 ApiController]
 [Route("api/devices/modules")]
-public sealed class ModulesController : ApiControllerBase
+public sealed class ModulesController : EdgeApiControllerBase
 {
     [HttpGet("assignment")]
     public IActionResult GetAssignment()

@@ -6,20 +6,23 @@ using HomeIOT.Api.Data.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace HomeIOT.Api.Controllers;
 
 [ApiController]
 [Route("api/devices")]
-public sealed class DevicesController : ApiControllerBase
+public sealed class DevicesController : EdgeApiControllerBase
 {
     private readonly ApiDbContext _dbContext;
     private readonly IOptions<RuntimeControlOptions> _runtimeOptions;
+    private readonly ILogger<DevicesController> _logger;
 
-    public DevicesController(ApiDbContext dbContext, IOptions<RuntimeControlOptions> runtimeOptions)
+    public DevicesController(ApiDbContext dbContext, IOptions<RuntimeControlOptions> runtimeOptions, ILogger<DevicesController> logger)
     {
         _dbContext = dbContext;
         _runtimeOptions = runtimeOptions;
+        _logger = logger;
     }
 
     [HttpPost("register")]
@@ -104,6 +107,8 @@ public sealed class DevicesController : ApiControllerBase
             return Unauthorized(new ErrorResponse("unauthorized", "Unknown device."));
         }
 
+        
+
         var now = DateTimeOffset.UtcNow;
         device.LastHeartbeatAtUtc = now;
         device.UpdatedAtUtc = now;
@@ -124,7 +129,7 @@ public sealed class DevicesController : ApiControllerBase
         var response = new HeartbeatResponse(
             "ok",
             ToUtcZ(now),
-            device.Mode,
+            "development",
             runtime.DevPollIntervalMs,
             runtime.ModuleAssignmentPollIntervalMs,
             runtime.NextHeartbeatMs);
@@ -164,6 +169,8 @@ public sealed class DevicesController : ApiControllerBase
         {
             return Unauthorized(new ErrorResponse("unauthorized", "Unknown device."));
         }
+
+        _logger.LogInformation("Received log batch from {DeviceId} (ip={Ip}) reason={Reason} entries={Count} dropped={Dropped}", requestContext.DeviceId, device.Ip, request.Reason, request.Logs?.Count ?? 0, request.DroppedCount ?? 0);
 
         var now = DateTimeOffset.UtcNow;
         device.UpdatedAtUtc = now;

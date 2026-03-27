@@ -5,7 +5,7 @@ namespace HomeIOT.Api.Controllers;
 
 [ApiController]
 [Route("api/ping")]
-public sealed class PingController : ApiControllerBase
+public sealed class PingController : EdgeApiControllerBase
 {
     [HttpGet]
     public ActionResult<PingResponse> Get()

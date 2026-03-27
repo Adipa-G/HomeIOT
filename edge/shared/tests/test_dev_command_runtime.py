@@ -95,3 +95,54 @@ def test_execute_dev_command_logs_warn_when_report_fails():
 
     assert result["reported"] is False
     assert logger.warn_calls >= 1
+
+
+def test_execute_dev_command_captures_structured_result():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={
+            "command_id": "cmd-5",
+            "code": "result = {'temp': 23.5, 'pins': [1, 0, 1]}",
+        },
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    assert result["status"] == "success"
+    payload = device_control.calls[0][1]
+    assert payload["data"] == {"temp": 23.5, "pins": [1, 0, 1]}
+    assert payload["stdout"] == ""
+
+
+def test_execute_dev_command_data_is_none_when_result_not_set():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-6", "code": "x = 42"},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    payload = device_control.calls[0][1]
+    assert payload["data"] is None
+
+
+def test_execute_dev_command_non_serialisable_result_coerced_to_string():
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    result = execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-7", "code": "result = object()"},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    payload = device_control.calls[0][1]
+    assert isinstance(payload["data"], str)
+    assert "object" in payload["data"]
