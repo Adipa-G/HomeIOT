@@ -2,6 +2,9 @@ from edge.shared.hal.interfaces import INetwork
 
 
 class MicroPythonNetwork(INetwork):
+    # MicroPython network.STAT_CONNECTING == 1 on ESP32 / most ports.
+    _STAT_CONNECTING = 1
+
     def __init__(self):
         self._wlan = None
 
@@ -19,6 +22,16 @@ class MicroPythonNetwork(INetwork):
         wlan.active(True)
         if wlan.isconnected():
             return
+
+        # If the station is already mid-connect, disconnect first to reset
+        # the ESP-IDF state machine.  Without this, calling wlan.connect()
+        # while a previous attempt is still in progress triggers
+        # "wifi:sta is connecting, cannot set config".
+        try:
+            if hasattr(wlan, "status") and wlan.status() == self._STAT_CONNECTING:
+                wlan.disconnect()
+        except Exception:
+            pass
 
         wlan.connect(ssid, password)
 

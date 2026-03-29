@@ -103,6 +103,8 @@ class Updater:
             actual_hash = None
             if _gc is not None:
                 _gc.collect()
+                free = _gc.mem_free() if hasattr(_gc, "mem_free") else None
+                self._log_info("OTA GC after file", {"path": rel_path, "free_memory": free})
 
         if config_staged:
             self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
@@ -178,7 +180,11 @@ class Updater:
             import hashlib
 
         digest = hashlib.sha256(data).digest()
-        return "".join("{:02x}".format(byte) for byte in digest)
+        try:
+            from ubinascii import hexlify
+            return str(hexlify(digest), "ascii")
+        except ImportError:  # pragma: no cover - desktop fallback
+            return digest.hex()
 
     def _log_info(self, message: str, context=None) -> None:
         if self._logger is not None:

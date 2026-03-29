@@ -20,11 +20,13 @@ class MicroPythonHttpClient(IHttpClient):
 
         _set_socket_timeout(_REQUEST_TIMEOUT_S)
         response = requests.get(url, headers=headers)
-        text = response.text if hasattr(response, "text") else ""
-        content = response.content if hasattr(response, "content") else b""
         status_code = response.status_code
+        # Read content (bytes) first; derive text from it to avoid
+        # holding two copies of the body in memory simultaneously.
+        content = response.content if hasattr(response, "content") else b""
         if hasattr(response, "close"):
             response.close()
+        text = content.decode("utf-8") if content else ""
         return HttpResponse(status_code=status_code, text=text, content=content)
 
     def post(self, url, data, headers=None):
@@ -35,9 +37,9 @@ class MicroPythonHttpClient(IHttpClient):
 
         _set_socket_timeout(_REQUEST_TIMEOUT_S)
         response = requests.post(url, json=data, headers=headers)
-        text = response.text if hasattr(response, "text") else ""
-        content = response.content if hasattr(response, "content") else b""
         status_code = response.status_code
+        content = response.content if hasattr(response, "content") else b""
         if hasattr(response, "close"):
             response.close()
+        text = content.decode("utf-8") if content else ""
         return HttpResponse(status_code=status_code, text=text, content=content)
