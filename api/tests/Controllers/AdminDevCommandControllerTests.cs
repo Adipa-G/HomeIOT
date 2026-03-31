@@ -1,6 +1,7 @@
 using HomeIOT.Api.Controllers;
 using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Services;
+using HomeIOT.Api.Services.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;

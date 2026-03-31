@@ -3,6 +3,7 @@ using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Data.Entities;
 using HomeIOT.Api.Infrastructure;
 using HomeIOT.Api.Services;
+using HomeIOT.Api.Services.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;

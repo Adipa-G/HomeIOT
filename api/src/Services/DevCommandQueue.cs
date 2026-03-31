@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using HomeIOT.Api.Services.Models;
 
 namespace HomeIOT.Api.Services;
 
@@ -8,38 +9,6 @@ namespace HomeIOT.Api.Services;
 /// Not persisted — designed for interactive development use. A DB-backed
 /// implementation can be substituted later by implementing the same interface.
 /// </summary>
-public interface IDevCommandQueue
-{
-    DevCommandEntry Enqueue(string deviceId, string code, int? timeoutMs);
-    DevCommandEntry? PeekNext(string deviceId);
-    void Acknowledge(string deviceId, string commandId);
-    void StoreResult(string commandId, DevCommandResultPayload result);
-    DevCommandResultPayload? GetResult(string commandId);
-}
-
-public sealed record DevCommandEntry(
-    string CommandId,
-    string DeviceId,
-    string RevisionHash,
-    string DedupeToken,
-    string Code,
-    int? TimeoutMs,
-    DateTimeOffset QueuedAt);
-
-public sealed record DevCommandResultPayload(
-    string CommandId,
-    string? RevisionHash,
-    string? DedupeToken,
-    string Status,
-    string? StartedAtUtc,
-    string? FinishedAtUtc,
-    long ElapsedMs,
-    int ExitCode,
-    string? Stdout,
-    string? Stderr,
-    System.Text.Json.JsonElement? Data,
-    DateTimeOffset ReceivedAt);
-
 public sealed class DevCommandQueue : IDevCommandQueue
 {
     // One pending command per device — replaces any existing pending entry.
@@ -78,3 +47,4 @@ public sealed class DevCommandQueue : IDevCommandQueue
     public DevCommandResultPayload? GetResult(string commandId) =>
         _results.TryGetValue(commandId, out var result) ? result : null;
 }
+

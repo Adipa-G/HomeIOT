@@ -1,6 +1,7 @@
 using System.Text.Json;
 using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Services;
+using HomeIOT.Api.Services.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HomeIOT.Api.Controllers;

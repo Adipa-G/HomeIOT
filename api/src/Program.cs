@@ -15,12 +15,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<RuntimeControlOptions>(builder.Configuration.GetSection(RuntimeControlOptions.SectionName));
 builder.Services.Configure<OtaArtifactOptions>(builder.Configuration.GetSection(OtaArtifactOptions.SectionName));
+builder.Services.Configure<ModuleStorageOptions>(builder.Configuration.GetSection(ModuleStorageOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.AddDbContext<ApiDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddSingleton<IOtaReleaseService, FileSystemOtaReleaseService>();
 builder.Services.AddSingleton<IDevCommandQueue, DevCommandQueue>();
+builder.Services.AddScoped<IModuleService, ModuleService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

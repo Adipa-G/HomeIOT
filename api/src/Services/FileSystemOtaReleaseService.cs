@@ -1,6 +1,7 @@
 using System.Text.Json;
 using HomeIOT.Api.Configuration;
 using HomeIOT.Api.Contracts;
+using HomeIOT.Api.Services.Models;
 using Microsoft.Extensions.Options;
 
 namespace HomeIOT.Api.Services;
