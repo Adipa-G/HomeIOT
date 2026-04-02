@@ -194,4 +194,71 @@ public sealed class AdminModulesController : UserApiControllerBase
 
         return Ok(new { status = "ok" });
     }
+
+    [HttpPut("{moduleId}")]
+    public async Task<IActionResult> UpdateModule(
+        string moduleId, [FromBody] UpdateModuleRequest? request, CancellationToken ct)
+    {
+        if (request is null)
+            return BadRequest(new ErrorResponse("invalid_request", "Request body is required."));
+
+        var updated = await _moduleService.UpdateModuleAsync(moduleId, request, ct);
+        if (!updated)
+            return NotFound(new ErrorResponse("not_found", "Module not found."));
+
+        return Ok(new { status = "ok" });
+    }
+
+    [HttpDelete("{moduleId}")]
+    public async Task<IActionResult> DeleteModule(string moduleId, CancellationToken ct)
+    {
+        var deleted = await _moduleService.DeleteModuleAsync(moduleId, ct);
+        if (!deleted)
+            return NotFound(new ErrorResponse("not_found", "Module not found."));
+
+        return Ok(new { status = "ok" });
+    }
+
+    [HttpDelete("{moduleId}/versions/{versionId:guid}")]
+    public async Task<IActionResult> DeleteVersion(string moduleId, Guid versionId, CancellationToken ct)
+    {
+        var deleted = await _moduleService.DeleteVersionAsync(moduleId, versionId, ct);
+        if (!deleted)
+            return NotFound(new ErrorResponse("not_found", "Version not found."));
+
+        return Ok(new { status = "ok" });
+    }
+
+    [HttpGet("results")]
+    public async Task<IActionResult> QueryResults(
+        [FromQuery] int offset = 0,
+        [FromQuery] int limit = 50,
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery(Name = "device_id")] string? deviceId = null,
+        [FromQuery(Name = "module_id")] string? moduleId = null,
+        [FromQuery] string? status = null,
+        CancellationToken ct = default)
+    {
+        limit = Math.Clamp(limit, 1, 200);
+        offset = Math.Max(offset, 0);
+
+        var result = await _moduleService.QueryResultsAsync(offset, limit, from, to, deviceId, moduleId, status, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("statuses")]
+    public async Task<IActionResult> QueryStatuses(
+        [FromQuery] int offset = 0,
+        [FromQuery] int limit = 50,
+        [FromQuery(Name = "device_id")] string? deviceId = null,
+        [FromQuery(Name = "module_id")] string? moduleId = null,
+        CancellationToken ct = default)
+    {
+        limit = Math.Clamp(limit, 1, 200);
+        offset = Math.Max(offset, 0);
+
+        var result = await _moduleService.QueryStatusesAsync(offset, limit, deviceId, moduleId, ct);
+        return Ok(result);
+    }
 }

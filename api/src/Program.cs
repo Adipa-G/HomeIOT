@@ -23,6 +23,8 @@ builder.Services.AddDbContext<ApiDbContext>(options =>
 builder.Services.AddSingleton<IOtaReleaseService, FileSystemOtaReleaseService>();
 builder.Services.AddSingleton<IDevCommandQueue, DevCommandQueue>();
 builder.Services.AddScoped<IModuleService, ModuleService>();
+builder.Services.AddScoped<IDeviceAdminService, DeviceAdminService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

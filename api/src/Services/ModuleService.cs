@@ -387,6 +387,152 @@ public sealed class ModuleService : IModuleService
     }
 
     // ──────────────────────────────────────────────
+    //  Admin observability
+    // ──────────────────────────────────────────────
+
+    public async Task<PaginatedResponse<ModuleResultListItem>> QueryResultsAsync(
+        int offset, int limit, DateTimeOffset? from, DateTimeOffset? to,
+        string? deviceId, string? moduleId, string? status, CancellationToken ct = default)
+    {
+        var query = _db.ModuleResults.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(deviceId))
+            query = query.Where(r => r.DeviceId == deviceId);
+        if (!string.IsNullOrWhiteSpace(moduleId))
+            query = query.Where(r => r.ModuleId == moduleId);
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(r => r.Status == status);
+        if (from.HasValue)
+            query = query.Where(r => r.ReceivedAtUtc >= from.Value);
+        if (to.HasValue)
+            query = query.Where(r => r.ReceivedAtUtc <= to.Value);
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(r => r.ReceivedAtUtc)
+            .Skip(offset)
+            .Take(limit)
+            .Select(r => new ModuleResultListItem(
+                r.Id,
+                r.DeviceId,
+                r.ModuleId,
+                r.ModuleVersion,
+                r.RunId,
+                r.Status,
+                r.ElapsedMs,
+                r.ErrorMessage,
+                EndpointValidation.ToUtcZ(r.StartedAtUtc),
+                EndpointValidation.ToUtcZ(r.FinishedAtUtc)))
+            .ToListAsync(ct);
+
+        return new PaginatedResponse<ModuleResultListItem>(items, total, offset, limit);
+    }
+
+    public async Task<PaginatedResponse<ModuleStatusListItem>> QueryStatusesAsync(
+        int offset, int limit, string? deviceId, string? moduleId, CancellationToken ct = default)
+    {
+        var query = _db.ModuleStatuses.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(deviceId))
+            query = query.Where(s => s.DeviceId == deviceId);
+        if (!string.IsNullOrWhiteSpace(moduleId))
+            query = query.Where(s => s.ModuleId == moduleId);
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(s => s.ReceivedAtUtc)
+            .Skip(offset)
+            .Take(limit)
+            .Select(s => new ModuleStatusListItem(
+                s.Id,
+                s.DeviceId,
+                s.ModuleId,
+                s.ModuleVersion,
+                s.Disabled,
+                s.DisabledReason,
+                s.FailedStartCount,
+                s.DisabledAtUtc.HasValue ? EndpointValidation.ToUtcZ(s.DisabledAtUtc.Value) : null,
+                EndpointValidation.ToUtcZ(s.ReceivedAtUtc)))
+            .ToListAsync(ct);
+
+        return new PaginatedResponse<ModuleStatusListItem>(items, total, offset, limit);
+    }
+
+    public async Task<bool> UpdateModuleAsync(string moduleId, UpdateModuleRequest request, CancellationToken ct = default)
+    {
+        var module = await _db.ModuleDefinitions.FirstOrDefaultAsync(m => m.ModuleId == moduleId, ct);
+        if (module is null)
+            return false;
+
+        if (request.Description is not null)
+            module.Description = request.Description;
+        if (request.DefaultEntrypoint is not null)
+            module.DefaultEntrypoint = request.DefaultEntrypoint;
+
+        module.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> DeleteModuleAsync(string moduleId, CancellationToken ct = default)
+    {
+        var module = await _db.ModuleDefinitions
+            .Include(m => m.Versions)
+            .FirstOrDefaultAsync(m => m.ModuleId == moduleId, ct);
+
+        if (module is null)
+            return false;
+
+        // Remove assignments
+        var assignments = await _db.ModuleAssignments
+            .Where(a => a.ModuleDefinitionId == module.Id)
+            .ToListAsync(ct);
+        _db.ModuleAssignments.RemoveRange(assignments);
+
+        // Remove versions
+        _db.ModuleVersions.RemoveRange(module.Versions);
+
+        // Remove definition
+        _db.ModuleDefinitions.Remove(module);
+
+        await _db.SaveChangesAsync(ct);
+
+        // Remove package files
+        var modulePath = Path.Combine(_packageRoot, moduleId);
+        if (Directory.Exists(modulePath))
+            Directory.Delete(modulePath, recursive: true);
+
+        return true;
+    }
+
+    public async Task<bool> DeleteVersionAsync(string moduleId, Guid versionId, CancellationToken ct = default)
+    {
+        var module = await _db.ModuleDefinitions.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.ModuleId == moduleId, ct);
+
+        if (module is null)
+            return false;
+
+        var version = await _db.ModuleVersions
+            .FirstOrDefaultAsync(v => v.Id == versionId && v.ModuleDefinitionId == module.Id, ct);
+
+        if (version is null)
+            return false;
+
+        _db.ModuleVersions.Remove(version);
+        await _db.SaveChangesAsync(ct);
+
+        // Remove package file
+        var packagePath = Path.Combine(_packageRoot, moduleId, $"{version.Version}.py");
+        if (File.Exists(packagePath))
+            File.Delete(packagePath);
+
+        return true;
+    }
+
+    // ──────────────────────────────────────────────
     //  Private helpers
     // ──────────────────────────────────────────────
 

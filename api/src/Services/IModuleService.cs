@@ -19,4 +19,16 @@ public interface IModuleService
     Task<ModuleAssignmentRecord?> AssignModuleAsync(string moduleId, AssignModuleRequest request, CancellationToken ct = default);
     Task<ModuleAssignmentRecord?> UpdateAssignmentAsync(Guid assignmentId, UpdateAssignmentRequest request, CancellationToken ct = default);
     Task<bool> RemoveAssignmentAsync(Guid assignmentId, CancellationToken ct = default);
+
+    // Admin observability
+    Task<PaginatedResponse<ModuleResultListItem>> QueryResultsAsync(
+        int offset, int limit, DateTimeOffset? from, DateTimeOffset? to,
+        string? deviceId, string? moduleId, string? status, CancellationToken ct = default);
+
+    Task<PaginatedResponse<ModuleStatusListItem>> QueryStatusesAsync(
+        int offset, int limit, string? deviceId, string? moduleId, CancellationToken ct = default);
+
+    Task<bool> UpdateModuleAsync(string moduleId, UpdateModuleRequest request, CancellationToken ct = default);
+    Task<bool> DeleteModuleAsync(string moduleId, CancellationToken ct = default);
+    Task<bool> DeleteVersionAsync(string moduleId, Guid versionId, CancellationToken ct = default);
 }
