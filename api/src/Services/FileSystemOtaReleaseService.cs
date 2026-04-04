@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text.Json;
 using HomeIOT.Api.Configuration;
 using HomeIOT.Api.Contracts;
@@ -11,6 +13,12 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
     private static readonly JsonSerializerOptions ManifestJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
+    };
+
+    private static readonly JsonSerializerOptions ManifestWriteOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
     };
 
     private readonly string _artifactRoot;
@@ -103,6 +111,149 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
 
         return new OtaFileContent(File.ReadAllBytes(fullPath), Path.GetFileName(fullPath));
     }
+
+    // ──────────────────────────────────────────────
+    //  Admin
+    // ──────────────────────────────────────────────
+
+    public List<OtaPlatformListItem> ListPlatforms()
+    {
+        if (!Directory.Exists(_artifactRoot))
+            return new List<OtaPlatformListItem>();
+
+        var result = new List<OtaPlatformListItem>();
+        foreach (var dir in Directory.EnumerateDirectories(_artifactRoot))
+        {
+            var platform = Path.GetFileName(dir);
+            var releases = LoadReleases(dir);
+            result.Add(new OtaPlatformListItem(platform, releases.Count));
+        }
+
+        return result.OrderBy(p => p.Platform).ToList();
+    }
+
+    public List<OtaReleaseListItem> ListReleases(string platform)
+    {
+        var platformRoot = Path.Combine(_artifactRoot, platform);
+        if (!Directory.Exists(platformRoot))
+            return new List<OtaReleaseListItem>();
+
+        var releases = LoadReleases(platformRoot);
+        var result = new List<OtaReleaseListItem>();
+        foreach (var release in releases)
+        {
+            var releaseDir = Path.Combine(platformRoot, release.Version);
+            long totalSize = 0;
+            foreach (var item in release.Manifest)
+            {
+                var filePath = TryResolveSafePath(releaseDir, item.Path);
+                if (filePath is not null && File.Exists(filePath))
+                    totalSize += new FileInfo(filePath).Length;
+            }
+
+            result.Add(new OtaReleaseListItem(release.Version, release.Manifest.Count, totalSize));
+        }
+
+        return result
+            .OrderByDescending(r =>
+                Version.TryParse(r.Version, out var v) ? v : new Version(0, 0))
+            .ToList();
+    }
+
+    public OtaReleaseDetailResponse? GetReleaseDetail(string platform, string version)
+    {
+        var releaseDir = Path.Combine(_artifactRoot, platform, version);
+        if (!Directory.Exists(releaseDir))
+            return null;
+
+        var release = LoadRelease(releaseDir);
+        if (release is null)
+            return null;
+
+        var manifestFiles = new List<OtaManifestFileItem>();
+        long totalSize = 0;
+        foreach (var item in release.Manifest)
+        {
+            var filePath = TryResolveSafePath(releaseDir, item.Path);
+            long fileSize = 0;
+            if (filePath is not null && File.Exists(filePath))
+                fileSize = new FileInfo(filePath).Length;
+
+            totalSize += fileSize;
+            manifestFiles.Add(new OtaManifestFileItem(item.Path, item.Hash, fileSize));
+        }
+
+        return new OtaReleaseDetailResponse(platform, release.Version, manifestFiles.Count, totalSize, manifestFiles);
+    }
+
+    public async Task UploadReleaseAsync(string platform, string version, Stream zipStream, CancellationToken ct = default)
+    {
+        var releaseDir = Path.Combine(_artifactRoot, platform, version);
+        Directory.CreateDirectory(releaseDir);
+
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+
+        var manifestItems = new List<ManifestItemDocument>();
+
+        foreach (var entry in archive.Entries)
+        {
+            // Skip directories
+            if (string.IsNullOrEmpty(entry.Name))
+                continue;
+
+            var relativePath = entry.FullName.Replace('\\', '/');
+            if (!IsSafeRelativePath(relativePath))
+                continue;
+
+            var targetPath = TryResolveSafePath(releaseDir, relativePath);
+            if (targetPath is null)
+                continue;
+
+            var targetDir = Path.GetDirectoryName(targetPath);
+            if (targetDir is not null)
+                Directory.CreateDirectory(targetDir);
+
+            using (var entryStream = entry.Open())
+            using (var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write))
+            {
+                await entryStream.CopyToAsync(fileStream, ct);
+            }
+
+            // Compute hash from written file
+            string hash;
+            using (var readStream = new FileStream(targetPath, FileMode.Open, FileAccess.Read))
+            {
+                var hashBytes = await SHA256.HashDataAsync(readStream, ct);
+                hash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+            }
+
+            manifestItems.Add(new ManifestItemDocument { Path = relativePath, Hash = hash });
+        }
+
+        // Write manifest.json
+        var document = new ManifestDocument
+        {
+            Version = version,
+            Manifest = manifestItems,
+        };
+        var manifestJson = JsonSerializer.Serialize(document, ManifestWriteOptions);
+        var manifestPath = Path.Combine(releaseDir, _manifestFileName);
+        await File.WriteAllTextAsync(manifestPath, manifestJson, ct);
+    }
+
+    public bool DeleteRelease(string platform, string version)
+    {
+        var releaseDir = Path.Combine(_artifactRoot, platform, version);
+        if (!Directory.Exists(releaseDir))
+            return false;
+
+        Directory.Delete(releaseDir, recursive: true);
+        return true;
+    }
+
+    // ──────────────────────────────────────────────
+    //  Private helpers
+    // ──────────────────────────────────────────────
 
     private List<ReleaseEntry> LoadReleases(string platformRoot)
     {

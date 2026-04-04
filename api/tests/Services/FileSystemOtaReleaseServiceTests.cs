@@ -1,4 +1,5 @@
 using System.Text;
+using System.IO.Compression;
 using System.Text.Json;
 using HomeIOT.Api.Configuration;
 using HomeIOT.Api.Services;
@@ -66,6 +67,121 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
         Assert.Equal(expected, file.Content);
     }
 
+    [Fact]
+    public void ListPlatforms_ReturnsAllPlatforms()
+    {
+        CreateRelease("esp32", "1.0.0", new[] { ("main.py", "hash1") });
+        CreateRelease("pico", "1.0.0", new[] { ("main.py", "hash2") });
+
+        var service = CreateService();
+
+        var platforms = service.ListPlatforms();
+
+        Assert.Equal(2, platforms.Count);
+        Assert.Contains(platforms, p => p.Platform == "esp32" && p.ReleaseCount == 1);
+        Assert.Contains(platforms, p => p.Platform == "pico" && p.ReleaseCount == 1);
+    }
+
+    [Fact]
+    public void ListPlatforms_ReturnsEmpty_WhenNoArtifacts()
+    {
+        var service = CreateService();
+        var platforms = service.ListPlatforms();
+        Assert.Empty(platforms);
+    }
+
+    [Fact]
+    public void ListReleases_ReturnsVersionsDescending()
+    {
+        CreateRelease("esp32", "1.0.0", new[] { ("main.py", "hash1") });
+        CreateRelease("esp32", "1.2.0", new[] { ("main.py", "hash2"), ("boot.py", "hash3") });
+
+        var service = CreateService();
+
+        var releases = service.ListReleases("esp32");
+
+        Assert.Equal(2, releases.Count);
+        Assert.Equal("1.2.0", releases[0].Version);
+        Assert.Equal(2, releases[0].FileCount);
+        Assert.Equal("1.0.0", releases[1].Version);
+    }
+
+    [Fact]
+    public void ListReleases_ReturnsEmpty_WhenPlatformMissing()
+    {
+        var service = CreateService();
+        var releases = service.ListReleases("nonexistent");
+        Assert.Empty(releases);
+    }
+
+    [Fact]
+    public void GetReleaseDetail_ReturnsManifestWithSizes()
+    {
+        CreateRelease("esp32", "1.0.0", new[] { ("main.py", "hash1") });
+
+        var service = CreateService();
+
+        var detail = service.GetReleaseDetail("esp32", "1.0.0");
+
+        Assert.NotNull(detail);
+        Assert.Equal("esp32", detail!.Platform);
+        Assert.Equal("1.0.0", detail.Version);
+        Assert.Single(detail.Manifest);
+        Assert.Equal("main.py", detail.Manifest[0].Path);
+        Assert.True(detail.Manifest[0].SizeBytes > 0);
+    }
+
+    [Fact]
+    public void GetReleaseDetail_ReturnsNull_WhenMissing()
+    {
+        var service = CreateService();
+        var detail = service.GetReleaseDetail("esp32", "9.9.9");
+        Assert.Null(detail);
+    }
+
+    [Fact]
+    public async Task UploadRelease_ExtractsZipAndWritesManifest()
+    {
+        var service = CreateService();
+
+        using var zipStream = CreateTestZip(new Dictionary<string, string>
+        {
+            ["main.py"] = "print('hello')",
+            ["lib/utils.py"] = "# utils",
+        });
+
+        await service.UploadReleaseAsync("esp32", "2.0.0", zipStream);
+
+        var detail = service.GetReleaseDetail("esp32", "2.0.0");
+
+        Assert.NotNull(detail);
+        Assert.Equal("2.0.0", detail!.Version);
+        Assert.Equal(2, detail.FileCount);
+        Assert.Contains(detail.Manifest, f => f.Path == "main.py");
+        Assert.Contains(detail.Manifest, f => f.Path == "lib/utils.py");
+        Assert.All(detail.Manifest, f => Assert.NotEmpty(f.Hash));
+    }
+
+    [Fact]
+    public void DeleteRelease_RemovesDirectory()
+    {
+        CreateRelease("esp32", "1.0.0", new[] { ("main.py", "hash1") });
+
+        var service = CreateService();
+
+        var deleted = service.DeleteRelease("esp32", "1.0.0");
+
+        Assert.True(deleted);
+        Assert.Null(service.GetReleaseDetail("esp32", "1.0.0"));
+    }
+
+    [Fact]
+    public void DeleteRelease_ReturnsFalse_WhenMissing()
+    {
+        var service = CreateService();
+        Assert.False(service.DeleteRelease("esp32", "9.9.9"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))
@@ -112,5 +228,22 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
         {
             File.WriteAllText(Path.Combine(releaseDir, item.Path), "print('" + item.Path + "')");
         }
+    }
+
+    private static MemoryStream CreateTestZip(Dictionary<string, string> files)
+    {
+        var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (path, content) in files)
+            {
+                var entry = archive.CreateEntry(path);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(content);
+            }
+        }
+
+        ms.Position = 0;
+        return ms;
     }
 }
