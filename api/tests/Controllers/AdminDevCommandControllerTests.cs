@@ -100,6 +100,59 @@ public class AdminDevCommandControllerTests
         Assert.IsType<OkObjectResult>(getResult);
     }
 
+    [Fact]
+    public void ListPending_ReturnsEmptyWhenNoCommands()
+    {
+        var queue = new DevCommandQueue();
+        var controller = CreateController(queue);
+
+        var result = controller.ListPending();
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public void ListPending_ReturnsQueuedCommands()
+    {
+        var queue = new DevCommandQueue();
+        queue.Enqueue("dev-001", "print('a')", null);
+        queue.Enqueue("dev-002", "print('b')", 5000);
+        var controller = CreateController(queue);
+
+        var result = controller.ListPending();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(ok.Value);
+    }
+
+    [Fact]
+    public void ListResults_ReturnsEmptyWhenNoResults()
+    {
+        var queue = new DevCommandQueue();
+        var controller = CreateController(queue);
+
+        var result = controller.ListResults();
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public void ListResults_ReturnsStoredResults()
+    {
+        var queue = new DevCommandQueue();
+        queue.StoreResult("cmd-1", new DevCommandResultPayload(
+            CommandId: "cmd-1", RevisionHash: null, DedupeToken: null,
+            Status: "success", StartedAtUtc: "2026-05-30T00:00:00Z",
+            FinishedAtUtc: "2026-05-30T00:00:01Z", ElapsedMs: 100,
+            ExitCode: 0, Stdout: "ok", Stderr: null, Data: null,
+            ReceivedAt: DateTimeOffset.UtcNow));
+        var controller = CreateController(queue);
+
+        var result = controller.ListResults();
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
     private static AdminDevCommandController CreateController(IDevCommandQueue queue)
     {
         var controller = new AdminDevCommandController(queue);

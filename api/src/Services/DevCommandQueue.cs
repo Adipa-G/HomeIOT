@@ -46,5 +46,11 @@ public sealed class DevCommandQueue : IDevCommandQueue
 
     public DevCommandResultPayload? GetResult(string commandId) =>
         _results.TryGetValue(commandId, out var result) ? result : null;
+
+    public IReadOnlyList<DevCommandEntry> ListPending() =>
+        _pending.Values.OrderByDescending(e => e.QueuedAt).ToList();
+
+    public IReadOnlyList<DevCommandResultPayload> ListResults() =>
+        _results.Values.OrderByDescending(r => r.ReceivedAt).ToList();
 }
 

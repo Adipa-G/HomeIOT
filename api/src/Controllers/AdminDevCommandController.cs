@@ -1,4 +1,5 @@
 using HomeIOT.Api.Contracts;
+using HomeIOT.Api.Infrastructure;
 using HomeIOT.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -61,5 +62,44 @@ public sealed class AdminDevCommandController : UserApiControllerBase
             data            = result.Data,
             received_at     = result.ReceivedAt,
         });
+    }
+
+    /// <summary>
+    /// Operator: list all pending (not yet acknowledged) commands.
+    /// </summary>
+    [HttpGet("pending")]
+    public ActionResult ListPending()
+    {
+        var pending = _queue.ListPending();
+        return Ok(pending.Select(e => new
+        {
+            command_id = e.CommandId,
+            device_id = e.DeviceId,
+            code = e.Code,
+            timeout_ms = e.TimeoutMs,
+            queued_at_utc = EndpointValidation.ToUtcZ(e.QueuedAt),
+        }));
+    }
+
+    /// <summary>
+    /// Operator: list all stored command results (most recent first).
+    /// </summary>
+    [HttpGet("results")]
+    public ActionResult ListResults()
+    {
+        var results = _queue.ListResults();
+        return Ok(results.Select(r => new
+        {
+            command_id = r.CommandId,
+            status = r.Status,
+            exit_code = r.ExitCode,
+            elapsed_ms = r.ElapsedMs,
+            started_at_utc = r.StartedAtUtc,
+            finished_at_utc = r.FinishedAtUtc,
+            stdout = r.Stdout,
+            stderr = r.Stderr,
+            data = r.Data,
+            received_at = r.ReceivedAt,
+        }));
     }
 }

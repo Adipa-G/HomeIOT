@@ -9,4 +9,8 @@ public interface IDevCommandQueue
     void Acknowledge(string deviceId, string commandId);
     void StoreResult(string commandId, DevCommandResultPayload result);
     DevCommandResultPayload? GetResult(string commandId);
+
+    // Admin listing
+    IReadOnlyList<DevCommandEntry> ListPending();
+    IReadOnlyList<DevCommandResultPayload> ListResults();
 }
