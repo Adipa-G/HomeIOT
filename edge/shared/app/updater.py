@@ -66,6 +66,11 @@ class Updater:
         except ImportError:  # pragma: no cover - desktop fallback
             _gc = None
 
+        # Pause log uplink during OTA to avoid socket contention;
+        # log entries still buffer and print to console.
+        if self._logger is not None and hasattr(self._logger, "pause_uplink"):
+            self._logger.pause_uplink()
+
         self._log_info("Applying OTA update", {"version": update_info.version})
         self._clear_staging()
         self._ensure_dir(self._staging_root)
@@ -106,6 +111,10 @@ class Updater:
                 free = _gc.mem_free() if hasattr(_gc, "mem_free") else None
                 self._log_info("OTA GC after file", {"path": rel_path, "free_memory": free})
 
+            # Brief pause between downloads to let ESP32 TCP sockets recycle
+            # from TIME_WAIT state; prevents socket exhaustion on large updates.
+            self._system.sleep_ms(50)
+
         if config_staged:
             self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
             try:
@@ -119,13 +128,25 @@ class Updater:
         self._log_info("OTA apply complete, resetting", {"version": update_info.version})
         self._system.reset()
 
-    def _download_file(self, version: str, path: str) -> bytes:
+    def _download_file(self, version: str, path: str, retries: int = 3) -> bytes:
         url = self._config.api_url + OTA_FILE_PATH + "?version=" + version + "&path=" + path
-        response = self._http.get(url, headers=self._auth_headers())
-        if response.status_code != 200:
-            self._log_error("OTA file download failed", {"path": path, "status_code": response.status_code})
-            raise RuntimeError("Failed to download update file: " + path)
-        return response.content
+        last_error = None
+        for attempt in range(retries):
+            if attempt > 0:
+                delay_ms = 500 * attempt
+                self._log_warn("Retrying OTA download", {"path": path, "attempt": attempt + 1, "delay_ms": delay_ms})
+                self._system.sleep_ms(delay_ms)
+            try:
+                response = self._http.get(url, headers=self._auth_headers())
+                if response.status_code == 200:
+                    return response.content
+                last_error = "HTTP " + str(response.status_code)
+                self._log_warn("OTA download got non-200", {"path": path, "status_code": response.status_code})
+            except Exception as exc:
+                last_error = str(exc)
+                self._log_warn("OTA download error", {"path": path, "error": last_error})
+        self._log_error("OTA file download failed after retries", {"path": path, "error": last_error})
+        raise RuntimeError("Failed to download update file: " + path)
 
     def _auth_headers(self):
         return {

@@ -49,6 +49,9 @@ def test_heartbeat_posts_device_identity():
     assert method == "POST"
     assert url == "http://localhost:8000/api/devices/heartbeat"
     assert data["device_id"] == "esp32-001"
+    assert "uptime_ms" in data
+    assert "free_memory_bytes" in data
+    assert data["free_memory_bytes"] == 65536
     assert headers["X-Device-ID"] == "esp32-001"
     assert headers["X-Api-Key"] == "secret"
 

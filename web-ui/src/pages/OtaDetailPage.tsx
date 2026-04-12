@@ -28,7 +28,7 @@ export default function OtaDetailPage() {
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">{platform} v{data.version}</h2>
-          <p className="mt-1 text-sm text-gray-500">{data.files.length} file{data.files.length !== 1 ? 's' : ''}</p>
+          <p className="mt-1 text-sm text-gray-500">{data.manifest.length} file{data.manifest.length !== 1 ? 's' : ''}</p>
         </div>
         <ConfirmModal title="Delete release?" description={`This will permanently delete ${platform} v${data.version}.`} onConfirm={() => deleteRelease.mutateAsync()}>
           {(open) => <button onClick={open} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700">Delete</button>}
@@ -39,17 +39,17 @@ export default function OtaDetailPage() {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Filename</th>
+              <th className="px-4 py-3">Path</th>
               <th className="px-4 py-3">Size</th>
               <th className="px-4 py-3">SHA256</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {data.files.map((f) => (
-              <tr key={f.filename} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono">{f.filename}</td>
+            {data.manifest.map((f) => (
+              <tr key={f.path} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-mono">{f.path}</td>
                 <td className="px-4 py-3 text-gray-600">{formatBytes(f.size_bytes)}</td>
-                <td className="px-4 py-3 font-mono text-xs text-gray-500">{f.sha256}</td>
+                <td className="px-4 py-3 font-mono text-xs text-gray-500">{f.hash}</td>
               </tr>
             ))}
           </tbody>

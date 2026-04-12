@@ -17,6 +17,21 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // SQLite stores DateTimeOffset as TEXT (ISO 8601) but the EF Core SQLite
+        // provider cannot translate DateTimeOffset comparisons or ORDER BY.
+        // Tell EF to treat them as strings so comparisons and ordering translate
+        // to simple TEXT operations which work correctly with ISO 8601 format.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTimeOffset))
+                    property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.DateTimeOffsetToStringConverter());
+                else if (property.ClrType == typeof(DateTimeOffset?))
+                    property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.DateTimeOffsetToStringConverter());
+            }
+        }
+
         modelBuilder.Entity<DeviceRecord>(entity =>
         {
             entity.ToTable("devices");

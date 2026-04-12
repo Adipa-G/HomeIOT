@@ -83,6 +83,12 @@ class ISystem:
     def time_ms(self) -> int:
         raise NotImplementedError()
 
+    def uptime_ms(self) -> int:
+        raise NotImplementedError()
+
+    def free_memory_bytes(self) -> int:
+        raise NotImplementedError()
+
     def sleep_ms(self, milliseconds: int) -> None:
         raise NotImplementedError()
 

@@ -129,7 +129,7 @@ public sealed class DevicesController : EdgeApiControllerBase
         var response = new HeartbeatResponse(
             "ok",
             ToUtcZ(now),
-            "development",
+            device.Mode,
             runtime.DevPollIntervalMs,
             runtime.ModuleAssignmentPollIntervalMs,
             runtime.NextHeartbeatMs);

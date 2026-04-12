@@ -52,6 +52,13 @@ export interface HeartbeatListItem {
   received_at_utc: string;
 }
 
+export interface LogEntry {
+  ts: number | null;
+  level: string | null;
+  message: string | null;
+  context: Record<string, unknown>;
+}
+
 export interface LogBatchListItem {
   id: string;
   reason: string;

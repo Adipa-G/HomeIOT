@@ -10,6 +10,7 @@ class MicroPythonSystem(ISystem):
         except ImportError:  # pragma: no cover - desktop fallback
             import time as _time
         self._time = _time
+        self._boot_ms = self.time_ms()
 
     def reset(self) -> None:
         try:
@@ -29,6 +30,20 @@ class MicroPythonSystem(ISystem):
         if hasattr(self._time, "ticks_ms"):
             return self._time.ticks_ms()
         return int(self._time.time() * 1000)
+
+    def uptime_ms(self) -> int:
+        now = self.time_ms()
+        if hasattr(self._time, "ticks_diff"):
+            return self._time.ticks_diff(now, self._boot_ms)
+        return now - self._boot_ms
+
+    def free_memory_bytes(self) -> int:
+        try:
+            import gc
+            gc.collect()
+            return gc.mem_free()
+        except (ImportError, AttributeError):  # pragma: no cover - desktop fallback
+            return 0
 
     def sleep_ms(self, milliseconds: int) -> None:
         if hasattr(self._time, "sleep_ms"):

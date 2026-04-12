@@ -78,9 +78,8 @@ class BootManager:
         if app_staged:
             self._remove_tree(self._app_prev_path)
             if self._fs.exists(self._app_path):
-                self._copy_tree(self._app_path, self._app_prev_path)
-            self._remove_tree(self._app_path)
-            self._copy_tree(self._app_staging_path, self._app_path)
+                self._fs.rename(self._app_path, self._app_prev_path)
+            self._fs.rename(self._app_staging_path, self._app_path)
 
         self._promote_config()
 
@@ -119,7 +118,7 @@ class BootManager:
 
         if pending_app_changed:
             self._remove_tree(self._app_path)
-            self._copy_tree(self._app_prev_path, self._app_path)
+            self._fs.rename(self._app_prev_path, self._app_path)
 
         if pending_config_changed:
             self._restore_config()
@@ -187,17 +186,16 @@ class BootManager:
 
         self._remove_tree(self._config_prev_path)
         if self._fs.exists(self._config_path):
-            self._copy_tree(self._config_path, self._config_prev_path)
+            self._fs.rename(self._config_path, self._config_prev_path)
 
-        self._remove_tree(self._config_path)
-        self._copy_tree(self._config_staging_path, self._config_path)
+        self._fs.rename(self._config_staging_path, self._config_path)
 
     def _restore_config(self) -> None:
         if not self._fs.exists(self._config_prev_path):
             return
 
         self._remove_tree(self._config_path)
-        self._copy_tree(self._config_prev_path, self._config_path)
+        self._fs.rename(self._config_prev_path, self._config_path)
 
     def _copy_tree(self, src: str, dst: str) -> None:
         if self._fs.is_dir(src):

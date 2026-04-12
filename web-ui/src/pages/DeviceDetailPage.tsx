@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, PaginatedResponse } from '../types/api';
+import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, PaginatedResponse } from '../types/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Pagination } from '../components/Pagination';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -118,34 +118,44 @@ export default function DeviceDetailPage() {
       )}
 
       {tab === 'logs' && (
-        logs.isLoading ? <p className="text-sm text-gray-500">Loading…</p> : logs.data && (
-          <>
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3">Received</th>
-                    <th className="px-4 py-3">Reason</th>
-                    <th className="px-4 py-3">Count</th>
-                    <th className="px-4 py-3">Dropped</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {logs.data.items.map((l) => (
-                    <tr key={l.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-600">{formatUtc(l.received_at_utc)}</td>
-                      <td className="px-4 py-3 text-gray-600">{l.reason}</td>
-                      <td className="px-4 py-3 text-gray-600">{l.received_count}</td>
-                      <td className="px-4 py-3 text-gray-600">{l.dropped_count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination offset={logOffset} limit={25} total={logs.data.total} onChange={setLogOffset} />
-          </>
-        )
+        logs.isLoading ? <p className="text-sm text-gray-500">Loading…</p> : logs.data && (() => {
+          const allEntries = logs.data.items.flatMap((l) => {
+            const entries: LogEntry[] = (() => { try { return JSON.parse(l.logs_json); } catch { return []; } })();
+            return entries.map((e) => ({ ...e, batchTime: l.received_at_utc }));
+          });
+          return (
+            <>
+              <div className="rounded-lg border border-gray-200 bg-gray-900 px-4 py-3 font-mono text-xs leading-relaxed text-gray-200">
+                {allEntries.length === 0 ? (
+                  <p className="text-gray-500">No log entries</p>
+                ) : (
+                  allEntries.map((e, i) => (
+                    <div key={i} className="flex gap-2 py-0.5">
+                      <span className="shrink-0 text-gray-500">{e.ts ? new Date(e.ts * 1000).toISOString().slice(11, 19) : '??:??:??'}</span>
+                      <LogLevel level={e.level} />
+                      <span className="break-all">{e.message ?? '—'}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <Pagination offset={logOffset} limit={25} total={logs.data.total} onChange={setLogOffset} />
+            </>
+          );
+        })()
       )}
     </div>
   );
+}
+
+const levelColors: Record<string, string> = {
+  error: 'text-red-400',
+  warn: 'text-yellow-400',
+  warning: 'text-yellow-400',
+  info: 'text-blue-400',
+  debug: 'text-gray-500',
+};
+
+function LogLevel({ level }: { level: string | null }) {
+  const l = (level ?? 'info').toLowerCase();
+  return <span className={`shrink-0 w-12 uppercase ${levelColors[l] ?? 'text-gray-400'}`}>{l}</span>;
 }

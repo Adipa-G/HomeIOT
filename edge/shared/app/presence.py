@@ -55,6 +55,8 @@ class PresenceService:
         payload = {
             "device_id": self._config.device_id,
             "timestamp": self._system.time_ms(),
+            "uptime_ms": self._system.uptime_ms(),
+            "free_memory_bytes": self._system.free_memory_bytes(),
         }
 
         self._log_info("Sending heartbeat", {"url": url})

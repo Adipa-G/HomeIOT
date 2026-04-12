@@ -313,3 +313,49 @@ def test_apply_raises_on_invalid_config_and_cleans_staging():
     assert fs.read_text("config.json").startswith("{\"device_id\":\"esp32-001\"")
     assert not fs.exists("config_staging.json")
     assert not fs.exists("app_staging")
+
+
+def test_download_retries_on_failure():
+    """_download_file retries on exception and succeeds on subsequent attempt."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    new_file = b"print('retried')"
+    expected_hash = updater._digest_bytes(new_file)
+
+    # Track call count to simulate transient failure
+    call_count = [0]
+    original_get = http.get
+
+    def flaky_get(url, headers=None):
+        call_count[0] += 1
+        if call_count[0] == 1 and "file" in url:
+            raise OSError("socket exhaustion")
+        return original_get(url, headers)
+
+    http.get = flaky_get
+    http.add_bytes_response(
+        "GET",
+        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
+        200,
+        new_file,
+    )
+
+    fs.write_text(
+        "config.json",
+        '{"device_id":"esp32-001","api_url":"http://localhost:8000","api_key":"secret","wifi_ssid":"ssid","wifi_password":"pass","heartbeat_interval_ms":1000,"max_boot_attempts":3,"current_version":"1.0.0"}',
+    )
+
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[{"path": "main.py", "hash": expected_hash, "size": len(new_file)}],
+        )
+    )
+
+    assert call_count[0] == 2  # first failed, second succeeded
+    assert system.reset_calls == 1

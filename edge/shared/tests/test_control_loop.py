@@ -15,6 +15,12 @@ class _FakeSystem:
         self._time_ms += 100
         return self._time_ms
 
+    def uptime_ms(self):
+        return self._time_ms
+
+    def free_memory_bytes(self):
+        return 65536
+
     def sleep_ms(self, milliseconds):
         self.sleep_calls.append(milliseconds)
 

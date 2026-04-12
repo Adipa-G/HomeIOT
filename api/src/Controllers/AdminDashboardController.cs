@@ -26,7 +26,7 @@ public sealed class AdminDashboardController : UserApiControllerBase
 
         var totalDevices = await _db.Devices.CountAsync(ct);
         var devicesOnline24h = await _db.Devices
-            .CountAsync(d => d.LastHeartbeatAtUtc.HasValue && d.LastHeartbeatAtUtc.Value >= since24h, ct);
+            .CountAsync(d => d.LastHeartbeatAtUtc != null && d.LastHeartbeatAtUtc >= since24h, ct);
         var totalModules = await _db.ModuleDefinitions.CountAsync(ct);
         var totalAssignments = await _db.ModuleAssignments.CountAsync(ct);
         var totalUsers = await _db.Users.CountAsync(ct);

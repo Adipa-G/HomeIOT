@@ -29,6 +29,15 @@ class EdgeLogger:
         self._dropped_count = 0
         self._drop_mode_bytes_remaining = 0
         self._last_flush_ms = self._system.time_ms()
+        self._uplink_paused = False
+
+    def pause_uplink(self):
+        """Temporarily suppress uplink flushes (e.g. during OTA)."""
+        self._uplink_paused = True
+
+    def resume_uplink(self):
+        """Re-enable uplink flushes after pausing."""
+        self._uplink_paused = False
 
     def info(self, message, context=None):
         self._log("INFO", message, context)
@@ -47,6 +56,8 @@ class EdgeLogger:
     def flush(self, reason="manual") -> bool:
         self._last_flush_ms = self._system.time_ms()
 
+        if self._uplink_paused:
+            return False
         if not self._cfg.enabled_uplink:
             return False
         if self._http is None or not self._api_url:

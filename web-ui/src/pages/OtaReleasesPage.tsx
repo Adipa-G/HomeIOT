@@ -18,9 +18,10 @@ export default function OtaReleasesPage() {
 
   const upload = useMutation({
     mutationFn: () => {
+      const version = file!.name.replace(/\.zip$/i, '');
       const fd = new FormData();
       fd.append('file', file!);
-      return api.upload(`/api/admin/ota/${platform}`, fd);
+      return api.upload(`/api/admin/ota/${platform}/${version}`, fd);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ota-releases', platform] }); setFile(null); toast('Release uploaded'); },
   });
