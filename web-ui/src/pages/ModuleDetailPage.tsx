@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import React, { useState, type FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -19,9 +19,13 @@ export default function ModuleDetailPage() {
 
   const [versionCode, setVersionCode] = useState('');
   const [versionFile, setVersionFile] = useState<File | null>(null);
+  const [versionSource, setVersionSource] = useState('');
+  const [uploadMode, setUploadMode] = useState<'file' | 'code'>('file');
 
   const [assignDevice, setAssignDevice] = useState('');
   const [assignVersion, setAssignVersion] = useState('');
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
   const { data: mod, isLoading } = useQuery({
     queryKey: ['module', moduleId],
@@ -40,12 +44,15 @@ export default function ModuleDetailPage() {
 
   const uploadVersion = useMutation({
     mutationFn: () => {
-      const fd = new FormData();
-      fd.append('version', versionCode);
-      fd.append('file', versionFile!);
-      return api.upload(`/api/admin/modules/${moduleId}/versions`, fd);
+      if (uploadMode === 'file') {
+        const fd = new FormData();
+        fd.append('version', versionCode);
+        fd.append('file', versionFile!);
+        return api.upload(`/api/admin/modules/${moduleId}/versions`, fd);
+      }
+      return api.post(`/api/admin/modules/${moduleId}/versions`, { version: versionCode, code: versionSource });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['module', moduleId] }); setVersionCode(''); setVersionFile(null); toast('Version uploaded'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['module', moduleId] }); setVersionCode(''); setVersionFile(null); setVersionSource(''); toast('Version uploaded'); },
   });
 
   const deleteVersion = useMutation({
@@ -109,22 +116,53 @@ export default function ModuleDetailPage() {
       {/* Versions */}
       <section className="mb-8">
         <h3 className="mb-3 text-lg font-medium text-gray-900">Versions</h3>
-        <div className="mb-3 flex items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-gray-600">Version</label>
-            <input value={versionCode} onChange={(e) => setVersionCode(e.target.value)} placeholder="1.0.0" className="rounded border border-gray-300 px-2 py-1 text-sm" />
+        <div className="mb-3 space-y-3">
+          <div className="flex items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-gray-600">Version</label>
+              <input value={versionCode} onChange={(e) => setVersionCode(e.target.value)} placeholder="1.0.0" className="rounded border border-gray-300 px-2 py-1 text-sm" />
+            </div>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setUploadMode('file')} className={`rounded px-2 py-1 text-xs ${uploadMode === 'file' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>File</button>
+              <button type="button" onClick={() => setUploadMode('code')} className={`rounded px-2 py-1 text-xs ${uploadMode === 'code' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>Code</button>
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-600">File</label>
-            <input type="file" onChange={(e) => setVersionFile(e.target.files?.[0] ?? null)} className="text-sm" />
-          </div>
-          <button
-            onClick={() => uploadVersion.mutate()}
-            disabled={!versionCode || !versionFile || uploadVersion.isPending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-          >
-            Upload
-          </button>
+          {uploadMode === 'file' ? (
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-gray-600">File</label>
+                <input type="file" onChange={(e) => setVersionFile(e.target.files?.[0] ?? null)} className="text-sm" />
+              </div>
+              <button
+                onClick={() => uploadVersion.mutate()}
+                disabled={!versionCode || !versionFile || uploadVersion.isPending}
+                className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+              >
+                Upload
+              </button>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs text-gray-600">Code</label>
+              <textarea
+                value={versionSource}
+                onChange={(e) => setVersionSource(e.target.value)}
+                rows={10}
+                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm focus:border-blue-500 focus:outline-none"
+                placeholder={"def run(ctx):\n    pass"}
+              />
+              {!versionCode && versionSource && (
+                <p className="mt-1 text-xs text-amber-600">Enter a version number above to save.</p>
+              )}
+              <button
+                onClick={() => uploadVersion.mutate()}
+                disabled={!versionCode || !versionSource || uploadVersion.isPending}
+                className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+              >
+                Save Version
+              </button>
+            </div>
+          )}
         </div>
         {mod.versions.length === 0 ? (
           <p className="text-sm text-gray-500">No versions yet.</p>
@@ -141,16 +179,40 @@ export default function ModuleDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {mod.versions.map((v) => (
-                  <tr key={v.version} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono">{v.version}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{v.sha256?.slice(0, 16)}…</td>
-                    <td className="px-4 py-3 text-gray-600">{formatUtc(v.created_at_utc)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <ConfirmModal title="Delete version?" onConfirm={() => deleteVersion.mutateAsync(v.version)}>
-                        {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
-                      </ConfirmModal>
-                    </td>
-                  </tr>
+                  <React.Fragment key={v.version}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono">{v.version}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{v.sha256?.slice(0, 16)}…</td>
+                      <td className="px-4 py-3 text-gray-600">{formatUtc(v.created_at_utc)}</td>
+                      <td className="px-4 py-3 text-right space-x-3">
+                        <button
+                          onClick={async () => {
+                            if (expandedVersion === v.version) { setExpandedVersion(null); setExpandedCode(null); return; }
+                            setExpandedVersion(v.version); setExpandedCode(null);
+                            const res = await api.get<{ code: string }>(`/api/admin/modules/${moduleId}/versions/${v.version}/code`);
+                            setExpandedCode(res.code);
+                          }}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {expandedVersion === v.version ? 'Hide' : 'View'}
+                        </button>
+                        <ConfirmModal title="Delete version?" onConfirm={() => deleteVersion.mutateAsync(v.version)}>
+                          {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
+                        </ConfirmModal>
+                      </td>
+                    </tr>
+                    {expandedVersion === v.version && (
+                      <tr>
+                        <td colSpan={4} className="bg-gray-900 px-4 py-3">
+                          {expandedCode === null ? (
+                            <p className="text-sm text-gray-400">Loading…</p>
+                          ) : (
+                            <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-gray-200 whitespace-pre-wrap">{expandedCode}</pre>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

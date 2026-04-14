@@ -127,6 +127,17 @@ public sealed class AdminModulesController : UserApiControllerBase
             ToUtcZ(result.CreatedAtUtc)));
     }
 
+    [HttpGet("{moduleId}/versions/{version}/code")]
+    public IActionResult GetVersionCode(string moduleId, string version)
+    {
+        var bytes = _moduleService.GetPackage(moduleId, version);
+        if (bytes is null)
+            return NotFound(new ErrorResponse("not_found", "Module version not found."));
+
+        var code = System.Text.Encoding.UTF8.GetString(bytes);
+        return Ok(new { module_id = moduleId, version, code });
+    }
+
     [HttpGet("{moduleId}/assignments")]
     public async Task<IActionResult> GetAssignments(string moduleId, CancellationToken ct)
     {

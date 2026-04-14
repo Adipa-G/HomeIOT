@@ -123,19 +123,37 @@ export default function DeviceDetailPage() {
             const entries: LogEntry[] = (() => { try { return JSON.parse(l.logs_json); } catch { return []; } })();
             return entries.map((e) => ({ ...e, batchTime: l.received_at_utc }));
           });
+          allEntries.sort((a, b) => {
+            const ba = new Date(a.batchTime).getTime();
+            const bb = new Date(b.batchTime).getTime();
+            if (ba !== bb) return bb - ba;
+            return (b.ts ?? 0) - (a.ts ?? 0);
+          });
           return (
             <>
               <div className="rounded-lg border border-gray-200 bg-gray-900 px-4 py-3 font-mono text-xs leading-relaxed text-gray-200">
                 {allEntries.length === 0 ? (
                   <p className="text-gray-500">No log entries</p>
                 ) : (
-                  allEntries.map((e, i) => (
-                    <div key={i} className="flex gap-2 py-0.5">
-                      <span className="shrink-0 text-gray-500">{e.ts ? new Date(e.ts * 1000).toISOString().slice(11, 19) : '??:??:??'}</span>
-                      <LogLevel level={e.level} />
-                      <span className="break-all">{e.message ?? '—'}</span>
-                    </div>
-                  ))
+                  allEntries.map((e, i) => {
+                    const ctx = e.context && typeof e.context === 'object' && Object.keys(e.context).length > 0
+                      ? e.context as Record<string, unknown>
+                      : null;
+                    return (
+                      <div key={i} className="flex gap-2 py-0.5">
+                        <span className="shrink-0 text-gray-500">{formatUtc(e.batchTime)}</span>
+                        <LogLevel level={e.level} />
+                        <span className="break-all">
+                          {e.message ?? '—'}
+                          {ctx && (
+                            <span className="ml-2 text-gray-500">
+                              {Object.entries(ctx).map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' ')}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })
                 )}
               </div>
               <Pagination offset={logOffset} limit={25} total={logs.data.total} onChange={setLogOffset} />

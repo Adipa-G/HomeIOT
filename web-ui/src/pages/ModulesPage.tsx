@@ -14,7 +14,7 @@ export default function ModulesPage() {
   });
 
   const filtered = data?.filter((m) =>
-    !search || m.name.toLowerCase().includes(search.toLowerCase()) || m.module_id.toLowerCase().includes(search.toLowerCase()),
+    !search || m.module_id.toLowerCase().includes(search.toLowerCase()) || (m.description ?? '').toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -43,9 +43,8 @@ export default function ModulesPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
-                <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Module ID</th>
-                <th className="px-4 py-3">Platform</th>
+                <th className="px-4 py-3">Description</th>
                 <th className="px-4 py-3">Versions</th>
                 <th className="px-4 py-3">Assignments</th>
                 <th className="px-4 py-3">Created</th>
@@ -55,10 +54,9 @@ export default function ModulesPage() {
               {filtered.map((m) => (
                 <tr key={m.module_id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link to={`/modules/${m.module_id}`} className="text-blue-600 hover:underline">{m.name}</Link>
+                    <Link to={`/modules/${m.module_id}`} className="font-mono text-blue-600 hover:underline">{m.module_id}</Link>
                   </td>
-                  <td className="px-4 py-3 font-mono text-gray-600">{m.module_id}</td>
-                  <td className="px-4 py-3 text-gray-600">{m.platform}</td>
+                  <td className="px-4 py-3 text-gray-600">{m.description ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{m.version_count}</td>
                   <td className="px-4 py-3 text-gray-600">{m.assignment_count}</td>
                   <td className="px-4 py-3 text-gray-600">{formatUtc(m.created_at_utc)}</td>

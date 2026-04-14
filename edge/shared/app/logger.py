@@ -24,8 +24,8 @@ class EdgeLogger:
         self._api_key = api_key
         self._cfg = logging_config or LoggingConfig(enabled_uplink=False)
 
-        self._buffer = []
-        self._buffer_bytes = 0
+        self._buffer_data = bytearray()
+        self._entry_count = 0
         self._dropped_count = 0
         self._drop_mode_bytes_remaining = 0
         self._last_flush_ms = self._system.time_ms()
@@ -62,8 +62,10 @@ class EdgeLogger:
             return False
         if self._http is None or not self._api_url:
             return False
-        if not self._buffer and self._dropped_count == 0:
+        if not self._buffer_data and self._dropped_count == 0:
             return False
+
+        logs = self._decode_buffer()
 
         payload = {
             "device_id": self._device_id,
@@ -71,7 +73,7 @@ class EdgeLogger:
             "sentAt": self._system.time_ms(),
             "dropped_count": self._dropped_count,
             "truncated": self._dropped_count > 0,
-            "logs": list(self._buffer),
+            "logs": logs,
         }
 
         url = self._api_url + LOGS_PATH
@@ -85,7 +87,7 @@ class EdgeLogger:
                 "ts": self._system.time_ms(),
                 "level": "INFO",
                 "message": "Sending log batch",
-                "context": {"url": url, "reason": reason, "count": len(payload.get("logs", [])), "dropped_count": self._dropped_count},
+                "context": {"url": url, "reason": reason, "count": len(logs), "dropped_count": self._dropped_count},
             }
             print(self._format_console_event(console_event))
         except Exception:
@@ -98,8 +100,8 @@ class EdgeLogger:
         if response.status_code not in (200, 201):
             return False
 
-        self._buffer = []
-        self._buffer_bytes = 0
+        self._buffer_data = bytearray()
+        self._entry_count = 0
         self._dropped_count = 0
         return True
 
@@ -120,21 +122,23 @@ class EdgeLogger:
         if not self._cfg.enabled_uplink:
             return
 
-        event_bytes = self._event_size(event)
+        event_line = json.dumps(event)
+        event_bytes = len(event_line) + 1  # +1 for newline separator
 
         if self._drop_mode_bytes_remaining > 0:
             self._drop_mode_bytes_remaining = max(0, self._drop_mode_bytes_remaining - event_bytes)
             self._dropped_count += 1
             return
 
-        if self._buffer_bytes + event_bytes > self._cfg.buffer_max_bytes:
+        if len(self._buffer_data) + event_bytes > self._cfg.buffer_max_bytes:
             flushed = False
-            if self._buffer:
+            if self._buffer_data:
                 flushed = self.flush("threshold")
 
-            if flushed and self._buffer_bytes + event_bytes <= self._cfg.buffer_max_bytes:
-                self._buffer.append(event)
-                self._buffer_bytes += event_bytes
+            if flushed and len(self._buffer_data) + event_bytes <= self._cfg.buffer_max_bytes:
+                self._buffer_data.extend(event_line.encode("utf-8"))
+                self._buffer_data.extend(b"\n")
+                self._entry_count += 1
                 return
 
             self._dropped_count += 1
@@ -154,16 +158,23 @@ class EdgeLogger:
             )
             return
 
-        self._buffer.append(event)
-        self._buffer_bytes += event_bytes
+        self._buffer_data.extend(event_line.encode("utf-8"))
+        self._buffer_data.extend(b"\n")
+        self._entry_count += 1
 
-        if self._buffer_bytes >= self._cfg.buffer_max_bytes:
+        if len(self._buffer_data) >= self._cfg.buffer_max_bytes:
             self.flush("threshold")
 
     def _should_log(self, level):
         configured = _LEVELS.get(self._cfg.min_level.upper(), _LEVELS["INFO"])
         current = _LEVELS.get(level, _LEVELS["INFO"])
         return current >= configured
+
+    def _decode_buffer(self):
+        if not self._buffer_data:
+            return []
+        raw = bytes(self._buffer_data).decode("utf-8")
+        return [json.loads(line) for line in raw.strip().split("\n") if line]
 
     @staticmethod
     def _format_console_event(event):
@@ -178,6 +189,4 @@ class EdgeLogger:
             ctx=ctx,
         )
 
-    @staticmethod
-    def _event_size(event):
-        return len(json.dumps(event).encode("utf-8"))
+

@@ -13,8 +13,6 @@ vi.mock('../../api/client', () => ({
 const mockModules = [
   {
     module_id: 'mod-temp-sensor',
-    name: 'Temperature Sensor',
-    platform: 'esp32',
     description: 'Reads DHT22',
     default_entrypoint: 'main.py',
     version_count: 3,
@@ -23,8 +21,6 @@ const mockModules = [
   },
   {
     module_id: 'mod-led-blink',
-    name: 'LED Blink',
-    platform: 'pico',
     description: null,
     default_entrypoint: 'main.py',
     version_count: 1,
@@ -50,10 +46,10 @@ describe('ModulesPage', () => {
     renderWithProviders(<ModulesPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Temperature Sensor')).toBeInTheDocument();
+      expect(screen.getByText('mod-temp-sensor')).toBeInTheDocument();
     });
-    expect(screen.getByText('LED Blink')).toBeInTheDocument();
-    expect(screen.getByText('mod-temp-sensor')).toBeInTheDocument();
+    expect(screen.getByText('mod-led-blink')).toBeInTheDocument();
+    expect(screen.getByText('Reads DHT22')).toBeInTheDocument();
   });
 
   it('shows "No modules found" when empty', async () => {

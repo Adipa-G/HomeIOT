@@ -1,5 +1,13 @@
 # Copilot Instructions — HomeIOT
 
+## Testing Requirements
+
+- **Every code change must include corresponding tests.** When adding or modifying a feature, add or update tests in the same commit.
+- **API (.NET):** Add xUnit tests in `api/tests/`. One test class per production class. Run with `dotnet test api/tests/homeiot.api.tests.csproj`.
+- **Edge (Python):** Add pytest tests in `edge/shared/tests/`. Run with `python -m pytest edge`.
+- **Web UI (React):** Add Vitest tests in `web-ui/src/test/`. Run with `cd web-ui && npx vitest run`.
+- **Verify all three suites pass** after any change that touches multiple layers.
+
 ## .NET / C# Conventions (api/)
 
 - **One type per file.** Each class, record, struct, enum, or interface gets its own `.cs` file named after the type. Private nested types within a class are fine.

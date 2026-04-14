@@ -366,4 +366,28 @@ public class AdminModulesControllerTests
         var error = Assert.IsType<ErrorResponse>(bad.Value);
         Assert.Contains("version", error.Message);
     }
+
+    [Fact]
+    public void GetVersionCode_ReturnsOk_WithCode()
+    {
+        var code = "def run(ctx): pass";
+        _mockService.Setup(s => s.GetPackage("sensor-reader", "1.0.0"))
+            .Returns(System.Text.Encoding.UTF8.GetBytes(code));
+
+        var result = _controller.GetVersionCode("sensor-reader", "1.0.0");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(ok.Value);
+    }
+
+    [Fact]
+    public void GetVersionCode_ReturnsNotFound_WhenPackageMissing()
+    {
+        _mockService.Setup(s => s.GetPackage("sensor-reader", "9.9.9"))
+            .Returns((byte[]?)null);
+
+        var result = _controller.GetVersionCode("sensor-reader", "9.9.9");
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
 }

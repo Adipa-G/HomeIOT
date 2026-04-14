@@ -79,7 +79,6 @@ class Updater:
         for item in update_info.manifest:
             rel_path = item["path"]
             expected_hash = item["hash"]
-            self._log_info("Downloading OTA file", {"path": rel_path})
             downloaded_content = self._download_file(update_info.version, rel_path)
 
             actual_hash = self._digest_bytes(downloaded_content)
@@ -109,7 +108,6 @@ class Updater:
             if _gc is not None:
                 _gc.collect()
                 free = _gc.mem_free() if hasattr(_gc, "mem_free") else None
-                self._log_info("OTA GC after file", {"path": rel_path, "free_memory": free})
 
             # Brief pause between downloads to let ESP32 TCP sockets recycle
             # from TIME_WAIT state; prevents socket exhaustion on large updates.

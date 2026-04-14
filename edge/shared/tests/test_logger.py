@@ -152,3 +152,96 @@ def test_logger_flush_returns_false_on_transport_exception():
     logger.info("startup")
 
     assert logger.flush("startup") is False
+
+
+def test_logger_buffer_stores_as_bytearray():
+    """Compact buffer stores events as newline-delimited JSON in a bytearray."""
+    system = ControlledSystem()
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=4096,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=MockHttpClient(),
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("event-one", {"key": "value"})
+    logger.warn("event-two")
+
+    assert isinstance(logger._buffer_data, bytearray)
+    assert len(logger._buffer_data) > 0
+
+    decoded = logger._decode_buffer()
+    assert len(decoded) == 2
+    assert decoded[0]["message"] == "event-one"
+    assert decoded[0]["context"]["key"] == "value"
+    assert decoded[1]["level"] == "WARN"
+
+
+def test_logger_flush_clears_bytearray_buffer():
+    """After a successful flush the buffer is empty."""
+    system = ControlledSystem()
+    http = MockHttpClient()
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=4096,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=http,
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("before-flush")
+    assert len(logger._buffer_data) > 0
+
+    ok = logger.flush("manual")
+    assert ok is True
+    assert len(logger._buffer_data) == 0
+    assert logger._entry_count == 0
+
+    # Verify payload sent contains the log entry
+    post_calls = [c for c in http.calls if c[0] == "POST"]
+    assert len(post_calls) >= 1
+    payload = post_calls[-1][2]
+    assert len(payload["logs"]) == 1
+    assert payload["logs"][0]["message"] == "before-flush"
+
+
+def test_logger_pause_uplink_prevents_flush():
+    """Pausing uplink returns False from flush without sending."""
+    system = ControlledSystem()
+    http = MockHttpClient()
+    cfg = LoggingConfig(
+        enabled_uplink=True,
+        buffer_max_bytes=4096,
+        flush_interval_ms=30000,
+        min_level="INFO",
+    )
+    logger = EdgeLogger(
+        system=system,
+        http=http,
+        device_id="esp32-001",
+        api_url="http://localhost:8000",
+        api_key="secret",
+        logging_config=cfg,
+    )
+
+    logger.info("some-event")
+    logger.pause_uplink()
+    assert logger.flush("manual") is False
+
+    logger.resume_uplink()
+    assert logger.flush("manual") is True

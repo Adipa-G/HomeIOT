@@ -8,7 +8,7 @@ import { ApiError } from '../api/client';
 
 export default function ModuleCreatePage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState<CreateModuleRequest>({ name: '', platform: 'esp32', description: '' });
+  const [form, setForm] = useState<CreateModuleRequest>({ module_id: '', description: '' });
   const [error, setError] = useState('');
 
   const mutation = useMutation({
@@ -25,25 +25,15 @@ export default function ModuleCreatePage() {
       {error && <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Module ID</label>
           <input
             type="text"
             required
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            value={form.module_id}
+            onChange={(e) => setForm({ ...form, module_id: e.target.value })}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            placeholder="e.g. sensor-reader"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Platform</label>
-          <select
-            value={form.platform}
-            onChange={(e) => setForm({ ...form, platform: e.target.value })}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="esp32">esp32</option>
-            <option value="pico">pico</option>
-          </select>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
@@ -53,6 +43,29 @@ export default function ModuleCreatePage() {
             rows={3}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Version <span className="text-gray-400 font-normal">(optional)</span></label>
+          <input
+            type="text"
+            value={form.version ?? ''}
+            onChange={(e) => setForm({ ...form, version: e.target.value || undefined })}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            placeholder="e.g. 1.0.0"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Code <span className="text-gray-400 font-normal">(optional)</span></label>
+          <textarea
+            value={form.code ?? ''}
+            onChange={(e) => setForm({ ...form, code: e.target.value || undefined })}
+            rows={10}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none"
+            placeholder="def run(ctx):&#10;    pass"
+          />
+          {form.code && !form.version && (
+            <p className="mt-1 text-xs text-amber-600">Version is required when code is provided.</p>
+          )}
         </div>
         <button
           type="submit"
