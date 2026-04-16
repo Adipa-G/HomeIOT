@@ -138,8 +138,16 @@ class ModuleRuntime:
 
             q = self._load_quarantine(schedule.module_id)
             if q.get("disabled"):
-                schedule.next_due_ms = now + schedule.interval_ms
-                continue
+                # Auto-clear quarantine when the version has changed since it was disabled.
+                if q.get("last_version") and q.get("last_version") != schedule.version:
+                    self._clear_quarantine(schedule.module_id)
+                    self._log_info(
+                        "Quarantine auto-cleared: version changed",
+                        {"module_id": schedule.module_id, "old_version": q.get("last_version"), "new_version": schedule.version},
+                    )
+                else:
+                    schedule.next_due_ms = now + schedule.interval_ms
+                    continue
 
             executed += 1
             outcome = self._run_one(schedule)
@@ -182,6 +190,11 @@ class ModuleRuntime:
         output = {}
         error_message = None
 
+        self._log_info(
+            "Running module",
+            {"module_id": schedule.module_id, "version": schedule.version, "run_id": run_id, "entrypoint": schedule.entrypoint},
+        )
+
         try:
             entrypoint = self._load_entrypoint(schedule)
             context = {
@@ -216,6 +229,10 @@ class ModuleRuntime:
 
         if status == "success":
             self._clear_quarantine(schedule.module_id)
+            self._log_info(
+                "Module executed successfully",
+                {"module_id": schedule.module_id, "version": schedule.version, "run_id": run_id, "elapsed_ms": elapsed_ms},
+            )
         else:
             count = q["failed_start_count"]
             if count >= self._quarantine_threshold:

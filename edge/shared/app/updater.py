@@ -68,63 +68,69 @@ class Updater:
 
         # Pause log uplink during OTA to avoid socket contention;
         # log entries still buffer and print to console.
+        uplink_paused = False
         if self._logger is not None and hasattr(self._logger, "pause_uplink"):
             self._logger.pause_uplink()
+            uplink_paused = True
 
-        self._log_info("Applying OTA update", {"version": update_info.version})
-        self._clear_staging()
-        self._ensure_dir(self._staging_root)
+        try:
+            self._log_info("Applying OTA update", {"version": update_info.version})
+            self._clear_staging()
+            self._ensure_dir(self._staging_root)
 
-        config_staged = False
-        for item in update_info.manifest:
-            rel_path = item["path"]
-            expected_hash = item["hash"]
-            downloaded_content = self._download_file(update_info.version, rel_path)
+            config_staged = False
+            for item in update_info.manifest:
+                rel_path = item["path"]
+                expected_hash = item["hash"]
+                downloaded_content = self._download_file(update_info.version, rel_path)
 
-            actual_hash = self._digest_bytes(downloaded_content)
-            if actual_hash.lower() != expected_hash.lower():
-                self._clear_staging()
-                self._log_error("OTA file hash mismatch", {"path": rel_path})
-                raise ValueError("Hash mismatch for " + rel_path)
+                actual_hash = self._digest_bytes(downloaded_content)
+                if actual_hash.lower() != expected_hash.lower():
+                    self._clear_staging()
+                    self._log_error("OTA file hash mismatch", {"path": rel_path})
+                    raise ValueError("Hash mismatch for " + rel_path)
 
-            content = downloaded_content
+                content = downloaded_content
 
-            if rel_path == CONFIG_PATH:
-                content = self._merge_config_payload(content, update_info.version)
+                if rel_path == CONFIG_PATH:
+                    content = self._merge_config_payload(content, update_info.version)
 
-            target_path = self._config_staging_target() if rel_path == CONFIG_PATH else self._join(self._staging_root, rel_path)
-            self._ensure_dir(self._parent_dir(target_path))
-            atomic_write_bytes(self._fs, target_path, content)
-            self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content)})
+                target_path = self._config_staging_target() if rel_path == CONFIG_PATH else self._join(self._staging_root, rel_path)
+                self._ensure_dir(self._parent_dir(target_path))
+                atomic_write_bytes(self._fs, target_path, content)
+                self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content)})
 
-            if rel_path == CONFIG_PATH:
-                config_staged = True
+                if rel_path == CONFIG_PATH:
+                    config_staged = True
 
-            # Release buffers immediately and run GC to avoid heap exhaustion
-            # on memory-constrained devices when downloading many files.
-            downloaded_content = None
-            content = None
-            actual_hash = None
-            if _gc is not None:
-                _gc.collect()
-                free = _gc.mem_free() if hasattr(_gc, "mem_free") else None
+                # Release buffers immediately and run GC to avoid heap exhaustion
+                # on memory-constrained devices when downloading many files.
+                downloaded_content = None
+                content = None
+                actual_hash = None
+                if _gc is not None:
+                    _gc.collect()
 
-            # Brief pause between downloads to let ESP32 TCP sockets recycle
-            # from TIME_WAIT state; prevents socket exhaustion on large updates.
-            self._system.sleep_ms(50)
+                # Brief pause between downloads to yield to the RTOS scheduler
+                # and let flash I/O settle.  TCP TIME_WAIT is handled at the
+                # HTTP-client layer via SO_LINGER(0).
+                self._system.sleep_ms(50)
 
-        if config_staged:
-            self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
-            try:
-                Config.load(self._fs, path=CONFIG_STAGING_PATH, system=self._system)
-            except Exception:
-                self._clear_staging()
-                self._log_error("Staged config validation failed")
-                raise
+            if config_staged:
+                self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
+                try:
+                    Config.load(self._fs, path=CONFIG_STAGING_PATH, system=self._system)
+                except Exception:
+                    self._clear_staging()
+                    self._log_error("Staged config validation failed")
+                    raise
 
-        self._boot_manager.set_new_version(update_info.version)
-        self._log_info("OTA apply complete, resetting", {"version": update_info.version})
-        self._system.reset()
+            self._boot_manager.set_new_version(update_info.version)
+            self._log_info("OTA apply complete, resetting", {"version": update_info.version})
+            self._system.reset()
+        finally:
+            if uplink_paused:
+                self._logger.resume_uplink()
 
     def _download_file(self, version: str, path: str, retries: int = 3) -> bytes:
         url = self._config.api_url + OTA_FILE_PATH + "?version=" + version + "&path=" + path

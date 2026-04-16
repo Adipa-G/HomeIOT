@@ -343,6 +343,49 @@ def test_quarantine_clears_on_version_change():
     assert result["success"] == 1
 
 
+def test_quarantine_auto_clears_in_tick_on_version_change():
+    """If quarantine file persists with a stale version, tick() auto-clears and runs the module."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(
+        system=system, device_control=client, config=config, fs=fs,
+        utc_now_iso=lambda: "2026-05-29T10:00:00Z", quarantine_threshold=2,
+    )
+
+    # Manually write a quarantine file for version 1.0.0
+    import json as _json
+    fs.makedirs("modules_cache/m1")
+    fs.write_text("modules_cache/m1/quarantine.json", _json.dumps({
+        "failed_start_count": 5,
+        "disabled": True,
+        "disabled_reason": "threshold exceeded",
+        "last_version": "1.0.0",
+    }))
+
+    # Deploy version 2.0.0 — simulates post-reboot with new version
+    fs.write_bytes("modules_cache/m1/2.0.0.pkg", b"def run(context):\n    return {'ok': True}\n")
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m1", "version": "2.0.0", "interval_ms": 1000, "timeout_ms": 5000}]},
+        now_ms=0,
+    )
+
+    # Even if quarantine file somehow persisted, tick should auto-clear because version changed
+    # Re-write quarantine to simulate it surviving (e.g. concurrent write race)
+    fs.write_text("modules_cache/m1/quarantine.json", _json.dumps({
+        "failed_start_count": 5,
+        "disabled": True,
+        "disabled_reason": "threshold exceeded",
+        "last_version": "1.0.0",
+    }))
+
+    result = runtime.tick(now_ms=0)
+    assert result["executed"] == 1
+    assert result["success"] == 1
+
+
 def test_quarantine_module_status_persisted_when_api_offline():
     fs = MockFileSystem()
     http = MockHttpClient()

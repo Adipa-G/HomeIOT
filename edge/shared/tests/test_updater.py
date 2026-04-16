@@ -359,3 +359,49 @@ def test_download_retries_on_failure():
 
     assert call_count[0] == 2  # first failed, second succeeded
     assert system.reset_calls == 1
+
+
+def test_apply_resumes_uplink_on_failure():
+    """If apply() raises, logger.resume_uplink() must still be called."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+
+    class FakeLogger:
+        def __init__(self):
+            self.paused = False
+            self.resumed = False
+        def pause_uplink(self):
+            self.paused = True
+        def resume_uplink(self):
+            self.resumed = True
+        def info(self, msg, ctx=None):
+            pass
+        def warn(self, msg, ctx=None):
+            pass
+        def error(self, msg, ctx=None):
+            pass
+
+    logger = FakeLogger()
+    updater = Updater(fs=fs, http=http, system=system, config=_config(),
+                      boot_manager=boot_manager, logger=logger)
+
+    http.add_bytes_response(
+        "GET",
+        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
+        200,
+        b"bad-content",
+    )
+
+    with pytest.raises(ValueError):
+        updater.apply(
+            UpdateInfo(
+                available=True,
+                version="1.1.0",
+                manifest=[{"path": "main.py", "hash": "0000", "size": 11}],
+            )
+        )
+
+    assert logger.paused
+    assert logger.resumed
