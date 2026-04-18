@@ -66,6 +66,70 @@ const mockLogs = {
   total: 2,
 };
 
+const mockModuleResults = {
+  items: [
+    {
+      id: 'r1',
+      device_id: 'esp32-001',
+      module_id: 'sensor_read',
+      module_version: '1.0.0',
+      run_id: 'run-001',
+      status: 'success',
+      elapsed_ms: 42,
+      error_message: null,
+      output: JSON.stringify({ temperature: 23.5 }),
+      started_at_utc: '2026-05-30T10:00:00Z',
+      finished_at_utc: '2026-05-30T10:00:00Z',
+    },
+    {
+      id: 'r2',
+      device_id: 'esp32-001',
+      module_id: 'led_blink',
+      module_version: '2.0.0',
+      run_id: 'run-002',
+      status: 'error',
+      elapsed_ms: 5,
+      error_message: 'NameError: x not defined',
+      output: null,
+      started_at_utc: '2026-05-30T09:55:00Z',
+      finished_at_utc: '2026-05-30T09:55:00Z',
+    },
+  ],
+  total: 2,
+};
+
+const mockModuleHistory = {
+  items: [
+    {
+      id: 'r1',
+      device_id: 'esp32-001',
+      module_id: 'sensor_read',
+      module_version: '1.0.0',
+      run_id: 'run-001',
+      status: 'success',
+      elapsed_ms: 42,
+      error_message: null,
+      output: JSON.stringify({ temperature: 23.5 }),
+      started_at_utc: '2026-05-30T10:00:00Z',
+      finished_at_utc: '2026-05-30T10:00:00Z',
+    },
+    {
+      id: 'r3',
+      device_id: 'esp32-001',
+      module_id: 'sensor_read',
+      module_version: '1.0.0',
+      run_id: 'run-003',
+      status: 'error',
+      elapsed_ms: 3,
+      error_message: 'OSError: sensor timeout',
+      output: null,
+      started_at_utc: '2026-05-30T09:50:00Z',
+      finished_at_utc: '2026-05-30T09:50:00Z',
+    },
+  ],
+  total: 2,
+};
+
 describe('DeviceDetailPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -136,5 +200,71 @@ describe('DeviceDetailPage', () => {
     // First entries should be from the 10:00 batch (descending)
     expect(logEntries[0].textContent).toContain('Low memory');
     expect(logEntries[2].textContent).toContain('Connection failed');
+  });
+
+  it('switches to modules tab and shows tiles', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
+      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
+      if (url.includes('/logs')) return Promise.resolve(mockLogs);
+      return Promise.resolve(mockDevice);
+    });
+    renderWithProviders(<DeviceDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('esp32-001')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Modules'));
+
+    await waitFor(() => {
+      expect(screen.getByText('sensor_read')).toBeInTheDocument();
+    });
+    expect(screen.getByText('led_blink')).toBeInTheDocument();
+    // Tile shows latest output
+    expect(screen.getByText(/"temperature"/)).toBeInTheDocument();
+    // Status badges
+    expect(screen.getByText('success')).toBeInTheDocument();
+    expect(screen.getByText('error')).toBeInTheDocument();
+  });
+
+  it('drills down into module history and expands a row', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('module_id=sensor_read')) return Promise.resolve(mockModuleHistory);
+      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
+      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
+      if (url.includes('/logs')) return Promise.resolve(mockLogs);
+      return Promise.resolve(mockDevice);
+    });
+    renderWithProviders(<DeviceDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('esp32-001')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Modules'));
+
+    await waitFor(() => {
+      expect(screen.getByText('sensor_read')).toBeInTheDocument();
+    });
+
+    // Click the sensor_read tile to drill down
+    await user.click(screen.getByText('sensor_read'));
+
+    await waitFor(() => {
+      expect(screen.getByText('sensor_read — Run History')).toBeInTheDocument();
+    });
+    expect(screen.getByText('OSError: sensor timeout')).toBeInTheDocument();
+    expect(screen.getByText('← All modules')).toBeInTheDocument();
+
+    // Expand a row to see output
+    const successRow = screen.getByText('42 ms');
+    await user.click(successRow);
+
+    await waitFor(() => {
+      expect(screen.getByText(/"temperature"/)).toBeInTheDocument();
+    });
   });
 });

@@ -422,6 +422,7 @@ public sealed class ModuleService : IModuleService
                 r.Status,
                 r.ElapsedMs,
                 r.ErrorMessage,
+                r.Output,
                 EndpointValidation.ToUtcZ(r.StartedAtUtc),
                 EndpointValidation.ToUtcZ(r.FinishedAtUtc)))
             .ToListAsync(ct);

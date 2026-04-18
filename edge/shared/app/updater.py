@@ -79,6 +79,7 @@ class Updater:
             self._ensure_dir(self._staging_root)
 
             config_staged = False
+            file_count = 0
             for item in update_info.manifest:
                 rel_path = item["path"]
                 expected_hash = item["hash"]
@@ -103,6 +104,8 @@ class Updater:
                 if rel_path == CONFIG_PATH:
                     config_staged = True
 
+                file_count += 1
+
                 # Release buffers immediately and run GC to avoid heap exhaustion
                 # on memory-constrained devices when downloading many files.
                 downloaded_content = None
@@ -110,6 +113,13 @@ class Updater:
                 actual_hash = None
                 if _gc is not None:
                     _gc.collect()
+
+                # Flush OTA progress logs to the server every 10 files so
+                # they are not lost if the device resets or the buffer fills.
+                if file_count % 10 == 0:
+                    if _gc is not None:
+                        _gc.collect()
+                    self._flush_logs()
 
                 # Brief pause between downloads to yield to the RTOS scheduler
                 # and let flash I/O settle.  TCP TIME_WAIT is handled at the
@@ -125,8 +135,32 @@ class Updater:
                     self._log_error("Staged config validation failed")
                     raise
 
-            self._boot_manager.set_new_version(update_info.version)
-            self._log_info("OTA apply complete, resetting", {"version": update_info.version})
+            # All files are downloaded and verified — the manifest (30+ dicts
+            # with hash strings) is no longer needed.  Releasing it before the
+            # version swap frees ~8 KB of scattered heap objects, reducing
+            # fragmentation so larger contiguous blocks become available.
+            version = update_info.version
+            update_info.manifest.clear()
+            update_info = None
+
+            # Reclaim heap before the version swap — set_new_version does
+            # recursive directory walks and file renames that allocate.
+            if _gc is not None:
+                _gc.collect()
+
+            self._boot_manager.set_new_version(version)
+            self._log_info("OTA apply complete, resetting", {"version": version})
+
+            # Reclaim heap before flush — _decode_buffer + json.dumps of
+            # the batch payload is the largest single allocation in the
+            # OTA path and can fail on a fragmented heap.
+            if _gc is not None:
+                _gc.collect()
+
+            # Resume uplink and flush before reset so OTA logs reach the
+            # server — reset() never returns, so the finally block won't run.
+            self._flush_logs()
+
             self._system.reset()
         finally:
             if uplink_paused:
@@ -158,6 +192,20 @@ class Updater:
             "X-Api-Key": self._config.api_key,
             "X-Platform": self._platform,
         }
+
+    def _flush_logs(self) -> None:
+        """Temporarily resume uplink, flush buffered logs, then re-pause."""
+        if self._logger is None or not hasattr(self._logger, "flush"):
+            return
+        if hasattr(self._logger, "resume_uplink"):
+            self._logger.resume_uplink()
+        try:
+            self._logger.flush("ota")
+        except Exception:
+            pass  # best-effort; don't let a log failure abort OTA
+        finally:
+            if hasattr(self._logger, "pause_uplink"):
+                self._logger.pause_uplink()
 
     def _clear_staging(self) -> None:
         self._remove_tree(self._staging_root)

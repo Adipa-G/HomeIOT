@@ -157,6 +157,7 @@ export interface ModuleResultListItem {
   status: string;
   elapsed_ms: number;
   error_message: string | null;
+  output: string | null;
   started_at_utc: string;
   finished_at_utc: string;
 }

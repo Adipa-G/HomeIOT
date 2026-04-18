@@ -11,5 +11,6 @@ public sealed record ModuleResultListItem(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("elapsed_ms")] int ElapsedMs,
     [property: JsonPropertyName("error_message")] string? ErrorMessage,
+    [property: JsonPropertyName("output")] string? Output,
     [property: JsonPropertyName("started_at_utc")] string StartedAtUtc,
     [property: JsonPropertyName("finished_at_utc")] string FinishedAtUtc);

@@ -214,13 +214,27 @@ class BootManager:
         if not self._fs.exists(path):
             return
 
-        if self._fs.is_dir(path):
-            for name in self._fs.listdir(path):
-                self._remove_tree(self._join(path, name))
-            self._fs.rmdir(path)
+        if not self._fs.is_dir(path):
+            self._fs.remove(path)
             return
 
-        self._fs.remove(path)
+        # Iterative depth-first removal.  The recursive version keeps
+        # every parent's listdir() result alive on the call stack which
+        # fragments the MicroPython heap on large trees.
+        dirs = [path]
+        idx = 0
+        while idx < len(dirs):
+            current = dirs[idx]
+            for name in self._fs.listdir(current):
+                child = self._join(current, name)
+                if self._fs.is_dir(child):
+                    dirs.append(child)
+                else:
+                    self._fs.remove(child)
+            idx += 1
+        # Remove directories deepest-first
+        for i in range(len(dirs) - 1, -1, -1):
+            self._fs.rmdir(dirs[i])
 
     @staticmethod
     def _join(left: str, right: str) -> str:

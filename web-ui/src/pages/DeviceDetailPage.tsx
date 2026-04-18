@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, PaginatedResponse } from '../types/api';
+import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, ModuleResultListItem, PaginatedResponse } from '../types/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Pagination } from '../components/Pagination';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -13,9 +13,13 @@ export default function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'heartbeats' | 'logs'>('heartbeats');
+  const [tab, setTab] = useState<'heartbeats' | 'logs' | 'modules'>('heartbeats');
   const [hbOffset, setHbOffset] = useState(0);
   const [logOffset, setLogOffset] = useState(0);
+  const [modOffset, setModOffset] = useState(0);
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const [modHistoryOffset, setModHistoryOffset] = useState(0);
+  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', deviceId],
@@ -32,6 +36,18 @@ export default function DeviceDetailPage() {
     queryKey: ['logs', deviceId, logOffset],
     queryFn: () => api.get<PaginatedResponse<LogBatchListItem>>(`/api/admin/devices/${deviceId}/logs?offset=${logOffset}&limit=25`),
     enabled: tab === 'logs',
+  });
+
+  const moduleResults = useQuery({
+    queryKey: ['moduleResults', deviceId, modOffset],
+    queryFn: () => api.get<PaginatedResponse<ModuleResultListItem>>(`/api/admin/modules/results?device_id=${deviceId}&offset=${modOffset}&limit=100`),
+    enabled: tab === 'modules' && selectedModule === null,
+  });
+
+  const moduleHistory = useQuery({
+    queryKey: ['moduleHistory', deviceId, selectedModule, modHistoryOffset],
+    queryFn: () => api.get<PaginatedResponse<ModuleResultListItem>>(`/api/admin/modules/results?device_id=${deviceId}&module_id=${selectedModule}&offset=${modHistoryOffset}&limit=25`),
+    enabled: tab === 'modules' && selectedModule !== null,
   });
 
   const toggleMode = useMutation({
@@ -87,6 +103,7 @@ export default function DeviceDetailPage() {
       <div className="mb-4 flex border-b border-gray-200">
         <button className={tabClass('heartbeats')} onClick={() => setTab('heartbeats')}>Heartbeats</button>
         <button className={tabClass('logs')} onClick={() => setTab('logs')}>Logs</button>
+        <button className={tabClass('modules')} onClick={() => setTab('modules')}>Modules</button>
       </div>
 
       {tab === 'heartbeats' && (
@@ -115,6 +132,112 @@ export default function DeviceDetailPage() {
             <Pagination offset={hbOffset} limit={25} total={heartbeats.data.total} onChange={setHbOffset} />
           </>
         )
+      )}
+
+      {tab === 'modules' && selectedModule === null && (
+        moduleResults.isLoading ? <p className="text-sm text-gray-500">Loading…</p> : moduleResults.data && (() => {
+          const byModule = new Map<string, ModuleResultListItem>();
+          for (const r of moduleResults.data.items) {
+            if (!byModule.has(r.module_id)) byModule.set(r.module_id, r);
+          }
+          const tiles = Array.from(byModule.values());
+          if (tiles.length === 0) return <p className="text-sm text-gray-400">No module results</p>;
+          return (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {tiles.map((r) => {
+                const isSuccess = r.status === 'success' || r.status === 'ok';
+                return (
+                  <div
+                    key={r.module_id}
+                    className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                    onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-gray-900">{r.module_id}</span>
+                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 mb-2">
+                      v{r.module_version} · {r.elapsed_ms != null ? `${r.elapsed_ms} ms` : '—'} · {formatUtc(r.finished_at_utc)}
+                    </div>
+                    {r.error_message && (
+                      <div className="text-xs text-red-500 mb-2 truncate">{r.error_message}</div>
+                    )}
+                    <div className="rounded bg-gray-900 p-2 text-xs font-mono text-gray-200 max-h-32 overflow-auto whitespace-pre-wrap">
+                      {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()
+      )}
+
+      {tab === 'modules' && selectedModule !== null && (
+        <>
+          <button
+            className="mb-3 text-sm text-blue-600 hover:text-blue-800"
+            onClick={() => { setSelectedModule(null); setExpandedResultId(null); }}
+          >
+            ← All modules
+          </button>
+          {moduleHistory.isLoading ? <p className="text-sm text-gray-500">Loading…</p> : moduleHistory.data && (
+            <>
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">{selectedModule} — Run History</h3>
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="px-4 py-3">Version</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Duration</th>
+                      <th className="px-4 py-3">Finished</th>
+                      <th className="px-4 py-3">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {moduleHistory.data.items.length === 0 ? (
+                      <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No results</td></tr>
+                    ) : moduleHistory.data.items.map((r) => {
+                      const isSuccess = r.status === 'success' || r.status === 'ok';
+                      const expanded = expandedResultId === r.id;
+                      return (
+                        <React.Fragment key={r.id}>
+                          <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedResultId(expanded ? null : r.id)}>
+                            <td className="px-4 py-3 text-gray-600">{r.module_version}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">{r.elapsed_ms != null ? `${r.elapsed_ms} ms` : '—'}</td>
+                            <td className="px-4 py-3 text-gray-600">{formatUtc(r.finished_at_utc)}</td>
+                            <td className="px-4 py-3 text-red-600 text-xs">{r.error_message ?? '—'}</td>
+                          </tr>
+                          {expanded && (
+                            <tr>
+                              <td colSpan={5} className="bg-gray-900 px-6 py-3">
+                                <div className="text-xs font-mono text-gray-200 whitespace-pre-wrap">
+                                  {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
+                                </div>
+                                {r.error_message && (
+                                  <div className="mt-2 text-xs font-mono text-red-400 whitespace-pre-wrap">{r.error_message}</div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination offset={modHistoryOffset} limit={25} total={moduleHistory.data.total} onChange={setModHistoryOffset} />
+            </>
+          )}
+        </>
       )}
 
       {tab === 'logs' && (
@@ -163,6 +286,15 @@ export default function DeviceDetailPage() {
       )}
     </div>
   );
+}
+
+function formatOutput(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return raw;
+  }
 }
 
 const levelColors: Record<string, string> = {

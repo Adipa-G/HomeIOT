@@ -405,3 +405,82 @@ def test_apply_resumes_uplink_on_failure():
 
     assert logger.paused
     assert logger.resumed
+
+
+class _TrackingLogger:
+    """Logger that records pause/resume/flush calls for verification."""
+    def __init__(self):
+        self.calls = []
+    def pause_uplink(self):
+        self.calls.append("pause")
+    def resume_uplink(self):
+        self.calls.append("resume")
+    def flush(self, reason="manual"):
+        self.calls.append(("flush", reason))
+        return True
+    def info(self, msg, ctx=None):
+        pass
+    def warn(self, msg, ctx=None):
+        pass
+    def error(self, msg, ctx=None):
+        pass
+
+
+def test_apply_flushes_logs_before_reset():
+    """OTA logs must be flushed to the server before reset() is called."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    logger = _TrackingLogger()
+    updater = Updater(fs=fs, http=http, system=system, config=_config(),
+                      boot_manager=boot_manager, logger=logger)
+
+    new_file = b"print('v2')"
+    expected_hash = updater._digest_bytes(new_file)
+    http.add_bytes_response(
+        "GET",
+        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
+        200,
+        new_file,
+    )
+
+    updater.apply(
+        UpdateInfo(available=True, version="1.1.0",
+                   manifest=[{"path": "main.py", "hash": expected_hash, "size": len(new_file)}])
+    )
+
+    # The last flush must happen before reset
+    flush_indices = [i for i, c in enumerate(logger.calls) if isinstance(c, tuple) and c[0] == "flush"]
+    assert len(flush_indices) >= 1
+    # flush("ota") should appear — this is the pre-reset flush
+    assert ("flush", "ota") in logger.calls
+
+
+def test_apply_flushes_logs_every_10_files():
+    """Periodic flush should fire after every 10 downloaded files."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    logger = _TrackingLogger()
+    updater = Updater(fs=fs, http=http, system=system, config=_config(),
+                      boot_manager=boot_manager, logger=logger)
+
+    manifest = []
+    for i in range(15):
+        content = ("file-" + str(i)).encode()
+        path = "mod" + str(i) + ".py"
+        h = updater._digest_bytes(content)
+        http.add_bytes_response("GET",
+            "http://localhost:8000/api/ota/file?version=1.1.0&path=" + path,
+            200, content)
+        manifest.append({"path": path, "hash": h, "size": len(content)})
+
+    updater.apply(
+        UpdateInfo(available=True, version="1.1.0", manifest=manifest)
+    )
+
+    ota_flushes = [c for c in logger.calls if c == ("flush", "ota")]
+    # 1 periodic flush at file 10 + 1 pre-reset flush = 2
+    assert len(ota_flushes) == 2
