@@ -1,3 +1,10 @@
+import sys
+
+# Both USB deploy and OTA place code under /app/edge/.
+# Prepend /app so `import edge.…` resolves correctly.
+if "app" not in sys.path:
+    sys.path.insert(0, "app")
+
 import json
 
 from edge.shared.app.boot_manager import BootManager

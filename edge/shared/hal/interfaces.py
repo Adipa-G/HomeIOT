@@ -35,6 +35,10 @@ class IFileSystem:
     def rename(self, src: str, dst: str) -> None:
         raise NotImplementedError()
 
+    def write_chunks(self, path: str, chunks) -> None:
+        """Write an iterable of bytes chunks to path without buffering all at once."""
+        raise NotImplementedError()
+
 
 class INetwork:
     def connect(self, ssid: str, password: str, timeout_ms: int = 15000) -> None:
@@ -70,6 +74,10 @@ class IHttpClient:
         data,
         headers=None,
     ) -> HttpResponse:
+        raise NotImplementedError()
+
+    def get_stream(self, url: str, headers=None):
+        """Open a streaming GET request. Returns an object with read(n) and close() methods."""
         raise NotImplementedError()
 
 

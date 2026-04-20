@@ -61,3 +61,8 @@ class MicroPythonFileSystem(IFileSystem):
 
     def rename(self, src: str, dst: str) -> None:
         _os.rename(src, dst)
+
+    def write_chunks(self, path: str, chunks) -> None:
+        with open(path, "wb") as handle:
+            for chunk in chunks:
+                handle.write(chunk)

@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using HomeIOT.Api.Configuration;
 using HomeIOT.Api.Contracts;
-using HomeIOT.Api.Services.Models;
 using Microsoft.Extensions.Options;
 
 namespace HomeIOT.Api.Services;
@@ -82,34 +82,34 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
         return new OtaCheckResponse(true, latest.Version, latest.Manifest);
     }
 
-    public OtaFileContent? TryGetReleaseFile(string platform, string version, string relativePath)
+    public async Task StreamReleaseAsync(string platform, string version, Stream output, CancellationToken ct = default)
     {
-        var platformRoot = Path.Combine(_artifactRoot, platform);
-        var releaseRoot = Path.Combine(platformRoot, version);
-        if (!Directory.Exists(releaseRoot))
-        {
-            return null;
-        }
-
+        var releaseRoot = Path.Combine(_artifactRoot, platform, version);
         var release = LoadRelease(releaseRoot);
         if (release is null)
         {
-            return null;
+            return;
         }
 
-        var manifestItem = release.Manifest.FirstOrDefault(x => string.Equals(x.Path, relativePath, StringComparison.Ordinal));
-        if (manifestItem is null)
+        foreach (var item in release.Manifest)
         {
-            return null;
+            var fullPath = TryResolveSafePath(releaseRoot, item.Path);
+            if (fullPath is null || !File.Exists(fullPath))
+            {
+                continue;
+            }
+
+            var sizeBytes = new FileInfo(fullPath).Length;
+            await output.WriteAsync(Encoding.ASCII.GetBytes($"HASH:{item.Hash}\n"), ct);
+            await output.WriteAsync(Encoding.ASCII.GetBytes($"FILE:{item.Path}\n"), ct);
+            await output.WriteAsync(Encoding.ASCII.GetBytes($"SIZE:{sizeBytes}\n"), ct);
+
+            using var fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            await fileStream.CopyToAsync(output, ct);
         }
 
-        var fullPath = TryResolveSafePath(releaseRoot, manifestItem.Path);
-        if (fullPath is null || !File.Exists(fullPath))
-        {
-            return null;
-        }
-
-        return new OtaFileContent(File.ReadAllBytes(fullPath), Path.GetFileName(fullPath));
+        await output.WriteAsync(Encoding.ASCII.GetBytes("END\n"), ct);
+        await output.FlushAsync(ct);
     }
 
     // ──────────────────────────────────────────────

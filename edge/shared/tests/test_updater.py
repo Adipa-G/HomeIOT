@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 from edge.shared.app.secret_crypto import encrypt_secret
@@ -6,9 +7,9 @@ import pytest
 
 from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.config import Config
-from edge.shared.app.updater import UpdateInfo, Updater
+from edge.shared.app.updater import UpdateInfo, Updater, _StreamFrameReader
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
-from edge.shared.tests.mocks.mock_http_client import MockHttpClient
+from edge.shared.tests.mocks.mock_http_client import MockHttpClient, MockStreamingResponse
 from edge.shared.tests.mocks.mock_system import MockSystem
 
 
@@ -24,6 +25,34 @@ def _config():
         current_version="1.0.0",
     )
 
+
+_STREAM_URL = "http://localhost:8000/api/ota/stream?version=1.1.0"
+
+
+def _sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _build_ota_stream(files) -> bytes:
+    """Build an OTA stream payload as the server would send it.
+
+    files: list of (rel_path, content_bytes) or (rel_path, content_bytes, hash_override)
+    """
+    out = bytearray()
+    for entry in files:
+        rel_path, content = entry[0], entry[1]
+        h = entry[2] if len(entry) > 2 else _sha256_hex(content)
+        out.extend(("HASH:" + h + "\n").encode())
+        out.extend(("FILE:" + rel_path + "\n").encode())
+        out.extend(("SIZE:" + str(len(content)) + "\n").encode())
+        out.extend(content)
+    out.extend(b"END\n")
+    return bytes(out)
+
+
+# ---------------------------------------------------------------------------
+# OTA check tests
+# ---------------------------------------------------------------------------
 
 def test_check_returns_none_when_no_update():
     fs = MockFileSystem()
@@ -62,38 +91,26 @@ def test_apply_downloads_and_swaps_version():
     )
 
     new_file = b"print('new-version')"
-    expected_hash = updater._digest_bytes(new_file)
     # Staged config: placeholders for device secrets (should be preserved from active),
     # real values for non-secret fields (should be taken from the new release),
     # and a real api_url (should override the active value).
     new_config = b"{\"device_id\":\"replace-with-device-id\",\"api_url\":\"replace-with-api-url\",\"api_key\":\"replace-with-device-api-key\",\"wifi_ssid\":\"replace-with-ssid\",\"wifi_password\":\"replace-with-password\",\"heartbeat_interval_ms\":2000,\"max_boot_attempts\":4,\"current_version\":\"1.1.0\"}"
-    expected_config_hash = updater._digest_bytes(new_config)
 
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
-        200,
-        new_file,
-    )
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=config.json",
-        200,
-        new_config,
-    )
+    stream_data = _build_ota_stream([("main.py", new_file), ("config.json", new_config)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     updater.apply(
         UpdateInfo(
             available=True,
             version="1.1.0",
             manifest=[
-                {"path": "main.py", "hash": expected_hash, "size": len(new_file)},
-                {"path": "config.json", "hash": expected_config_hash, "size": len(new_config)},
+                {"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": _sha256_hex(new_config), "size": len(new_config)},
             ],
         )
     )
 
-    assert fs.read_bytes("app/main.py") == new_file
+    assert fs.read_bytes("main.py") == new_file
     assert fs.read_bytes("app_prev/main.py") == b"old-version"
     merged_config = json.loads(fs.read_text("config.json"))
     assert merged_config["device_id"] == "esp32-001"            # placeholder → preserved from active
@@ -117,7 +134,6 @@ def test_apply_preserves_enc_credentials_when_absent_from_staged():
     updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
 
     # Use properly encrypted fixtures so staged config validation (Config.load) can decrypt them.
-    # Config.load tries device_id as binding first.
     device_id = "esp32-001"
     api_key_enc = encrypt_secret("real-api-key", device_id, "api_key")
     wifi_password_enc = encrypt_secret("real-wifi-pass", device_id, "wifi_password")
@@ -138,7 +154,6 @@ def test_apply_preserves_enc_credentials_when_absent_from_staged():
     )
 
     new_file = b"print('new-version')"
-    # Staged config has no api_key_enc / wifi_password_enc — they must be copied from active.
     new_config = json.dumps({
         "device_id": "replace-with-device-id",
         "api_url": "replace-with-api-url",
@@ -150,16 +165,16 @@ def test_apply_preserves_enc_credentials_when_absent_from_staged():
         "current_version": "1.1.0",
     }, separators=(",", ":")).encode("utf-8")
 
-    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py", 200, new_file)
-    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=config.json", 200, new_config)
+    stream_data = _build_ota_stream([("main.py", new_file), ("config.json", new_config)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     updater.apply(
         UpdateInfo(
             available=True,
             version="1.1.0",
             manifest=[
-                {"path": "main.py", "hash": updater._digest_bytes(new_file), "size": len(new_file)},
-                {"path": "config.json", "hash": updater._digest_bytes(new_config), "size": len(new_config)},
+                {"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": _sha256_hex(new_config), "size": len(new_config)},
             ],
         )
     )
@@ -216,16 +231,16 @@ def test_apply_encrypts_new_plaintext_credentials_from_release():
         "current_version": "1.1.0",
     }, separators=(",", ":")).encode("utf-8")
 
-    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py", 200, new_file)
-    http.add_bytes_response("GET", "http://localhost:8000/api/ota/file?version=1.1.0&path=config.json", 200, new_config)
+    stream_data = _build_ota_stream([("main.py", new_file), ("config.json", new_config)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     updater.apply(
         UpdateInfo(
             available=True,
             version="1.1.0",
             manifest=[
-                {"path": "main.py", "hash": updater._digest_bytes(new_file), "size": len(new_file)},
-                {"path": "config.json", "hash": updater._digest_bytes(new_config), "size": len(new_config)},
+                {"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": _sha256_hex(new_config), "size": len(new_config)},
             ],
         )
     )
@@ -247,19 +262,17 @@ def test_apply_raises_on_hash_mismatch_and_cleans_staging():
     boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
     updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
 
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
-        200,
-        b"bad-content",
-    )
+    # Stream delivers file content whose hash doesn't match the HASH: header line.
+    content = b"bad-content"
+    stream_data = _build_ota_stream([("main.py", content, "0" * 64)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     with pytest.raises(ValueError):
         updater.apply(
             UpdateInfo(
                 available=True,
                 version="1.1.0",
-                manifest=[{"path": "main.py", "hash": "1234", "size": 11}],
+                manifest=[{"path": "main.py", "hash": "0" * 64, "size": len(content)}],
             )
         )
 
@@ -281,22 +294,10 @@ def test_apply_raises_on_invalid_config_and_cleans_staging():
     )
 
     new_file = b"print('new-version')"
-    expected_hash = updater._digest_bytes(new_file)
     invalid_config = b"{\"device_id\":\"esp32-001\",\"api_url\":\"http://localhost:8000\"}"
-    expected_config_hash = updater._digest_bytes(invalid_config)
 
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
-        200,
-        new_file,
-    )
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=config.json",
-        200,
-        invalid_config,
-    )
+    stream_data = _build_ota_stream([("main.py", new_file), ("config.json", invalid_config)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     with pytest.raises(ValueError):
         updater.apply(
@@ -304,8 +305,8 @@ def test_apply_raises_on_invalid_config_and_cleans_staging():
                 available=True,
                 version="1.1.0",
                 manifest=[
-                    {"path": "main.py", "hash": expected_hash, "size": len(new_file)},
-                    {"path": "config.json", "hash": expected_config_hash, "size": len(invalid_config)},
+                    {"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)},
+                    {"path": "config.json", "hash": _sha256_hex(invalid_config), "size": len(invalid_config)},
                 ],
             )
         )
@@ -313,52 +314,6 @@ def test_apply_raises_on_invalid_config_and_cleans_staging():
     assert fs.read_text("config.json").startswith("{\"device_id\":\"esp32-001\"")
     assert not fs.exists("config_staging.json")
     assert not fs.exists("app_staging")
-
-
-def test_download_retries_on_failure():
-    """_download_file retries on exception and succeeds on subsequent attempt."""
-    fs = MockFileSystem()
-    http = MockHttpClient()
-    system = MockSystem()
-    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
-    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
-
-    new_file = b"print('retried')"
-    expected_hash = updater._digest_bytes(new_file)
-
-    # Track call count to simulate transient failure
-    call_count = [0]
-    original_get = http.get
-
-    def flaky_get(url, headers=None):
-        call_count[0] += 1
-        if call_count[0] == 1 and "file" in url:
-            raise OSError("socket exhaustion")
-        return original_get(url, headers)
-
-    http.get = flaky_get
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
-        200,
-        new_file,
-    )
-
-    fs.write_text(
-        "config.json",
-        '{"device_id":"esp32-001","api_url":"http://localhost:8000","api_key":"secret","wifi_ssid":"ssid","wifi_password":"pass","heartbeat_interval_ms":1000,"max_boot_attempts":3,"current_version":"1.0.0"}',
-    )
-
-    updater.apply(
-        UpdateInfo(
-            available=True,
-            version="1.1.0",
-            manifest=[{"path": "main.py", "hash": expected_hash, "size": len(new_file)}],
-        )
-    )
-
-    assert call_count[0] == 2  # first failed, second succeeded
-    assert system.reset_calls == 1
 
 
 def test_apply_resumes_uplink_on_failure():
@@ -387,19 +342,17 @@ def test_apply_resumes_uplink_on_failure():
     updater = Updater(fs=fs, http=http, system=system, config=_config(),
                       boot_manager=boot_manager, logger=logger)
 
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
-        200,
-        b"bad-content",
-    )
+    # Stream with mismatched hash → should raise ValueError
+    content = b"bad-content"
+    stream_data = _build_ota_stream([("main.py", content, "0" * 64)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     with pytest.raises(ValueError):
         updater.apply(
             UpdateInfo(
                 available=True,
                 version="1.1.0",
-                manifest=[{"path": "main.py", "hash": "0000", "size": 11}],
+                manifest=[{"path": "main.py", "hash": "0000", "size": len(content)}],
             )
         )
 
@@ -437,17 +390,12 @@ def test_apply_flushes_logs_before_reset():
                       boot_manager=boot_manager, logger=logger)
 
     new_file = b"print('v2')"
-    expected_hash = updater._digest_bytes(new_file)
-    http.add_bytes_response(
-        "GET",
-        "http://localhost:8000/api/ota/file?version=1.1.0&path=main.py",
-        200,
-        new_file,
-    )
+    stream_data = _build_ota_stream([("main.py", new_file)])
+    http.add_stream_response(_STREAM_URL, stream_data)
 
     updater.apply(
         UpdateInfo(available=True, version="1.1.0",
-                   manifest=[{"path": "main.py", "hash": expected_hash, "size": len(new_file)}])
+                   manifest=[{"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)}])
     )
 
     # The last flush must happen before reset
@@ -457,8 +405,8 @@ def test_apply_flushes_logs_before_reset():
     assert ("flush", "ota") in logger.calls
 
 
-def test_apply_flushes_logs_every_10_files():
-    """Periodic flush should fire after every 10 downloaded files."""
+def test_apply_flushes_logs_once_before_reset():
+    """Logs should flush once before reset (no periodic mid-download flushes)."""
     fs = MockFileSystem()
     http = MockHttpClient()
     system = MockSystem()
@@ -467,20 +415,169 @@ def test_apply_flushes_logs_every_10_files():
     updater = Updater(fs=fs, http=http, system=system, config=_config(),
                       boot_manager=boot_manager, logger=logger)
 
-    manifest = []
-    for i in range(15):
-        content = ("file-" + str(i)).encode()
-        path = "mod" + str(i) + ".py"
-        h = updater._digest_bytes(content)
-        http.add_bytes_response("GET",
-            "http://localhost:8000/api/ota/file?version=1.1.0&path=" + path,
-            200, content)
-        manifest.append({"path": path, "hash": h, "size": len(content)})
+    files = [("mod" + str(i) + ".py", ("file-" + str(i)).encode()) for i in range(15)]
+    stream_data = _build_ota_stream(files)
+    http.add_stream_response(_STREAM_URL, stream_data)
+    manifest = [{"path": p, "hash": _sha256_hex(c), "size": len(c)} for p, c in files]
 
     updater.apply(
         UpdateInfo(available=True, version="1.1.0", manifest=manifest)
     )
 
     ota_flushes = [c for c in logger.calls if c == ("flush", "ota")]
-    # 1 periodic flush at file 10 + 1 pre-reset flush = 2
-    assert len(ota_flushes) == 2
+    # Only the pre-reset flush — no periodic mid-download flushes
+    assert len(ota_flushes) == 1
+
+
+# ---------------------------------------------------------------------------
+# _StreamFrameReader unit tests
+# ---------------------------------------------------------------------------
+
+def test_stream_frame_reader_readline():
+    data = b"HASH:abc123\nFILE:main.py\nSIZE:5\n"
+    resp = MockStreamingResponse(data)
+    reader = _StreamFrameReader(resp)
+
+    assert reader.readline() == "HASH:abc123"
+    assert reader.readline() == "FILE:main.py"
+    assert reader.readline() == "SIZE:5"
+
+
+def test_stream_frame_reader_read_chunks_full():
+    payload = b"hello world!"
+    data = ("SIZE:" + str(len(payload)) + "\n").encode() + payload + b"END\n"
+    resp = MockStreamingResponse(data)
+    reader = _StreamFrameReader(resp)
+    reader.readline()  # consume SIZE line
+
+    collected = b"".join(reader.read_chunks(len(payload)))
+    assert collected == payload
+
+
+def test_stream_frame_reader_read_chunks_small_chunk():
+    payload = b"0123456789"
+    resp = MockStreamingResponse(payload + b"END\n")
+    reader = _StreamFrameReader(resp)
+
+    # Convert each chunk to bytes immediately — the yielded memoryviews share
+    # the same pre-allocated buffer and are only valid until the next iteration.
+    chunks = [bytes(c) for c in reader.read_chunks(len(payload), chunk_size=3)]
+    assert b"".join(chunks) == payload
+    # Each chunk except possibly the last should be at most 3 bytes
+    for c in chunks[:-1]:
+        assert len(c) <= 3
+
+
+def test_stream_frame_reader_raises_on_eof():
+    resp = MockStreamingResponse(b"HASH:abc")  # no newline — truncated
+    reader = _StreamFrameReader(resp)
+
+    with pytest.raises(RuntimeError, match="Unexpected EOF"):
+        reader.readline()
+
+
+def test_stream_frame_reader_raises_on_eof_in_content():
+    # SIZE says 100 bytes but only 5 are available
+    resp = MockStreamingResponse(b"hello")
+    reader = _StreamFrameReader(resp)
+
+    with pytest.raises(RuntimeError, match="Unexpected EOF"):
+        list(reader.read_chunks(100))
+
+
+# ---------------------------------------------------------------------------
+# Streaming — single-socket guarantee
+# ---------------------------------------------------------------------------
+
+def test_apply_uses_single_stream_request_for_all_files():
+    """The entire update must be fetched over ONE stream request (one socket)."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    files = [("mod" + str(i) + ".py", ("content-" + str(i)).encode()) for i in range(10)]
+    stream_data = _build_ota_stream(files)
+    http.add_stream_response(_STREAM_URL, stream_data)
+    manifest = [{"path": p, "hash": _sha256_hex(c), "size": len(c)} for p, c in files]
+
+    updater.apply(UpdateInfo(available=True, version="1.1.0", manifest=manifest))
+
+    stream_calls = [c for c in http.calls if c[0] == "GET_STREAM"]
+    assert len(stream_calls) == 1, "Expected exactly one GET_STREAM call for all files"
+    assert stream_calls[0][1] == _STREAM_URL
+
+
+def test_apply_writes_large_file_without_full_buffer():
+    """Non-config files must be written to disk via write_chunks (no full-file bytearray).
+
+    Verifies the OOM fix: even a 'large' file (simulated as 15 KB) is correctly
+    staged without allocating a contiguous buffer for the entire content.
+    The MockFileSystem.write_chunks implementation buffers internally for test
+    assertions, but the updater itself never holds the full content in one object.
+    """
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    # 15 KB file — larger than typical ESP32 contiguous heap blocks after fragmentation
+    large_content = b"X" * 15360
+    stream_data = _build_ota_stream([("lib/big_module.py", large_content)])
+    http.add_stream_response(_STREAM_URL, stream_data)
+
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[{"path": "lib/big_module.py", "hash": _sha256_hex(large_content), "size": len(large_content)}],
+        )
+    )
+
+    assert fs.read_bytes("app/lib/big_module.py") == large_content
+    assert system.reset_calls == 1
+
+
+def test_apply_cleans_tmp_file_on_stream_error():
+    """If the stream is cut during a file, any .ota_tmp file must be cleaned up."""
+    import io
+
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    # Build a valid first file then truncate mid-second file
+    first = b"hello"
+    second = b"world-truncated"
+    # Stream: full first file, then second file with only 3 bytes delivered (SIZE says 15)
+    stream_bytes = bytearray()
+    stream_bytes.extend(("HASH:" + _sha256_hex(first) + "\n").encode())
+    stream_bytes.extend(b"FILE:first.py\n")
+    stream_bytes.extend(("SIZE:" + str(len(first)) + "\n").encode())
+    stream_bytes.extend(first)
+    # Second file: correct hash header but truncated body
+    stream_bytes.extend(("HASH:" + _sha256_hex(second) + "\n").encode())
+    stream_bytes.extend(b"FILE:second.py\n")
+    stream_bytes.extend(("SIZE:" + str(len(second)) + "\n").encode())
+    stream_bytes.extend(b"xxx")  # only 3 bytes instead of 15 — EOF will trigger
+
+    http.add_stream_response(_STREAM_URL, bytes(stream_bytes))
+
+    with pytest.raises(RuntimeError, match="Unexpected EOF"):
+        updater.apply(
+            UpdateInfo(
+                available=True,
+                version="1.1.0",
+                manifest=[
+                    {"path": "first.py", "hash": _sha256_hex(first), "size": len(first)},
+                    {"path": "second.py", "hash": _sha256_hex(second), "size": len(second)},
+                ],
+            )
+        )
+
+    # Staging should be cleaned; no leftover .ota_tmp files
+    assert not fs.exists("app_staging")

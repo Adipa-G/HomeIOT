@@ -38,6 +38,19 @@ class _FakePresence:
         return self.metadata
 
 
+class _SequencePresence:
+    """Returns a different metadata dict for each heartbeat call."""
+
+    def __init__(self, sequence):
+        self._sequence = list(sequence)
+        self.calls = 0
+
+    def heartbeat_with_metadata(self):
+        idx = min(self.calls, len(self._sequence) - 1)
+        self.calls += 1
+        return self._sequence[idx]
+
+
 class _FakeNetwork:
     def __init__(self, connected=True, fail_connect=False):
         self.connected = connected
@@ -123,9 +136,11 @@ class _FakeLogger:
         self.info_calls = 0
         self.warn_calls = 0
         self.tick_calls = 0
+        self.info_log = []
 
-    def info(self, *_args, **_kwargs):
+    def info(self, msg, data=None, **_kwargs):
         self.info_calls += 1
+        self.info_log.append((msg, data))
 
     def warn(self, *_args, **_kwargs):
         self.warn_calls += 1
@@ -656,3 +671,39 @@ def test_production_mode_does_not_poll_dev_commands_with_60s_config():
     )
 
     assert device_control.dev_calls == 0
+
+
+def test_mode_switches_on_first_heartbeat_returning_new_mode():
+    """Mode must update immediately on the heartbeat that returns the new mode,
+    not on the following one.  The 'Heartbeat sent' log should already reflect
+    the new mode, and a 'Mode changed' log should be emitted exactly once."""
+    system = _FakeSystem()
+    presence = _SequencePresence([
+        {"mode": "production", "next_heartbeat_ms": 1000, "module_assignment_poll_interval_ms": 60000},
+        {"mode": "development", "next_heartbeat_ms": 1000, "dev_poll_interval_ms": 2000, "module_assignment_poll_interval_ms": 60000},
+        {"mode": "development", "next_heartbeat_ms": 1000, "dev_poll_interval_ms": 2000, "module_assignment_poll_interval_ms": 60000},
+    ])
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        max_iterations=30,
+    )
+
+    heartbeat_logs = [(msg, d) for msg, d in logger.info_log if msg == "Heartbeat sent"]
+    mode_change_logs = [(msg, d) for msg, d in logger.info_log if msg == "Mode changed"]
+
+    # First heartbeat returns "production" → log says "production"
+    assert heartbeat_logs[0][1]["mode"] == "production"
+    # Second heartbeat returns "development" → log must say "development" immediately
+    assert heartbeat_logs[1][1]["mode"] == "development"
+    # A single "Mode changed" log is emitted
+    assert len(mode_change_logs) == 1
+    assert mode_change_logs[0][1] == {"from": "production", "to": "development"}

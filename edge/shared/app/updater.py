@@ -2,10 +2,83 @@ import json
 
 from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.config import CONFIG_PATH, CONFIG_STAGING_PATH, Config
-from edge.shared.app.endpoints import OTA_CHECK_PATH, OTA_FILE_PATH
+from edge.shared.app.endpoints import OTA_CHECK_PATH, OTA_STREAM_PATH
 from edge.shared.app.safe_io import atomic_write_bytes
 from edge.shared.app.secret_crypto import encrypt_secret
 from edge.shared.hal.interfaces import IFileSystem, IHttpClient, ISystem
+
+
+class _HashingChunkReader:
+    """Iterates chunks from a _StreamFrameReader while computing a rolling SHA256.
+
+    Designed to be passed directly to IFileSystem.write_chunks() so the data is
+    written to disk one chunk at a time — no large contiguous bytearray needed.
+    .digest is populated after the iterator is exhausted.
+    """
+
+    def __init__(self, frame_reader, size, hashlib_module):
+        self._frame_reader = frame_reader
+        self._size = size
+        self._h = hashlib_module.sha256()
+        self.digest = None
+
+    def __iter__(self):
+        for chunk in self._frame_reader.read_chunks(self._size):
+            self._h.update(chunk)
+            yield chunk
+        self.digest = self._h.digest()
+
+
+_READLINE_BUF_SIZE = 128
+_READ_CHUNK_SIZE = 512
+
+
+class _StreamFrameReader:
+    """Reads the OTA framing protocol from a streaming HTTP response.
+
+    Frame format (repeated for each file, then END\\n to terminate):
+        HASH:<sha256-hex>\\n
+        FILE:<relative/path>\\n
+        SIZE:<decimal-byte-count>\\n
+        <SIZE raw bytes of file content>
+    """
+
+    def __init__(self, streaming_response):
+        self._resp = streaming_response
+        self._buf = b""
+        self._chunk_buf = bytearray(_READ_CHUNK_SIZE)
+
+    def readline(self) -> str:
+        while True:
+            nl = self._buf.find(b"\n")
+            if nl >= 0:
+                line = self._buf[:nl].decode("utf-8").rstrip("\r")
+                self._buf = self._buf[nl + 1:]
+                return line
+            chunk = self._resp.read(_READLINE_BUF_SIZE)
+            if not chunk:
+                raise RuntimeError("Unexpected EOF in OTA stream")
+            self._buf = self._buf + chunk
+
+    def read_chunks(self, size: int, chunk_size: int = _READ_CHUNK_SIZE):
+        """Yield raw bytes in up-to chunk_size pieces until exactly *size* bytes have been yielded."""
+        remaining = size
+        # Drain any bytes already pulled into the header look-ahead buffer.
+        if self._buf:
+            take = min(len(self._buf), remaining)
+            yield self._buf[:take]
+            self._buf = self._buf[take:]
+            remaining -= take
+        # Reuse the pre-allocated chunk buffer for all reads — avoids repeated
+        # heap allocation that causes GC pressure on a fragmented MicroPython heap.
+        mv = memoryview(self._chunk_buf)
+        while remaining > 0:
+            ask = min(chunk_size, remaining)
+            n = self._resp.readinto(mv[:ask])
+            if not n:
+                raise RuntimeError("Unexpected EOF reading OTA file content")
+            remaining -= n
+            yield mv[:n]
 
 
 class UpdateInfo:
@@ -78,53 +151,13 @@ class Updater:
             self._clear_staging()
             self._ensure_dir(self._staging_root)
 
-            config_staged = False
-            file_count = 0
-            for item in update_info.manifest:
-                rel_path = item["path"]
-                expected_hash = item["hash"]
-                downloaded_content = self._download_file(update_info.version, rel_path)
-
-                actual_hash = self._digest_bytes(downloaded_content)
-                if actual_hash.lower() != expected_hash.lower():
-                    self._clear_staging()
-                    self._log_error("OTA file hash mismatch", {"path": rel_path})
-                    raise ValueError("Hash mismatch for " + rel_path)
-
-                content = downloaded_content
-
-                if rel_path == CONFIG_PATH:
-                    content = self._merge_config_payload(content, update_info.version)
-
-                target_path = self._config_staging_target() if rel_path == CONFIG_PATH else self._join(self._staging_root, rel_path)
-                self._ensure_dir(self._parent_dir(target_path))
-                atomic_write_bytes(self._fs, target_path, content)
-                self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content)})
-
-                if rel_path == CONFIG_PATH:
-                    config_staged = True
-
-                file_count += 1
-
-                # Release buffers immediately and run GC to avoid heap exhaustion
-                # on memory-constrained devices when downloading many files.
-                downloaded_content = None
-                content = None
-                actual_hash = None
-                if _gc is not None:
-                    _gc.collect()
-
-                # Flush OTA progress logs to the server every 10 files so
-                # they are not lost if the device resets or the buffer fills.
-                if file_count % 10 == 0:
-                    if _gc is not None:
-                        _gc.collect()
-                    self._flush_logs()
-
-                # Brief pause between downloads to yield to the RTOS scheduler
-                # and let flash I/O settle.  TCP TIME_WAIT is handled at the
-                # HTTP-client layer via SO_LINGER(0).
-                self._system.sleep_ms(50)
+            try:
+                config_staged = self._apply_update_streaming(update_info, _gc)
+            except Exception:
+                # Ensure partial staging is cleaned up on any stream error
+                # (hash mismatch already calls _clear_staging internally).
+                self._clear_staging()
+                raise
 
             if config_staged:
                 self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
@@ -157,6 +190,10 @@ class Updater:
             if _gc is not None:
                 _gc.collect()
 
+            # Wait for lwIP to fully release PCBs from the OTA stream socket
+            # before opening a new connection for the log flush POST.
+            self._system.sleep_ms(2000)
+
             # Resume uplink and flush before reset so OTA logs reach the
             # server — reset() never returns, so the finally block won't run.
             self._flush_logs()
@@ -166,25 +203,123 @@ class Updater:
             if uplink_paused:
                 self._logger.resume_uplink()
 
-    def _download_file(self, version: str, path: str, retries: int = 3) -> bytes:
-        url = self._config.api_url + OTA_FILE_PATH + "?version=" + version + "&path=" + path
-        last_error = None
-        for attempt in range(retries):
-            if attempt > 0:
-                delay_ms = 500 * attempt
-                self._log_warn("Retrying OTA download", {"path": path, "attempt": attempt + 1, "delay_ms": delay_ms})
-                self._system.sleep_ms(delay_ms)
-            try:
-                response = self._http.get(url, headers=self._auth_headers())
-                if response.status_code == 200:
-                    return response.content
-                last_error = "HTTP " + str(response.status_code)
-                self._log_warn("OTA download got non-200", {"path": path, "status_code": response.status_code})
-            except Exception as exc:
-                last_error = str(exc)
-                self._log_warn("OTA download error", {"path": path, "error": last_error})
-        self._log_error("OTA file download failed after retries", {"path": path, "error": last_error})
-        raise RuntimeError("Failed to download update file: " + path)
+    def _apply_update_streaming(self, update_info: UpdateInfo, _gc) -> bool:
+        """Open a single OTA stream and stage all files from it.
+
+        Returns True if config.json was staged (caller must validate it).
+        Raises RuntimeError or ValueError on any stream or hash error.
+        """
+        try:
+            import uhashlib as _hashlib
+        except ImportError:  # pragma: no cover - desktop fallback
+            import hashlib as _hashlib
+
+        try:
+            from ubinascii import hexlify as _hexlify
+
+            def _hex(digest):
+                return str(_hexlify(digest), "ascii")
+        except ImportError:  # pragma: no cover - desktop fallback
+            def _hex(digest):
+                return digest.hex()
+
+        url = self._config.api_url + OTA_STREAM_PATH + "?version=" + update_info.version
+        self._log_info("Opening OTA stream", {"version": update_info.version})
+        response = self._http.get_stream(url, headers=self._auth_headers())
+
+        config_staged = False
+        file_count = 0
+        _ROOT_FILES = ("boot.py", "main.py")
+
+        try:
+            reader = _StreamFrameReader(response)
+
+            while True:
+                line = reader.readline()
+                if line == "END":
+                    break
+
+                if not line.startswith("HASH:"):
+                    raise RuntimeError("Unexpected OTA stream frame: " + line)
+                expected_hash = line[5:]
+
+                file_line = reader.readline()
+                if not file_line.startswith("FILE:"):
+                    raise RuntimeError("Expected FILE: line, got: " + file_line)
+                rel_path = file_line[5:]
+
+                size_line = reader.readline()
+                if not size_line.startswith("SIZE:"):
+                    raise RuntimeError("Expected SIZE: line, got: " + size_line)
+                size = int(size_line[5:])
+
+                # Resolve staging path before reading content so we can stream
+                # directly to disk — no large bytearray needed.
+                if rel_path in _ROOT_FILES:
+                    target_path = rel_path
+                elif rel_path == CONFIG_PATH:
+                    target_path = self._config_staging_target()
+                else:
+                    target_path = self._join(self._staging_root, rel_path)
+
+                self._ensure_dir(self._parent_dir(target_path))
+
+                if rel_path == CONFIG_PATH:
+                    # Config is always small (< 2 KB): buffer in memory so we
+                    # can verify the hash and apply merge/encrypt before writing.
+                    h = _hashlib.sha256()
+                    buf = bytearray()
+                    for chunk in reader.read_chunks(size):
+                        h.update(chunk)
+                        buf.extend(chunk)
+                    actual_hash = _hex(h.digest())
+                    if actual_hash.lower() != expected_hash.lower():
+                        self._clear_staging()
+                        self._log_error("OTA file hash mismatch", {"path": rel_path})
+                        raise ValueError("Hash mismatch for " + rel_path)
+                    content = self._merge_config_payload(bytes(buf), update_info.version)
+                    buf = None
+                    atomic_write_bytes(self._fs, target_path, content)
+                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content)})
+                    content = None
+                    config_staged = True
+                else:
+                    # Stream directly to disk chunk-by-chunk — the maximum
+                    # in-RAM data is one 512-byte chunk + 32-byte hash state.
+                    # This avoids the large contiguous allocation that OOM'd.
+                    tmp_path = target_path + ".ota_tmp"
+                    h_reader = _HashingChunkReader(reader, size, _hashlib)
+                    try:
+                        self._fs.write_chunks(tmp_path, h_reader)
+                    except Exception:
+                        if self._fs.exists(tmp_path):
+                            try:
+                                self._fs.remove(tmp_path)
+                            except Exception:
+                                pass
+                        raise
+                    actual_hash = _hex(h_reader.digest)
+                    if actual_hash.lower() != expected_hash.lower():
+                        self._fs.remove(tmp_path)
+                        self._clear_staging()
+                        self._log_error("OTA file hash mismatch", {"path": rel_path})
+                        raise ValueError("Hash mismatch for " + rel_path)
+                    self._fs.rename(tmp_path, target_path)
+                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": size})
+
+                file_count += 1
+
+                if _gc is not None:
+                    _gc.collect()
+
+        finally:
+            response.close()
+
+        if file_count == 0:
+            self._clear_staging()
+            raise RuntimeError("OTA stream contained no files")
+
+        return config_staged
 
     def _auth_headers(self):
         return {
@@ -244,20 +379,6 @@ class Updater:
         if "/" not in path:
             return ""
         return path.rsplit("/", 1)[0]
-
-    @staticmethod
-    def _digest_bytes(data: bytes) -> str:
-        try:
-            import uhashlib as hashlib
-        except ImportError:  # pragma: no cover - desktop fallback
-            import hashlib
-
-        digest = hashlib.sha256(data).digest()
-        try:
-            from ubinascii import hexlify
-            return str(hexlify(digest), "ascii")
-        except ImportError:  # pragma: no cover - desktop fallback
-            return digest.hex()
 
     def _log_info(self, message: str, context=None) -> None:
         if self._logger is not None:

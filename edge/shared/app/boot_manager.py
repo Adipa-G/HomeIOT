@@ -106,27 +106,30 @@ class BootManager:
         pending_config_changed = bool(state.get("pending_config_changed", False))
         has_app_backup = self._fs.exists(self._app_prev_path)
         has_config_backup = self._fs.exists(self._config_prev_path)
-        if pending_app_changed and not has_app_backup:
-            raise RuntimeError("Rollback requested but app backup is missing")
-        if pending_config_changed and not has_config_backup:
-            raise RuntimeError("Rollback requested but config backup is missing")
+
         if not pending_app_changed and not pending_config_changed:
             raise RuntimeError("Rollback requested but no pending update is recorded")
-        if not has_app_backup and not has_config_backup:
-            raise RuntimeError("Rollback requested but no backup is available")
+
         self._log_warn("Rollback triggered", {"current_version": state.get("current_version")})
 
         if pending_app_changed:
-            self._remove_tree(self._app_path)
-            self._fs.rename(self._app_prev_path, self._app_path)
+            if has_app_backup:
+                self._remove_tree(self._app_path)
+                self._fs.rename(self._app_prev_path, self._app_path)
+                state["current_version"] = state.get("previous_version") or state.get("current_version")
+            else:
+                # No backup exists (e.g. first OTA from a freshly-deployed device).
+                # Cannot restore; keep current app and clear the pending flag so the
+                # device can attempt to boot rather than looping forever.
+                self._log_warn("App backup missing; cannot roll back app, keeping current version")
 
         if pending_config_changed:
-            self._restore_config()
+            if has_config_backup:
+                self._restore_config()
+                state["config_version"] = state.get("previous_config_version") or state.get("config_version") or state["current_version"]
+            else:
+                self._log_warn("Config backup missing; cannot roll back config, keeping current config")
 
-        if pending_app_changed:
-            state["current_version"] = state.get("previous_version") or state.get("current_version")
-        if pending_config_changed:
-            state["config_version"] = state.get("previous_config_version") or state.get("config_version") or state["current_version"]
         state["boot_count"] = 0
         state["boot_succeeded"] = False
         state["pending_app_changed"] = False

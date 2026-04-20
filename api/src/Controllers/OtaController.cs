@@ -49,17 +49,12 @@ public sealed class OtaController : EdgeApiControllerBase
         return Ok(response);
     }
 
-    [HttpGet("file")]
-    public IActionResult GetFile([FromQuery] string? version, [FromQuery] string? path)
+    [HttpGet("stream")]
+    public async Task<IActionResult> GetStream([FromQuery] string? version)
     {
         if (string.IsNullOrWhiteSpace(version))
         {
             return BadRequest(new ErrorResponse("invalid_request", "version is required."));
-        }
-
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return BadRequest(new ErrorResponse("invalid_request", "path is required."));
         }
 
         if (!IsSafeVersion(version))
@@ -78,13 +73,14 @@ public sealed class OtaController : EdgeApiControllerBase
             return BadRequest(new ErrorResponse("invalid_request", "platform contains unsupported characters."));
         }
 
-        var fileResult = _otaReleaseService.TryGetReleaseFile(platform, version.Trim(), path.Trim());
-        if (fileResult is null)
+        if (_otaReleaseService.GetReleaseDetail(platform, version.Trim()) is null)
         {
-            return NotFound(new ErrorResponse("not_found", "OTA artifact not found."));
+            return NotFound(new ErrorResponse("not_found", "OTA release not found."));
         }
 
-        return File(fileResult.Content, "application/octet-stream", fileDownloadName: fileResult.FileName);
+        Response.ContentType = "application/octet-stream";
+        await _otaReleaseService.StreamReleaseAsync(platform, version.Trim(), Response.Body, HttpContext.RequestAborted);
+        return new EmptyResult();
     }
 
     private string? ResolvePlatform()

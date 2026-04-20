@@ -1,58 +1,82 @@
-import struct
+import io
 
-from edge.shared.hal.http_client import _close_response
-
-
-class FakeRawSocket:
-    """Minimal socket stand-in that records setsockopt calls."""
-
-    def __init__(self):
-        self.opts = []
-
-    def setsockopt(self, level, optname, value):
-        self.opts.append((level, optname, value))
+from edge.shared.hal.http_client import StreamingResponse, _read_response
+from edge.shared.hal.interfaces import HttpResponse
 
 
 class FakeResponse:
-    def __init__(self, raw=None):
-        self.raw = raw
+    """Mimics urequests.Response: .content closes the socket and sets raw=None."""
+
+    def __init__(self, status_code, body):
+        self.status_code = status_code
+        self._body = body
         self.closed = False
+        self.raw = io.BytesIO(body)
+
+    @property
+    def content(self):
+        return self._body
 
     def close(self):
         self.closed = True
 
 
-def test_close_response_sets_so_linger_before_close():
-    raw = FakeRawSocket()
-    resp = FakeResponse(raw=raw)
+def test_read_response_returns_status_and_body():
+    resp = FakeResponse(200, b"hello")
+    result = _read_response(resp)
 
-    _close_response(resp)
-
-    assert resp.closed
-    assert len(raw.opts) == 1
-    level, optname, value = raw.opts[0]
-    assert level == 1   # SOL_SOCKET
-    assert optname == 13  # SO_LINGER
-    l_onoff, l_linger = struct.unpack("ii", value)
-    assert l_onoff == 1
-    assert l_linger == 0
-
-
-def test_close_response_still_closes_when_setsockopt_fails():
-    class BadSocket:
-        def setsockopt(self, *args):
-            raise OSError("not supported")
-
-    resp = FakeResponse(raw=BadSocket())
-
-    _close_response(resp)
-
+    assert result.status_code == 200
+    assert result.content == b"hello"
+    assert result.text == "hello"
     assert resp.closed
 
 
-def test_close_response_handles_no_raw():
-    resp = FakeResponse(raw=None)
+def test_read_response_handles_empty_body():
+    resp = FakeResponse(204, b"")
+    result = _read_response(resp)
 
-    _close_response(resp)
-
+    assert result.status_code == 204
+    assert result.content == b""
+    assert result.text == ""
     assert resp.closed
+
+
+def test_streaming_response_read_delegates_to_socket():
+    sock = io.BytesIO(b"stream body")
+    sr = StreamingResponse(sock, 200)
+
+    assert sr.status_code == 200
+    assert sr.read(6) == b"stream"
+    assert sr.read(5) == b" body"
+
+
+def test_streaming_response_close_nulls_socket():
+    sock = io.BytesIO(b"data")
+    sr = StreamingResponse(sock, 200)
+    sr.close()
+    assert sr._sock is None
+
+
+def test_streaming_response_close_is_idempotent():
+    sock = io.BytesIO(b"data")
+    sr = StreamingResponse(sock, 200)
+    sr.close()
+    sr.close()  # should not raise
+
+
+def test_streaming_response_readinto_fills_buffer_and_returns_count():
+    sock = io.BytesIO(b"stream body")
+    sr = StreamingResponse(sock, 200)
+    buf = bytearray(6)
+    n = sr.readinto(buf)
+    assert n == 6
+    assert buf == b"stream"
+
+
+def test_streaming_response_readinto_partial_at_end():
+    sock = io.BytesIO(b"hi")
+    sr = StreamingResponse(sock, 200)
+    buf = bytearray(10)
+    n = sr.readinto(buf)
+    assert n == 2
+    assert buf[:n] == b"hi"

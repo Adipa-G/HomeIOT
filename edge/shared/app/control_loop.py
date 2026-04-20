@@ -87,25 +87,29 @@ def run_control_loop(
             if now >= next_heartbeat_ms:
                 try:
                     metadata = presence.heartbeat_with_metadata()
-                    logger.info(
-                        "Heartbeat sent",
-                        {
-                            "mode": mode,
-                            "interval_ms": heartbeat_interval_ms,
-                        },
-                    )
                 except Exception as exc:
                     logger.warn("Heartbeat poll threw exception", {"error": str(exc)})
                     metadata = None
 
                 if isinstance(metadata, dict) and metadata:
-                    mode = str(metadata.get("mode", mode))
+                    server_mode = str(metadata.get("mode", mode))
+                    if server_mode != mode:
+                        logger.info("Mode changed", {"from": mode, "to": server_mode})
+                    mode = server_mode
                     heartbeat_interval_ms = max(1000, int(metadata.get("next_heartbeat_ms", heartbeat_interval_ms)))
                     dev_poll_interval_ms = max(500, int(metadata.get("dev_poll_interval_ms", dev_poll_interval_ms)))
                     module_poll_interval_ms = max(
                         1000,
                         int(metadata.get("module_assignment_poll_interval_ms", module_poll_interval_ms)),
                     )
+
+                logger.info(
+                    "Heartbeat sent",
+                    {
+                        "mode": mode,
+                        "interval_ms": heartbeat_interval_ms,
+                    },
+                )
 
                 next_heartbeat_ms = now + heartbeat_interval_ms
 

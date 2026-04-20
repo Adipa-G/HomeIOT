@@ -39,32 +39,59 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
     }
 
     [Fact]
-    public void TryGetReleaseFile_ReturnsNullWhenPathNotInManifest()
+    public async Task StreamReleaseAsync_WritesCorrectFrameFormat()
     {
-        CreateRelease("esp32", "1.1.0", new[] { ("main.py", "hash-main") });
-        File.WriteAllText(Path.Combine(_tempRoot, "esp32", "1.1.0", "hidden.py"), "print('hidden')");
+        var fileContent = "print('hello')";
+        CreateRelease("esp32", "1.1.0", new[] { ("main.py", "deadbeef") });
+        File.WriteAllText(Path.Combine(_tempRoot, "esp32", "1.1.0", "main.py"), fileContent);
 
         var service = CreateService();
 
-        var file = service.TryGetReleaseFile("esp32", "1.1.0", "hidden.py");
+        using var ms = new MemoryStream();
+        await service.StreamReleaseAsync("esp32", "1.1.0", ms);
+        ms.Position = 0;
 
-        Assert.Null(file);
+        var output = Encoding.ASCII.GetString(ms.ToArray());
+
+        Assert.Contains("HASH:deadbeef\n", output);
+        Assert.Contains("FILE:main.py\n", output);
+        var expectedSize = Encoding.UTF8.GetByteCount(fileContent);
+        Assert.Contains($"SIZE:{expectedSize}\n", output);
+        Assert.Contains(fileContent, output);
+        Assert.EndsWith("END\n", output);
     }
 
     [Fact]
-    public void TryGetReleaseFile_ReturnsBytesForManifestPath()
+    public async Task StreamReleaseAsync_WritesMultipleFilesInOrder()
     {
-        CreateRelease("esp32", "1.1.0", new[] { ("main.py", "hash-main") });
-        var expected = Encoding.UTF8.GetBytes("print('ok')");
-        File.WriteAllBytes(Path.Combine(_tempRoot, "esp32", "1.1.0", "main.py"), expected);
+        CreateRelease("esp32", "1.1.0", new[] { ("main.py", "hash1"), ("boot.py", "hash2") });
+        File.WriteAllText(Path.Combine(_tempRoot, "esp32", "1.1.0", "main.py"), "main");
+        File.WriteAllText(Path.Combine(_tempRoot, "esp32", "1.1.0", "boot.py"), "boot");
 
         var service = CreateService();
 
-        var file = service.TryGetReleaseFile("esp32", "1.1.0", "main.py");
+        using var ms = new MemoryStream();
+        await service.StreamReleaseAsync("esp32", "1.1.0", ms);
+        ms.Position = 0;
 
-        Assert.NotNull(file);
-        Assert.Equal("main.py", file!.FileName);
-        Assert.Equal(expected, file.Content);
+        var output = Encoding.ASCII.GetString(ms.ToArray());
+
+        Assert.Contains("FILE:main.py\n", output);
+        Assert.Contains("FILE:boot.py\n", output);
+        Assert.EndsWith("END\n", output);
+    }
+
+    [Fact]
+    public async Task StreamReleaseAsync_WritesNothing_WhenReleaseHasNoManifest()
+    {
+        Directory.CreateDirectory(Path.Combine(_tempRoot, "esp32", "1.0.0"));
+
+        var service = CreateService();
+
+        using var ms = new MemoryStream();
+        await service.StreamReleaseAsync("esp32", "1.0.0", ms);
+
+        Assert.Equal(0, ms.Length);
     }
 
     [Fact]

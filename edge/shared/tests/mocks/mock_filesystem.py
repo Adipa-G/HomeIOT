@@ -105,6 +105,12 @@ class MockFileSystem:
             return
         raise FileNotFoundError(src)
 
+    def write_chunks(self, path: str, chunks) -> None:
+        buf = bytearray()
+        for chunk in chunks:
+            buf.extend(chunk)
+        self.write_bytes(path, bytes(buf))
+
     @staticmethod
     def _normalize(path: str) -> str:
         return path.strip("/")

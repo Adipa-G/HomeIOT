@@ -1,7 +1,7 @@
 REGISTER_DEVICE_PATH = "/api/devices/register"
 HEARTBEAT_PATH = "/api/devices/heartbeat"
 OTA_CHECK_PATH = "/api/ota/check"
-OTA_FILE_PATH = "/api/ota/file"
+OTA_STREAM_PATH = "/api/ota/stream"
 LOGS_PATH = "/api/devices/logs"
 DEV_COMMAND_NEXT_PATH = "/api/devices/dev-commands/next"
 DEV_COMMAND_RESULT_PATH_TEMPLATE = "/api/devices/dev-commands/{commandId}/result"

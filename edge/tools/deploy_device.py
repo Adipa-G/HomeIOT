@@ -169,6 +169,48 @@ def _device_has_config(port: str) -> bool:
     return "EXISTS" in result.stdout
 
 
+def _clean_stale_directories(port: str) -> None:
+    """Remove stale directories from prior deploys: root /edge/ from old USB
+    deploys, and /app_prev/ + /app_staging/ from incomplete OTA cycles."""
+    script = (
+        "import os\n"
+        "def _rmtree(path):\n"
+        "    try:\n"
+        "        os.stat(path)\n"
+        "    except OSError:\n"
+        "        return\n"
+        "    dirs = []\n"
+        "    stack = [path]\n"
+        "    while stack:\n"
+        "        d = stack.pop()\n"
+        "        dirs.append(d)\n"
+        "        for name in os.listdir(d):\n"
+        "            full = d + '/' + name\n"
+        "            try:\n"
+        "                os.listdir(full)\n"
+        "                stack.append(full)\n"
+        "            except OSError:\n"
+        "                os.remove(full)\n"
+        "    for d in reversed(dirs):\n"
+        "        os.rmdir(d)\n"
+        "removed = []\n"
+        "for d in ['app','edge', 'modules_cache', 'app_prev', 'app_staging']:\n"
+        "    try:\n"
+        "        os.stat(d)\n"
+        "        _rmtree(d)\n"
+        "        removed.append(d)\n"
+        "    except OSError:\n"
+        "        pass\n"
+        "print('CLEANED:' + ','.join(removed) if removed else 'CLEANED:none')\n"
+    )
+    result = _run_mpremote(port, ["exec", script], "clean stale directories")
+    cleaned = result.stdout.strip()
+    if "CLEANED:" in cleaned:
+        dirs = cleaned.split("CLEANED:")[1].strip()
+        if dirs and dirs != "none":
+            _progress(0, 3, f"Cleaned stale directories: {dirs}")
+
+
 def _backup_device_config(port: str) -> None:
     _run_mpremote(port, ["cp", ":/config.json", ":/config_prev.json"], "backup config.json")
 
@@ -202,6 +244,9 @@ def _mark_pending_config_update(port: str, config_version: str) -> None:
 
 def _verify_remote_imports(port: str, platform: str) -> None:
     script = (
+        "import sys\n"
+        "if 'app' not in sys.path:\n"
+        "    sys.path.insert(0, 'app')\n"
         "import edge.shared.app.endpoints\n"
         "import edge.shared.app.config\n"
         "import edge.shared.app.boot_manager\n"
@@ -219,9 +264,11 @@ def _verify_remote_imports(port: str, platform: str) -> None:
 def _copy_runtime_essentials(port: str, paths: dict[str, Path], platform: str, root: Path) -> None:
     staging = _build_staging_tree(root, platform)
     try:
+        # Ensure /app/ parent directory exists on the device.
+        _run_mpremote(port, ["exec", "import os\ntry:\n    os.mkdir('app')\nexcept OSError:\n    pass"], "create /app directory")
         staged_edge = staging / "edge"
         copies = [
-            (staged_edge, ":/", f"edge/ (shared + {platform} HAL)"),
+            (staged_edge, ":/app/edge", f"edge/ -> app/edge/ (shared + {platform} HAL)"),
             (paths["boot"], ":/boot.py", "boot.py"),
             (paths["main"], ":/main.py", "main.py"),
         ]
@@ -367,6 +414,7 @@ def main(argv: list[str]) -> int:
             print("[2/5] Skipping runtime upload (--config-only)")
         else:
             print("[2/5] Upload runtime essentials (3 items)")
+            _clean_stale_directories(args.port)
             _copy_runtime_essentials(args.port, paths, args.platform, root)
 
         print("[3/5] Apply config policy")

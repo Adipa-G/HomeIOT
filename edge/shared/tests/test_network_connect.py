@@ -55,14 +55,15 @@ def test_connect_disconnects_when_status_is_connecting():
     assert len(wlan.connect_calls) == 1
 
 
-def test_connect_skips_disconnect_when_not_connecting():
-    """When wlan.status() != STAT_CONNECTING, no disconnect is issued."""
+def test_connect_always_disconnects_before_reconnect():
+    """disconnect() is called unconditionally before wlan.connect() so that
+    the ESP-IDF state machine is always in a clean idle state."""
     wlan = _FakeWlan(connected=False, status=0)
     net = _make_network(wlan)
 
     net.connect("ssid", "pass", timeout_ms=100)
 
-    assert wlan.disconnect_calls == 0
+    assert wlan.disconnect_calls == 1
     assert len(wlan.connect_calls) == 1
 
 
@@ -77,13 +78,13 @@ def test_connect_skips_entirely_when_already_connected():
     assert len(wlan.connect_calls) == 0
 
 
-def test_connect_survives_wlan_without_status_method():
-    """If wlan has no status() method (e.g. Pico), connect still works."""
+def test_connect_survives_wlan_without_disconnect_method():
+    """If wlan has no disconnect() method (e.g. some Pico ports), connect
+    still works — the exception is swallowed."""
 
-    class _NoStatusWlan:
+    class _NoDisconnectWlan:
         def __init__(self):
             self.connect_calls = []
-            self.disconnect_calls = 0
 
         def active(self, enable):
             pass
@@ -94,10 +95,9 @@ def test_connect_survives_wlan_without_status_method():
         def connect(self, ssid, password):
             self.connect_calls.append((ssid, password))
 
-    wlan = _NoStatusWlan()
+    wlan = _NoDisconnectWlan()
     net = _make_network(wlan)
 
     net.connect("ssid", "pass", timeout_ms=100)
 
-    assert wlan.disconnect_calls == 0
     assert len(wlan.connect_calls) == 1

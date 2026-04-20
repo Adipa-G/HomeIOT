@@ -3,7 +3,6 @@ using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Data.Entities;
 using HomeIOT.Api.Infrastructure;
 using HomeIOT.Api.Services;
-using HomeIOT.Api.Services.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
@@ -34,13 +33,74 @@ public class OtaControllerTests
     }
 
     [Fact]
-    public void GetFile_FallsBackToRegisteredPlatform()
+    public async Task GetStream_Returns200WithOctetStream_WhenReleaseExists()
     {
         var serviceMock = new Mock<IOtaReleaseService>();
-        var bytes = new byte[] { 0x01, 0x02, 0x03 };
+        var detail = new OtaReleaseDetailResponse("esp32", "1.1.0", 1, 10,
+            new List<OtaManifestFileItem> { new("main.py", "abc", 10) });
+        serviceMock.Setup(x => x.GetReleaseDetail("esp32", "1.1.0")).Returns(detail);
         serviceMock
-            .Setup(x => x.TryGetReleaseFile("esp32", "1.1.0", "main.py"))
-            .Returns(new OtaFileContent(bytes, "main.py"));
+            .Setup(x => x.StreamReleaseAsync("esp32", "1.1.0", It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var controller = CreateController(serviceMock.Object);
+        controller.HttpContext.Request.Headers["X-Platform"] = "esp32";
+
+        var result = await controller.GetStream("1.1.0");
+
+        Assert.IsType<EmptyResult>(result);
+        Assert.Equal("application/octet-stream", controller.HttpContext.Response.ContentType);
+        serviceMock.VerifyAll();
+    }
+
+    [Fact]
+    public async Task GetStream_Returns404_WhenReleaseNotFound()
+    {
+        var serviceMock = new Mock<IOtaReleaseService>();
+        serviceMock.Setup(x => x.GetReleaseDetail("esp32", "9.9.9")).Returns((OtaReleaseDetailResponse?)null);
+
+        var controller = CreateController(serviceMock.Object);
+        controller.HttpContext.Request.Headers["X-Platform"] = "esp32";
+
+        var result = await controller.GetStream("9.9.9");
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetStream_Returns400_WhenVersionMissing()
+    {
+        var serviceMock = new Mock<IOtaReleaseService>();
+        var controller = CreateController(serviceMock.Object);
+        controller.HttpContext.Request.Headers["X-Platform"] = "esp32";
+
+        var result = await controller.GetStream(null);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetStream_Returns400_WhenVersionUnsafe()
+    {
+        var serviceMock = new Mock<IOtaReleaseService>();
+        var controller = CreateController(serviceMock.Object);
+        controller.HttpContext.Request.Headers["X-Platform"] = "esp32";
+
+        var result = await controller.GetStream("../../etc/passwd");
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetStream_FallsBackToRegisteredPlatform()
+    {
+        var serviceMock = new Mock<IOtaReleaseService>();
+        var detail = new OtaReleaseDetailResponse("esp32", "1.1.0", 1, 10,
+            new List<OtaManifestFileItem> { new("main.py", "abc", 10) });
+        serviceMock.Setup(x => x.GetReleaseDetail("esp32", "1.1.0")).Returns(detail);
+        serviceMock
+            .Setup(x => x.StreamReleaseAsync("esp32", "1.1.0", It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         var controller = CreateController(serviceMock.Object);
         controller.HttpContext.SetDeviceRequestContext(new DeviceRequestContext(
@@ -57,12 +117,9 @@ public class OtaControllerTests
                 Mode = "production",
             }));
 
-        var result = controller.GetFile("1.1.0", "main.py");
+        var result = await controller.GetStream("1.1.0");
 
-        var file = Assert.IsType<FileContentResult>(result);
-        Assert.Equal("application/octet-stream", file.ContentType);
-        Assert.Equal("main.py", file.FileDownloadName);
-        Assert.Equal(bytes, file.FileContents);
+        Assert.IsType<EmptyResult>(result);
         serviceMock.VerifyAll();
     }
 

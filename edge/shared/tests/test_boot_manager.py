@@ -300,3 +300,76 @@ def test_on_boot_restores_app_only_when_only_app_changed():
 
     assert fs.read_bytes("app/main.py") == b"stable-app"
     assert fs.read_text("config.json") == "current-config"
+
+
+def test_rollback_keeps_current_app_when_backup_missing():
+    """First OTA from a freshly-deployed device: no app_prev exists.
+    rollback() must not raise; it clears pending flags and resets so the device
+    can attempt to boot with the current (only) version."""
+    fs = MockFileSystem()
+    system = MockSystem()
+    manager = BootManager(fs=fs, system=system, max_attempts=1)
+
+    fs.write_bytes("app/main.py", b"new-app")
+    # No app_prev — first-ever OTA, nothing to back up
+    fs.write_text("config.json", "current-config")
+    fs.write_text(
+        "boot_state.json",
+        json.dumps(
+            {
+                "boot_count": 1,
+                "boot_succeeded": False,
+                "current_version": "2.0.0",
+                "previous_version": None,
+                "config_version": "2.0.0",
+                "previous_config_version": None,
+                "pending_app_changed": True,
+                "pending_config_changed": False,
+            }
+        ),
+    )
+
+    manager.on_boot()
+
+    # App unchanged — nothing to restore
+    assert fs.read_bytes("app/main.py") == b"new-app"
+    assert system.reset_calls == 1
+    state = json.loads(fs.read_text("boot_state.json"))
+    assert state["boot_count"] == 0
+    assert state["pending_app_changed"] is False
+    assert state["pending_config_changed"] is False
+
+
+def test_rollback_keeps_current_config_when_config_backup_missing():
+    """Config backup absent; rollback clears flags and resets without raising."""
+    fs = MockFileSystem()
+    system = MockSystem()
+    manager = BootManager(fs=fs, system=system, max_attempts=1)
+
+    fs.write_bytes("app/main.py", b"current-app")
+    fs.write_text("config.json", "current-config")
+    # No config_prev
+    fs.write_text(
+        "boot_state.json",
+        json.dumps(
+            {
+                "boot_count": 1,
+                "boot_succeeded": False,
+                "current_version": "2.0.0",
+                "previous_version": None,
+                "config_version": "2.0.0",
+                "previous_config_version": None,
+                "pending_app_changed": False,
+                "pending_config_changed": True,
+            }
+        ),
+    )
+
+    manager.on_boot()
+
+    assert fs.read_text("config.json") == "current-config"
+    assert system.reset_calls == 1
+    state = json.loads(fs.read_text("boot_state.json"))
+    assert state["boot_count"] == 0
+    assert state["pending_app_changed"] is False
+    assert state["pending_config_changed"] is False
