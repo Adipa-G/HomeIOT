@@ -134,11 +134,6 @@ class Updater:
         )
 
     def apply(self, update_info: UpdateInfo) -> None:
-        try:
-            import gc as _gc
-        except ImportError:  # pragma: no cover - desktop fallback
-            _gc = None
-
         # Pause log uplink during OTA to avoid socket contention;
         # log entries still buffer and print to console.
         uplink_paused = False
@@ -152,7 +147,7 @@ class Updater:
             self._ensure_dir(self._staging_root)
 
             try:
-                config_staged = self._apply_update_streaming(update_info, _gc)
+                config_staged = self._apply_update_streaming(update_info)
             except Exception:
                 # Ensure partial staging is cleaned up on any stream error
                 # (hash mismatch already calls _clear_staging internally).
@@ -176,19 +171,8 @@ class Updater:
             update_info.manifest.clear()
             update_info = None
 
-            # Reclaim heap before the version swap — set_new_version does
-            # recursive directory walks and file renames that allocate.
-            if _gc is not None:
-                _gc.collect()
-
             self._boot_manager.set_new_version(version)
-            self._log_info("OTA apply complete, resetting", {"version": version})
-
-            # Reclaim heap before flush — _decode_buffer + json.dumps of
-            # the batch payload is the largest single allocation in the
-            # OTA path and can fail on a fragmented heap.
-            if _gc is not None:
-                _gc.collect()
+            self._log_info("OTA apply complete, resetting", {"version": version, "free_bytes": self._system.free_memory_bytes()})
 
             # Wait for lwIP to fully release PCBs from the OTA stream socket
             # before opening a new connection for the log flush POST.
@@ -203,7 +187,7 @@ class Updater:
             if uplink_paused:
                 self._logger.resume_uplink()
 
-    def _apply_update_streaming(self, update_info: UpdateInfo, _gc) -> bool:
+    def _apply_update_streaming(self, update_info: UpdateInfo) -> bool:
         """Open a single OTA stream and stage all files from it.
 
         Returns True if config.json was staged (caller must validate it).
@@ -224,7 +208,7 @@ class Updater:
                 return digest.hex()
 
         url = self._config.api_url + OTA_STREAM_PATH + "?version=" + update_info.version
-        self._log_info("Opening OTA stream", {"version": update_info.version})
+        self._log_info("Opening OTA stream", {"version": update_info.version, "free_bytes": self._system.free_memory_bytes()})
         response = self._http.get_stream(url, headers=self._auth_headers())
 
         config_staged = False
@@ -280,7 +264,7 @@ class Updater:
                     content = self._merge_config_payload(bytes(buf), update_info.version)
                     buf = None
                     atomic_write_bytes(self._fs, target_path, content)
-                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content)})
+                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content), "free_bytes": self._system.free_memory_bytes()})
                     content = None
                     config_staged = True
                 else:
@@ -305,12 +289,9 @@ class Updater:
                         self._log_error("OTA file hash mismatch", {"path": rel_path})
                         raise ValueError("Hash mismatch for " + rel_path)
                     self._fs.rename(tmp_path, target_path)
-                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": size})
+                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": size, "free_bytes": self._system.free_memory_bytes()})
 
                 file_count += 1
-
-                if _gc is not None:
-                    _gc.collect()
 
         finally:
             response.close()

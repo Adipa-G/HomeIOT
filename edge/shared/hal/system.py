@@ -50,3 +50,11 @@ class MicroPythonSystem(ISystem):
             self._time.sleep_ms(milliseconds)
         else:
             self._time.sleep(milliseconds / 1000)
+
+    def sync_time(self) -> bool:
+        try:
+            import ntptime
+            ntptime.settime()
+            return True
+        except Exception:  # pragma: no cover - desktop fallback
+            return False

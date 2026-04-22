@@ -100,6 +100,9 @@ class ISystem:
     def sleep_ms(self, milliseconds: int) -> None:
         raise NotImplementedError()
 
+    def sync_time(self) -> bool:
+        raise NotImplementedError()
+
 
 class IWatchdog:
     def init(self, timeout_ms: int) -> None:

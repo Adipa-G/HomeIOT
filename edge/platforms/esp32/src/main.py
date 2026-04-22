@@ -45,6 +45,10 @@ def run_main() -> None:
     try:
         network.connect(config.wifi_ssid, config.wifi_password)
         logger.info("WiFi connected", {"ip": network.get_ip()})
+        if system.sync_time():
+            logger.info("NTP time synced")
+        else:
+            logger.warn("NTP time sync failed; timestamps may be inaccurate")
     except Exception as exc:
         logger.warn("WiFi connection failed; continuing in offline mode", {"error": str(exc)})
 

@@ -23,3 +23,6 @@ class MockSystem:
 
     def sleep_ms(self, milliseconds: int) -> None:
         self.sleep_calls.append(milliseconds)
+
+    def sync_time(self) -> bool:
+        return True
