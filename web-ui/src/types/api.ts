@@ -239,6 +239,7 @@ export interface DevCommandPendingItem {
 
 export interface DevCommandResultItem {
   command_id: string;
+  code: string | null;
   status: string;
   exit_code: number;
   elapsed_ms: number;

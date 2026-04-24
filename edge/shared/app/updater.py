@@ -264,7 +264,7 @@ class Updater:
                     content = self._merge_config_payload(bytes(buf), update_info.version)
                     buf = None
                     atomic_write_bytes(self._fs, target_path, content)
-                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": len(content), "free_bytes": self._system.free_memory_bytes()})
+                    self._log_info("OTA config written to staging", {"path": rel_path, "bytes": len(content), "free_bytes": self._system.free_memory_bytes()})
                     content = None
                     config_staged = True
                 else:

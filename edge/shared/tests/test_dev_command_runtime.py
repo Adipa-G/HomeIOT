@@ -146,3 +146,69 @@ def test_execute_dev_command_non_serialisable_result_coerced_to_string():
     payload = device_control.calls[0][1]
     assert isinstance(payload["data"], str)
     assert "object" in payload["data"]
+
+
+def test_execute_dev_command_return_value_captured_as_data():
+    """Top-level `return` in the code should populate data (the common dev-mode pattern)."""
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    code = (
+        "def run(ctx):\n"
+        "    return {'raw_value': 128, 'temp_celsius': 53.3}\n"
+        "result = run(None)"
+    )
+
+    execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-8", "code": code},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    payload = device_control.calls[0][1]
+    assert payload["status"] == "success"
+    assert payload["data"] == {"raw_value": 128, "temp_celsius": 53.3}
+
+
+def test_execute_dev_command_bare_return_dict():
+    """A bare `return {...}` at the top level should work via function wrapping."""
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    code = "return {'raw_value': 128, 'temp_celsius': 53.3}"
+
+    execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-9", "code": code},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    payload = device_control.calls[0][1]
+    assert payload["status"] == "success"
+    assert payload["data"] == {"raw_value": 128, "temp_celsius": 53.3}
+
+
+def test_execute_dev_command_run_function_auto_called():
+    """A `def run(ctx)` function without an explicit call should be invoked automatically."""
+    system = MockSystem()
+    device_control = _FakeDeviceControl(report_ok=True)
+
+    code = (
+        "def run(ctx):\n"
+        "    raw_temp = 160\n"
+        "    temp_celsius = (raw_temp - 32) * 5 / 9\n"
+        "    return {'raw_value': raw_temp, 'temp_celsius': round(temp_celsius, 1)}\n"
+    )
+
+    execute_dev_command(
+        system=system,
+        device_control=device_control,
+        command={"command_id": "cmd-10", "code": code},
+        utc_now_iso=lambda: "2026-05-29T00:00:00Z",
+    )
+
+    payload = device_control.calls[0][1]
+    assert payload["status"] == "success"
+    assert payload["data"] == {"raw_value": 160, "temp_celsius": 71.1}

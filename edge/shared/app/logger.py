@@ -94,7 +94,7 @@ class EdgeLogger:
             # Fail silently; logging should not break normal flow
             pass
         try:
-            response = self._http.post(url, payload, headers=headers)
+            response = self._http.post(url, payload, headers=headers, timeout_s=self._cfg.flush_timeout_s)
         except Exception:
             return False
         if response.status_code not in (200, 201):

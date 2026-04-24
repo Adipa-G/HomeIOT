@@ -73,6 +73,7 @@ class IHttpClient:
         url: str,
         data,
         headers=None,
+        timeout_s=None,
     ) -> HttpResponse:
         raise NotImplementedError()
 

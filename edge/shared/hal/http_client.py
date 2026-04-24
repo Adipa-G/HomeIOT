@@ -1,6 +1,7 @@
 from edge.shared.hal.interfaces import IHttpClient, HttpResponse
 
 _REQUEST_TIMEOUT_S = 30
+_POST_OTA_TIMEOUT_S = 10
 
 
 class StreamingResponse:
@@ -59,13 +60,13 @@ class MicroPythonHttpClient(IHttpClient):
         response = requests.get(url, headers=headers)
         return _read_response(response)
 
-    def post(self, url, data, headers=None):
+    def post(self, url, data, headers=None, timeout_s=None):
         try:
             import urequests as requests
         except ImportError:  # pragma: no cover - desktop fallback
             import requests
 
-        _set_socket_timeout(_REQUEST_TIMEOUT_S)
+        _set_socket_timeout(timeout_s if timeout_s is not None else _REQUEST_TIMEOUT_S)
         response = requests.post(url, json=data, headers=headers)
         return _read_response(response)
 

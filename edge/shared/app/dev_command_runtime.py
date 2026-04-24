@@ -22,7 +22,22 @@ def execute_dev_command(system, device_control, command, logger=None, utc_now_is
     code = str(command.get("code") or "")
     scope = {"print": _capture_print}
     try:
-        exec(code, scope, scope)
+        try:
+            exec(code, scope, scope)  # noqa: S102
+        except SyntaxError:
+            # Bare `return` at the top level causes SyntaxError in exec.
+            # Wrap in a function so `return` works; capture the return value.
+            wrapped = "def _dev_cmd_fn(ctx):\n" + "\n".join("    " + line for line in code.splitlines())
+            exec(wrapped, scope, scope)  # noqa: S102
+            return_val = scope["_dev_cmd_fn"](scope)
+            if return_val is not None and "result" not in scope:
+                scope["result"] = return_val
+        # If code defines a `run` function but never calls it (the common pattern),
+        # call it automatically and capture the return value.
+        if "result" not in scope and callable(scope.get("run")):
+            return_val = scope["run"](scope)
+            if return_val is not None:
+                scope["result"] = return_val
     except Exception as exc:
         status = "error"
         exit_code = 1

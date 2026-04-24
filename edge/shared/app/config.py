@@ -15,11 +15,13 @@ class LoggingConfig:
         enabled_uplink=True,
         buffer_max_bytes=4096,
         flush_interval_ms=30000,
+        flush_timeout_s=10,
         min_level="INFO",
     ):
         self.enabled_uplink = bool(enabled_uplink)
         self.buffer_max_bytes = int(buffer_max_bytes)
         self.flush_interval_ms = int(flush_interval_ms)
+        self.flush_timeout_s = int(flush_timeout_s)
         self.min_level = str(min_level)
 
 
@@ -123,6 +125,7 @@ class Config:
             enabled_uplink=bool(payload.get("enabled_uplink", True)),
             buffer_max_bytes=max(512, int(payload.get("buffer_max_bytes", 4096))),
             flush_interval_ms=max(1000, int(payload.get("flush_interval_ms", 30000))),
+            flush_timeout_s=max(3, int(payload.get("flush_timeout_s", 10))),
             min_level=str(payload.get("min_level", "INFO")).upper(),
         )
 

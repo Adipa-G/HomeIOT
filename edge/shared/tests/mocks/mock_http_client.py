@@ -52,7 +52,7 @@ class MockHttpClient:
         self.calls.append(("GET", url, None, headers or {}))
         return self._responses.get(("GET", url), HttpResponse(404, "", b""))
 
-    def post(self, url, data, headers=None):
+    def post(self, url, data, headers=None, timeout_s=None):
         self.calls.append(("POST", url, data, headers or {}))
         return self._responses.get(("POST", url), HttpResponse(200, "{}", b"{}"))
 

@@ -9,7 +9,7 @@
   "current_version": "0.0.0",
   "logging": {
     "enabled_uplink": true,
-    "buffer_max_bytes": 4096,
+    "buffer_max_bytes": 12288,
     "flush_interval_ms": 60000,
     "min_level": "INFO"
   },

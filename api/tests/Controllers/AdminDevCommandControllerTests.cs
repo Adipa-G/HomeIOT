@@ -83,6 +83,7 @@ public class AdminDevCommandControllerTests
         queue.Acknowledge("esp32-001", enqueueResponse.CommandId);
         queue.StoreResult(enqueueResponse.CommandId, new DevCommandResultPayload(
             CommandId: enqueueResponse.CommandId,
+            Code: "print('hi')",
             RevisionHash: null,
             DedupeToken: null,
             Status: "success",
@@ -141,7 +142,7 @@ public class AdminDevCommandControllerTests
     {
         var queue = new DevCommandQueue();
         queue.StoreResult("cmd-1", new DevCommandResultPayload(
-            CommandId: "cmd-1", RevisionHash: null, DedupeToken: null,
+            CommandId: "cmd-1", Code: "print('ok')", RevisionHash: null, DedupeToken: null,
             Status: "success", StartedAtUtc: "2026-05-30T00:00:00Z",
             FinishedAtUtc: "2026-05-30T00:00:01Z", ElapsedMs: 100,
             ExitCode: 0, Stdout: "ok", Stderr: null, Data: null,
