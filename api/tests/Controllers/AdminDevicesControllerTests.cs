@@ -73,7 +73,9 @@ public class AdminDevicesControllerTests
         var result = await _controller.UpdateMode(
             "dev-001", new UpdateDeviceModeRequest { Mode = "development" }, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
     }
 
     [Fact]
@@ -114,7 +116,9 @@ public class AdminDevicesControllerTests
 
         var result = await _controller.DeleteDevice("dev-001", CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
     }
 
     [Fact]

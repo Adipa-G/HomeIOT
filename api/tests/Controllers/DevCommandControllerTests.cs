@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Controllers;
 using HomeIOT.Api.Infrastructure;
 using HomeIOT.Api.Services;
@@ -37,7 +38,11 @@ public class DevCommandControllerTests
         var result = controller.ReportResult(entry.CommandId, ParseBody(bodyJson));
 
         // Assert — command accepted
-        Assert.IsType<AcceptedObjectResult>(result);
+        var accepted = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(202, accepted.StatusCode);
+        var payload = Assert.IsType<DevCommandResultAcceptedResponse>(accepted.Value);
+        Assert.Equal(entry.CommandId, payload.CommandId);
+        Assert.Equal("accepted", payload.Status);
 
         // Assert — data is stored and readable (not disposed with the request)
         var stored = queue.GetResult(entry.CommandId);
@@ -74,7 +79,8 @@ public class DevCommandControllerTests
 
         var result = controller.ReportResult(entry.CommandId, ParseBody(bodyJson));
 
-        Assert.IsType<AcceptedObjectResult>(result);
+        var accepted = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(202, accepted.StatusCode);
         var stored = queue.GetResult(entry.CommandId);
         Assert.NotNull(stored);
         Assert.Null(stored.Data);
@@ -103,10 +109,9 @@ public class DevCommandControllerTests
         var result = controller.GetNext(null);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var json = JsonSerializer.Serialize(ok.Value);
-        using var doc = JsonDocument.Parse(json);
-        Assert.Equal("print('hello')", doc.RootElement.GetProperty("code").GetString());
-        Assert.Equal(5000, doc.RootElement.GetProperty("timeout_ms").GetInt32());
+        var payload = Assert.IsType<DevCommandNextResponse>(ok.Value);
+        Assert.Equal("print('hello')", payload.Code);
+        Assert.Equal(5000, payload.TimeoutMs);
     }
 
     private static DevCommandController CreateController(IDevCommandQueue queue, string deviceId, string bodyJson)

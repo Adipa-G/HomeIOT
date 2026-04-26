@@ -85,7 +85,7 @@ public sealed class AdminOtaController : UserApiControllerBase
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "Release not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     private static bool IsSafeToken(string value)

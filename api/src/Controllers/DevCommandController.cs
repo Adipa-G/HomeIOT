@@ -37,14 +37,12 @@ public sealed class DevCommandController : EdgeApiControllerBase
             return NoContent();
         }
 
-        return Ok(new
-        {
-            command_id    = entry.CommandId,
-            revision_hash = entry.RevisionHash,
-            dedupe_token  = entry.DedupeToken,
-            code          = entry.Code,
-            timeout_ms    = entry.TimeoutMs,
-        });
+        return Ok(new DevCommandNextResponse(
+            CommandId:    entry.CommandId,
+            RevisionHash: entry.RevisionHash,
+            DedupeToken:  entry.DedupeToken,
+            Code:         entry.Code,
+            TimeoutMs:    entry.TimeoutMs));
     }
 
     /// <summary>
@@ -55,12 +53,17 @@ public sealed class DevCommandController : EdgeApiControllerBase
     {
         var requestContext = GetDeviceRequestContext()!;
 
+        // Peek before acknowledging to capture the original code.
+        var pendingEntry = _queue.PeekNext(requestContext.DeviceId);
+        var originalCode = (pendingEntry?.CommandId == commandId) ? pendingEntry.Code : null;
+
         // Acknowledge removes the command from the pending queue so the device stops receiving it.
         _queue.Acknowledge(requestContext.DeviceId, commandId);
 
         var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var payload = new DevCommandResultPayload(
             CommandId:     commandId,
+            Code:          originalCode,
             RevisionHash:  body.TryGetProperty("revision_hash", out var rh) ? rh.GetString() : null,
             DedupeToken:   body.TryGetProperty("dedupe_token",  out var dt) ? dt.GetString() : null,
             Status:        body.TryGetProperty("status",        out var st) ? st.GetString() ?? "unknown" : "unknown",
@@ -70,12 +73,12 @@ public sealed class DevCommandController : EdgeApiControllerBase
             ExitCode:      body.TryGetProperty("exit_code",  out var ec) && ec.TryGetInt32(out var ecv) ? ecv : 0,
             Stdout:        body.TryGetProperty("stdout", out var so) ? so.GetString() : null,
             Stderr:        body.TryGetProperty("stderr", out var se) ? se.GetString() : null,
-            Data:          body.TryGetProperty("data", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null ? da : null,
+            Data:          body.TryGetProperty("data", out var da) && da.ValueKind != System.Text.Json.JsonValueKind.Null ? da.Clone() : null,
             ReceivedAt:    DateTimeOffset.UtcNow);
 
         _queue.StoreResult(commandId, payload);
 
-        return Accepted(new { command_id = commandId, status = "accepted" });
+        return Accepted(new DevCommandResultAcceptedResponse(CommandId: commandId, Status: "accepted"));
     }
 }
 

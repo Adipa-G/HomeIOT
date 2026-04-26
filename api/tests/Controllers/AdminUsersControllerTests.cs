@@ -92,7 +92,9 @@ public class AdminUsersControllerTests
         var result = await _controller.ChangePassword(
             1, new ChangePasswordRequest { NewPassword = "newpass123" }, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
     }
 
     [Fact]
@@ -133,7 +135,9 @@ public class AdminUsersControllerTests
 
         var result = await _controller.DeleteUser(1, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
     }
 
     [Fact]

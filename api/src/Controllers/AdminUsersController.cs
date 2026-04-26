@@ -58,7 +58,7 @@ public sealed class AdminUsersController : UserApiControllerBase
         if (!changed)
             return NotFound(new ErrorResponse("not_found", "User not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpDelete("{userId:int}")]
@@ -68,6 +68,6 @@ public sealed class AdminUsersController : UserApiControllerBase
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "User not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 }

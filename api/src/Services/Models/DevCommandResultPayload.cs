@@ -4,6 +4,7 @@ namespace HomeIOT.Api.Services.Models;
 
 public sealed record DevCommandResultPayload(
     string CommandId,
+    string? Code,
     string? RevisionHash,
     string? DedupeToken,
     string Status,

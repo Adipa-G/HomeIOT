@@ -52,14 +52,12 @@ public sealed class AdminModulesController : UserApiControllerBase
             }
         }
 
-        return Created($"/api/admin/modules/{module.ModuleId}", new
-        {
-            module_id = module.ModuleId,
-            description = module.Description,
-            default_entrypoint = module.DefaultEntrypoint,
-            created_at_utc = ToUtcZ(module.CreatedAtUtc),
-            version = versionItem,
-        });
+        return Created($"/api/admin/modules/{module.ModuleId}", new CreateModuleResponse(
+            ModuleId:          module.ModuleId,
+            Description:       module.Description,
+            DefaultEntrypoint: module.DefaultEntrypoint,
+            CreatedAtUtc:      ToUtcZ(module.CreatedAtUtc),
+            Version:           versionItem));
     }
 
     [HttpGet("{moduleId}")]
@@ -135,7 +133,7 @@ public sealed class AdminModulesController : UserApiControllerBase
             return NotFound(new ErrorResponse("not_found", "Module version not found."));
 
         var code = System.Text.Encoding.UTF8.GetString(bytes);
-        return Ok(new { module_id = moduleId, version, code });
+        return Ok(new ModuleVersionCodeResponse(ModuleId: moduleId, Version: version, Code: code));
     }
 
     [HttpGet("{moduleId}/assignments")]
@@ -167,17 +165,15 @@ public sealed class AdminModulesController : UserApiControllerBase
         if (assignment is null)
             return NotFound(new ErrorResponse("not_found", "Module, device, or version not found."));
 
-        return Created($"/api/admin/modules/assignments/{assignment.Id}", new
-        {
-            id = assignment.Id,
-            module_id = moduleId,
-            device_id = request.DeviceId,
-            version = request.Version,
-            interval_ms = assignment.IntervalMs,
-            timeout_ms = assignment.TimeoutMs,
-            entrypoint = assignment.Entrypoint,
-            enabled = assignment.Enabled,
-        });
+        return Created($"/api/admin/modules/assignments/{assignment.Id}", new AssignModuleResponse(
+            Id:         assignment.Id,
+            ModuleId:   moduleId,
+            DeviceId:   request.DeviceId,
+            Version:    request.Version,
+            IntervalMs: assignment.IntervalMs,
+            TimeoutMs:  assignment.TimeoutMs,
+            Entrypoint: assignment.Entrypoint,
+            Enabled:    assignment.Enabled));
     }
 
     [HttpPut("assignments/{assignmentId:guid}")]
@@ -193,7 +189,7 @@ public sealed class AdminModulesController : UserApiControllerBase
         if (assignment is null)
             return NotFound(new ErrorResponse("not_found", "Assignment or version not found."));
 
-        return Ok(new { status = "ok", id = assignment.Id });
+        return Ok(new UpdateAssignmentResponse(Status: "ok", Id: assignment.Id));
     }
 
     [HttpDelete("assignments/{assignmentId:guid}")]
@@ -203,7 +199,7 @@ public sealed class AdminModulesController : UserApiControllerBase
         if (!removed)
             return NotFound(new ErrorResponse("not_found", "Assignment not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpPut("{moduleId}")]
@@ -217,7 +213,7 @@ public sealed class AdminModulesController : UserApiControllerBase
         if (!updated)
             return NotFound(new ErrorResponse("not_found", "Module not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpDelete("{moduleId}")]
@@ -227,7 +223,7 @@ public sealed class AdminModulesController : UserApiControllerBase
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "Module not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpDelete("{moduleId}/versions/{versionId:guid}")]
@@ -237,7 +233,7 @@ public sealed class AdminModulesController : UserApiControllerBase
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "Version not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpGet("results")]

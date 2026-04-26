@@ -65,6 +65,9 @@ public class AdminModulesControllerTests
 
         var created = Assert.IsType<CreatedResult>(result);
         Assert.Equal($"/api/admin/modules/new-mod", created.Location);
+        var payload = Assert.IsType<CreateModuleResponse>(created.Value);
+        Assert.Equal("new-mod", payload.ModuleId);
+        Assert.Null(payload.Version);
     }
 
     [Fact]
@@ -140,7 +143,10 @@ public class AdminModulesControllerTests
             Version = "1.0.0",
         }, CancellationToken.None);
 
-        Assert.IsType<CreatedResult>(result);
+        var created = Assert.IsType<CreatedResult>(result);
+        var payload = Assert.IsType<AssignModuleResponse>(created.Value);
+        Assert.Equal("sensor-reader", payload.ModuleId);
+        Assert.Equal("dev-001", payload.DeviceId);
     }
 
     [Fact]
@@ -191,7 +197,10 @@ public class AdminModulesControllerTests
             Enabled = false,
         }, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<UpdateAssignmentResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
+        Assert.Equal(record.Id, payload.Id);
     }
 
     [Fact]
@@ -216,7 +225,9 @@ public class AdminModulesControllerTests
 
         var result = await _controller.RemoveAssignment(Guid.NewGuid(), CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
     }
 
     [Fact]
@@ -377,7 +388,10 @@ public class AdminModulesControllerTests
         var result = _controller.GetVersionCode("sensor-reader", "1.0.0");
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(ok.Value);
+        var payload = Assert.IsType<ModuleVersionCodeResponse>(ok.Value);
+        Assert.Equal("sensor-reader", payload.ModuleId);
+        Assert.Equal("1.0.0", payload.Version);
+        Assert.Equal(code, payload.Code);
     }
 
     [Fact]

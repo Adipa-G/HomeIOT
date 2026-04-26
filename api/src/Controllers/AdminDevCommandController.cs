@@ -52,6 +52,7 @@ public sealed class AdminDevCommandController : UserApiControllerBase
         return Ok(new
         {
             command_id      = result.CommandId,
+            code            = result.Code,
             status          = result.Status,
             exit_code       = result.ExitCode,
             elapsed_ms      = result.ElapsedMs,
@@ -91,6 +92,7 @@ public sealed class AdminDevCommandController : UserApiControllerBase
         return Ok(results.Select(r => new
         {
             command_id = r.CommandId,
+            code = r.Code,
             status = r.Status,
             exit_code = r.ExitCode,
             elapsed_ms = r.ElapsedMs,

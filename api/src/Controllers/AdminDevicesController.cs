@@ -60,7 +60,7 @@ public sealed class AdminDevicesController : UserApiControllerBase
         if (!updated)
             return NotFound(new ErrorResponse("not_found", "Device not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpDelete("{deviceId}")]
@@ -70,7 +70,7 @@ public sealed class AdminDevicesController : UserApiControllerBase
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "Device not found."));
 
-        return Ok(new { status = "ok" });
+        return Ok(new StatusResponse("ok"));
     }
 
     [HttpGet("{deviceId}/heartbeats")]

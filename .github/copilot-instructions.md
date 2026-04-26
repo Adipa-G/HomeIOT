@@ -20,6 +20,7 @@
 - **Service pattern:** Define `IService` interface and `Service` implementation in separate files under `Services/`. Service-related DTOs/models (e.g., `OtaFileContent`, `DevCommandEntry`) go in `Services/Models/` with namespace `HomeIOT.Api.Services.Models`.
 - **Entity pattern:** EF Core entities go in `Data/Entities/` with `Record` suffix (e.g., `DeviceRecord`).
 - **Test pattern:** Use xUnit with Moq. One test class per production class. Use `InMemoryDatabase` for DB tests, `Mock<T>` for service dependencies in controller tests.
+- **No anonymous types in responses:** Never return `new { ... }` from a controller action. Always define a named `sealed record` in `api/src/Contracts/` and return that instead. Use the existing `StatusResponse` for simple `{ status: "ok" }` responses.
 
 ## Python Conventions (edge/)
 
