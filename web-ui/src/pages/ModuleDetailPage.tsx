@@ -2,7 +2,7 @@ import React, { useState, type FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { ModuleDetailResponse, AssignModuleRequest } from '../types/api';
+import type { ModuleDetailResponse, AssignModuleRequest, PaginatedResponse, DeviceListItem } from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { toast } from '../components/Toast';
@@ -30,6 +30,11 @@ export default function ModuleDetailPage() {
   const { data: mod, isLoading } = useQuery({
     queryKey: ['module', moduleId],
     queryFn: () => api.get<ModuleDetailResponse>(`/api/admin/modules/${moduleId}`),
+  });
+
+  const { data: devicesPage } = useQuery({
+    queryKey: ['devices-all'],
+    queryFn: () => api.get<PaginatedResponse<DeviceListItem>>('/api/admin/devices?limit=200'),
   });
 
   const updateModule = useMutation({
@@ -225,16 +230,34 @@ export default function ModuleDetailPage() {
         <h3 className="mb-3 text-lg font-medium text-gray-900">Assignments</h3>
         <div className="mb-3 flex items-end gap-3">
           <div>
-            <label className="mb-1 block text-xs text-gray-600">Device ID</label>
-            <input value={assignDevice} onChange={(e) => setAssignDevice(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-sm" />
+            <label className="mb-1 block text-xs text-gray-600">Device</label>
+            <select
+              value={assignDevice}
+              onChange={(e) => setAssignDevice(e.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[180px]"
+            >
+              <option value="">— select device —</option>
+              {devicesPage?.items.map((d) => (
+                <option key={d.device_id} value={d.device_id}>{d.device_id}</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-600">Version (optional)</label>
-            <input value={assignVersion} onChange={(e) => setAssignVersion(e.target.value)} placeholder="latest" className="rounded border border-gray-300 px-2 py-1 text-sm" />
+            <label className="mb-1 block text-xs text-gray-600">Version</label>
+            <select
+              value={assignVersion}
+              onChange={(e) => setAssignVersion(e.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[130px]"
+            >
+              <option value="">— select version —</option>
+              {mod.versions.map((v) => (
+                <option key={v.version} value={v.version}>{v.version}</option>
+              ))}
+            </select>
           </div>
           <button
             onClick={() => assignModule.mutate()}
-            disabled={!assignDevice || assignModule.isPending}
+            disabled={!assignDevice || !assignVersion || assignModule.isPending}
             className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
           >
             Assign
