@@ -70,7 +70,7 @@ export default function DeviceDetailPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">{device.device_id}</h2>
           <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
@@ -80,7 +80,7 @@ export default function DeviceDetailPage() {
             <span>Created: {formatUtc(device.created_at_utc)}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <button onClick={() => toggleMode.mutate()} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
             Switch to {device.mode === 'production' ? 'development' : 'production'}
           </button>

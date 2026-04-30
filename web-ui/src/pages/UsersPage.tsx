@@ -46,7 +46,7 @@ export default function UsersPage() {
       {showCreate && (
         <form onSubmit={(e: FormEvent) => { e.preventDefault(); setError(''); create.mutate(); }} className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
           {error && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Username</label>
               <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required className="rounded border border-gray-300 px-3 py-1.5 text-sm" />

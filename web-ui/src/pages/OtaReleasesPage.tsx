@@ -31,7 +31,7 @@ export default function OtaReleasesPage() {
       <h2 className="mb-4 text-xl font-semibold text-gray-900">{platform} Releases</h2>
 
       {/* Upload */}
-      <div className="mb-4 flex items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Upload ZIP</label>
           <input type="file" accept=".zip" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />

@@ -85,12 +85,12 @@ export default function ModuleDetailPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           {editing ? (
             <form onSubmit={(e: FormEvent) => { e.preventDefault(); updateModule.mutate(); }} className="space-y-2">
               <input value={editName} onChange={(e) => setEditName(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-lg font-semibold" />
-              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="block w-80 rounded border border-gray-300 px-2 py-1 text-sm" />
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="block w-full sm:w-80 rounded border border-gray-300 px-2 py-1 text-sm" />
               <div className="flex gap-2">
                 <button type="submit" disabled={updateModule.isPending} className="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button>
                 <button type="button" onClick={() => setEditing(false)} className="rounded border border-gray-300 px-3 py-1 text-sm">Cancel</button>
@@ -109,7 +109,7 @@ export default function ModuleDetailPage() {
           )}
         </div>
         {!editing && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <button onClick={startEdit} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">Edit</button>
             <ConfirmModal title="Delete module?" description="All versions and assignments will also be removed." onConfirm={() => deleteModule.mutateAsync()}>
               {(open) => <button onClick={open} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700">Delete</button>}
@@ -122,7 +122,7 @@ export default function ModuleDetailPage() {
       <section className="mb-8">
         <h3 className="mb-3 text-lg font-medium text-gray-900">Versions</h3>
         <div className="mb-3 space-y-3">
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="mb-1 block text-xs text-gray-600">Version</label>
               <input value={versionCode} onChange={(e) => setVersionCode(e.target.value)} placeholder="1.0.0" className="rounded border border-gray-300 px-2 py-1 text-sm" />
@@ -133,7 +133,7 @@ export default function ModuleDetailPage() {
             </div>
           </div>
           {uploadMode === 'file' ? (
-            <div className="flex items-end gap-3">
+            <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="mb-1 block text-xs text-gray-600">File</label>
                 <input type="file" onChange={(e) => setVersionFile(e.target.files?.[0] ?? null)} className="text-sm" />
@@ -228,7 +228,7 @@ export default function ModuleDetailPage() {
       {/* Assignments */}
       <section>
         <h3 className="mb-3 text-lg font-medium text-gray-900">Assignments</h3>
-        <div className="mb-3 flex items-end gap-3">
+        <div className="mb-3 flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1 block text-xs text-gray-600">Device</label>
             <select
