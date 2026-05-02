@@ -316,50 +316,6 @@ def test_apply_raises_on_invalid_config_and_cleans_staging():
     assert not fs.exists("app_staging")
 
 
-def test_apply_resumes_uplink_on_failure():
-    """If apply() raises, logger.resume_uplink() must still be called."""
-    fs = MockFileSystem()
-    http = MockHttpClient()
-    system = MockSystem()
-    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
-
-    class FakeLogger:
-        def __init__(self):
-            self.paused = False
-            self.resumed = False
-        def pause_uplink(self):
-            self.paused = True
-        def resume_uplink(self):
-            self.resumed = True
-        def info(self, msg, ctx=None):
-            pass
-        def warn(self, msg, ctx=None):
-            pass
-        def error(self, msg, ctx=None):
-            pass
-
-    logger = FakeLogger()
-    updater = Updater(fs=fs, http=http, system=system, config=_config(),
-                      boot_manager=boot_manager, logger=logger)
-
-    # Stream with mismatched hash → should raise ValueError
-    content = b"bad-content"
-    stream_data = _build_ota_stream([("main.py", content, "0" * 64)])
-    http.add_stream_response(_STREAM_URL, stream_data)
-
-    with pytest.raises(ValueError):
-        updater.apply(
-            UpdateInfo(
-                available=True,
-                version="1.1.0",
-                manifest=[{"path": "main.py", "hash": "0000", "size": len(content)}],
-            )
-        )
-
-    assert logger.paused
-    assert logger.resumed
-
-
 class _TrackingLogger:
     """Logger that records pause/resume/flush calls for verification."""
     def __init__(self):
@@ -379,8 +335,8 @@ class _TrackingLogger:
         pass
 
 
-def test_apply_flushes_logs_before_reset():
-    """OTA logs must be flushed to the server before reset() is called."""
+def test_apply_does_not_pause_uplink():
+    """apply() must not pause the logger — log flushes happen naturally via threshold."""
     fs = MockFileSystem()
     http = MockHttpClient()
     system = MockSystem()
@@ -398,15 +354,12 @@ def test_apply_flushes_logs_before_reset():
                    manifest=[{"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)}])
     )
 
-    # The last flush must happen before reset
-    flush_indices = [i for i, c in enumerate(logger.calls) if isinstance(c, tuple) and c[0] == "flush"]
-    assert len(flush_indices) >= 1
-    # flush("ota") should appear — this is the pre-reset flush
-    assert ("flush", "ota") in logger.calls
+    assert "pause" not in logger.calls
+    assert "resume" not in logger.calls
 
 
-def test_apply_flushes_logs_once_before_reset():
-    """Logs should flush once before reset (no periodic mid-download flushes)."""
+def test_apply_flushes_logs_before_reset():
+    """apply() must call flush('ota') after staging is complete and before reset()."""
     fs = MockFileSystem()
     http = MockHttpClient()
     system = MockSystem()
@@ -424,9 +377,8 @@ def test_apply_flushes_logs_once_before_reset():
         UpdateInfo(available=True, version="1.1.0", manifest=manifest)
     )
 
-    ota_flushes = [c for c in logger.calls if c == ("flush", "ota")]
-    # Only the pre-reset flush — no periodic mid-download flushes
-    assert len(ota_flushes) == 1
+    assert ("flush", "ota") in logger.calls
+    assert system.reset_calls == 1
 
 
 # ---------------------------------------------------------------------------

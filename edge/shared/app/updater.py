@@ -134,58 +134,46 @@ class Updater:
         )
 
     def apply(self, update_info: UpdateInfo) -> None:
-        # Pause log uplink during OTA to avoid socket contention;
-        # log entries still buffer and print to console.
-        uplink_paused = False
-        if self._logger is not None and hasattr(self._logger, "pause_uplink"):
-            self._logger.pause_uplink()
-            uplink_paused = True
+        self._log_info("Applying OTA update", {"version": update_info.version})
+        self._clear_staging()
+        self._ensure_dir(self._staging_root)
 
         try:
-            self._log_info("Applying OTA update", {"version": update_info.version})
+            config_staged = self._apply_update_streaming(update_info)
+        except Exception:
+            # Ensure partial staging is cleaned up on any stream error
+            # (hash mismatch already calls _clear_staging internally).
             self._clear_staging()
-            self._ensure_dir(self._staging_root)
+            raise
 
+        if config_staged:
+            self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
             try:
-                config_staged = self._apply_update_streaming(update_info)
+                Config.load(self._fs, path=CONFIG_STAGING_PATH, system=self._system)
             except Exception:
-                # Ensure partial staging is cleaned up on any stream error
-                # (hash mismatch already calls _clear_staging internally).
                 self._clear_staging()
+                self._log_error("Staged config validation failed")
                 raise
 
-            if config_staged:
-                self._log_info("Validating staged config", {"path": CONFIG_STAGING_PATH})
-                try:
-                    Config.load(self._fs, path=CONFIG_STAGING_PATH, system=self._system)
-                except Exception:
-                    self._clear_staging()
-                    self._log_error("Staged config validation failed")
-                    raise
+        # All files are downloaded and verified — the manifest (30+ dicts
+        # with hash strings) is no longer needed.  Releasing it before the
+        # version swap frees ~8 KB of scattered heap objects, reducing
+        # fragmentation so larger contiguous blocks become available.
+        version = update_info.version
+        update_info.manifest.clear()
+        update_info = None
 
-            # All files are downloaded and verified — the manifest (30+ dicts
-            # with hash strings) is no longer needed.  Releasing it before the
-            # version swap frees ~8 KB of scattered heap objects, reducing
-            # fragmentation so larger contiguous blocks become available.
-            version = update_info.version
-            update_info.manifest.clear()
-            update_info = None
+        self._boot_manager.set_new_version(version)
+        self._log_info("OTA apply complete, resetting", {"version": version, "free_bytes": self._system.free_memory_bytes()})
 
-            self._boot_manager.set_new_version(version)
-            self._log_info("OTA apply complete, resetting", {"version": version, "free_bytes": self._system.free_memory_bytes()})
-
-            # Wait for lwIP to fully release PCBs from the OTA stream socket
-            # before opening a new connection for the log flush POST.
-            self._system.sleep_ms(2000)
-
-            # Resume uplink and flush before reset so OTA logs reach the
-            # server — reset() never returns, so the finally block won't run.
-            self._flush_logs()
-
-            self._system.reset()
-        finally:
-            if uplink_paused:
-                self._logger.resume_uplink()
+        if self._logger is not None and hasattr(self._logger, "flush"):
+            try:
+                self._logger.flush("ota")
+            except Exception:
+                pass
+            
+        self._system.sleep_ms(2000)
+        self._system.reset()
 
     def _apply_update_streaming(self, update_info: UpdateInfo) -> bool:
         """Open a single OTA stream and stage all files from it.
@@ -213,6 +201,7 @@ class Updater:
 
         config_staged = False
         file_count = 0
+        total_bytes = 0
         _ROOT_FILES = ("boot.py", "main.py")
 
         try:
@@ -264,7 +253,7 @@ class Updater:
                     content = self._merge_config_payload(bytes(buf), update_info.version)
                     buf = None
                     atomic_write_bytes(self._fs, target_path, content)
-                    self._log_info("OTA config written to staging", {"path": rel_path, "bytes": len(content), "free_bytes": self._system.free_memory_bytes()})
+                    total_bytes += len(content)
                     content = None
                     config_staged = True
                 else:
@@ -289,7 +278,7 @@ class Updater:
                         self._log_error("OTA file hash mismatch", {"path": rel_path})
                         raise ValueError("Hash mismatch for " + rel_path)
                     self._fs.rename(tmp_path, target_path)
-                    self._log_info("OTA file written to staging", {"path": rel_path, "bytes": size, "free_bytes": self._system.free_memory_bytes()})
+                    total_bytes += size
 
                 file_count += 1
 
@@ -300,6 +289,8 @@ class Updater:
             self._clear_staging()
             raise RuntimeError("OTA stream contained no files")
 
+        self._log_info("OTA stream complete", {"files": file_count, "bytes": total_bytes, "free_bytes": self._system.free_memory_bytes()})
+
         return config_staged
 
     def _auth_headers(self):
@@ -308,20 +299,6 @@ class Updater:
             "X-Api-Key": self._config.api_key,
             "X-Platform": self._platform,
         }
-
-    def _flush_logs(self) -> None:
-        """Temporarily resume uplink, flush buffered logs, then re-pause."""
-        if self._logger is None or not hasattr(self._logger, "flush"):
-            return
-        if hasattr(self._logger, "resume_uplink"):
-            self._logger.resume_uplink()
-        try:
-            self._logger.flush("ota")
-        except Exception:
-            pass  # best-effort; don't let a log failure abort OTA
-        finally:
-            if hasattr(self._logger, "pause_uplink"):
-                self._logger.pause_uplink()
 
     def _clear_staging(self) -> None:
         self._remove_tree(self._staging_root)
