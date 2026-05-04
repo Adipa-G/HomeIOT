@@ -130,6 +130,9 @@ class _FakeModuleRuntime:
         self.tick_calls += 1
         return {"reset_requested": False}
 
+    def get_upcoming_modules(self, next_wake_ms=0):
+        return []
+
 
 class _FakeLogger:
     def __init__(self):

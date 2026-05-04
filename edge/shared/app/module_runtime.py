@@ -13,6 +13,7 @@ class ModuleSchedule:
         entrypoint="run",
         next_due_ms=0,
         run_seq=0,
+        variables=None,
     ):
         self.module_id = str(module_id)
         self.version = str(version)
@@ -21,6 +22,7 @@ class ModuleSchedule:
         self.entrypoint = str(entrypoint)
         self.next_due_ms = int(next_due_ms)
         self.run_seq = int(run_seq)
+        self.variables = variables or {}
 
 
 class ModuleRuntime:
@@ -113,6 +115,8 @@ class ModuleRuntime:
                 next_due_ms = now
                 self._ack_module_reenabled(module_id, version)
 
+            variables = item.get("variables") or {}
+
             next_state[module_id] = ModuleSchedule(
                 module_id=module_id,
                 version=version,
@@ -121,6 +125,7 @@ class ModuleRuntime:
                 entrypoint=entrypoint,
                 next_due_ms=next_due_ms,
                 run_seq=run_seq,
+                variables=variables,
             )
 
         self._modules = next_state
@@ -302,8 +307,9 @@ class ModuleRuntime:
                 "Module package not cached for " + schedule.module_id + "@" + schedule.version
             )
         source = package.decode("utf-8")
+        preamble = self._build_variable_preamble(schedule.variables)
         scope = {}
-        exec(source, scope, scope)
+        exec(preamble + source, scope, scope)
         entrypoint = scope.get(schedule.entrypoint)
         if not callable(entrypoint):
             raise ValueError(
@@ -315,6 +321,40 @@ class ModuleRuntime:
                 + schedule.version
             )
         return entrypoint
+
+    @staticmethod
+    def _build_variable_preamble(variables):
+        if not variables:
+            return ""
+        lines = []
+        for name, value in variables.items():
+            lines.append(str(name) + " = " + ModuleRuntime._python_literal(value))
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _python_literal(value):
+        if value is None:
+            return "None"
+        if isinstance(value, bool):
+            return "True" if value else "False"
+        if value in ("true", "True"):
+            return "True"
+        if value in ("false", "False"):
+            return "False"
+        try:
+            float(value)
+            return value
+        except (ValueError, TypeError):
+            pass
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return '"' + escaped + '"'
+
+    def get_upcoming_modules(self, next_wake_ms):
+        result = []
+        for schedule in self._modules.values():
+            if schedule.next_due_ms <= next_wake_ms:
+                result.append({"module_id": schedule.module_id, "version": schedule.version})
+        return result
 
     @staticmethod
     def _normalize_output(returned):

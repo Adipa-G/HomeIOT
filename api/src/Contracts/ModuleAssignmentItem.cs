@@ -9,4 +9,5 @@ public sealed record ModuleAssignmentItem(
     [property: JsonPropertyName("timeout_ms")] int TimeoutMs,
     [property: JsonPropertyName("entrypoint")] string Entrypoint,
     [property: JsonPropertyName("package_hash")] string PackageHash,
-    [property: JsonPropertyName("enabled")] bool Enabled);
+    [property: JsonPropertyName("enabled")] bool Enabled,
+    [property: JsonPropertyName("variables")] Dictionary<string, string?>? Variables = null);

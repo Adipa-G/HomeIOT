@@ -22,15 +22,18 @@ public sealed class ModuleService : IModuleService
     private readonly ApiDbContext _db;
     private readonly string _packageRoot;
     private readonly ILogger<ModuleService> _logger;
+    private readonly IModuleVariableService _variableService;
 
     public ModuleService(
         ApiDbContext db,
         IOptions<ModuleStorageOptions> storageOptions,
         IWebHostEnvironment environment,
-        ILogger<ModuleService> logger)
+        ILogger<ModuleService> logger,
+        IModuleVariableService variableService)
     {
         _db = db;
         _logger = logger;
+        _variableService = variableService;
 
         var configuredRoot = string.IsNullOrWhiteSpace(storageOptions.Value.PackageRoot)
             ? "../modules"
@@ -63,14 +66,20 @@ public sealed class ModuleService : IModuleService
             .OrderBy(a => a.ModuleDefinition.ModuleId)
             .ToListAsync(ct);
 
-        var items = assignments.Select(a => new ModuleAssignmentItem(
-            a.ModuleDefinition.ModuleId,
-            a.ModuleVersion.Version,
-            a.IntervalMs,
-            a.TimeoutMs,
-            a.Entrypoint,
-            a.ModuleVersion.PackageHash,
-            a.Enabled)).ToList();
+        var items = new List<ModuleAssignmentItem>();
+        foreach (var a in assignments)
+        {
+            var variables = await _variableService.GetResolvedVariablesAsync(a.Id, ct);
+            items.Add(new ModuleAssignmentItem(
+                a.ModuleDefinition.ModuleId,
+                a.ModuleVersion.Version,
+                a.IntervalMs,
+                a.TimeoutMs,
+                a.Entrypoint,
+                a.ModuleVersion.PackageHash,
+                a.Enabled,
+                variables.Count > 0 ? variables : null));
+        }
 
         var hash = ComputeAssignmentHash(items);
 
@@ -166,6 +175,7 @@ public sealed class ModuleService : IModuleService
                 .ThenInclude(a => a.ModuleVersion)
             .Include(m => m.Assignments)
                 .ThenInclude(a => a.Device)
+            .Include(m => m.VariableDefs)
             .FirstOrDefaultAsync(m => m.ModuleId == moduleId, ct);
 
         if (module is null)
@@ -196,6 +206,17 @@ public sealed class ModuleService : IModuleService
                 EndpointValidation.ToUtcZ(a.UpdatedAtUtc)))
             .ToList();
 
+        var variableDefs = module.VariableDefs
+            .OrderBy(v => v.Name)
+            .Select(v => new ModuleVariableDefItem(
+                v.Name,
+                v.Type,
+                v.DefaultValue,
+                v.Description,
+                v.ServerCode is not null,
+                v.ServerCode))
+            .ToList();
+
         return new ModuleDetailResponse(
             module.ModuleId,
             module.Description,
@@ -203,7 +224,8 @@ public sealed class ModuleService : IModuleService
             EndpointValidation.ToUtcZ(module.CreatedAtUtc),
             EndpointValidation.ToUtcZ(module.UpdatedAtUtc),
             versions,
-            assignments);
+            assignments,
+            variableDefs);
     }
 
     public async Task<ModuleDefinitionRecord> CreateModuleAsync(

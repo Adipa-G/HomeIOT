@@ -35,8 +35,12 @@ public class ModuleServiceTests : IDisposable
         env.Setup(x => x.ContentRootPath).Returns(_tempDir);
 
         var logger = new Mock<ILogger<ModuleService>>();
+        var variableService = new Mock<IModuleVariableService>();
+        variableService
+            .Setup(v => v.GetResolvedVariablesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string?>());
 
-        _service = new ModuleService(_db, storageOptions.Object, env.Object, logger.Object);
+        _service = new ModuleService(_db, storageOptions.Object, env.Object, logger.Object, variableService.Object);
     }
 
     public void Dispose()

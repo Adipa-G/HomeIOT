@@ -11,10 +11,14 @@ namespace HomeIOT.Api.Controllers;
 public sealed class AdminModulesController : UserApiControllerBase
 {
     private readonly IModuleService _moduleService;
+    private readonly IModuleVariableService _variableService;
 
-    public AdminModulesController(IModuleService moduleService)
+    public AdminModulesController(
+        IModuleService moduleService,
+        IModuleVariableService variableService)
     {
         _moduleService = moduleService;
+        _variableService = variableService;
     }
 
     [HttpGet]
@@ -267,5 +271,83 @@ public sealed class AdminModulesController : UserApiControllerBase
 
         var result = await _moduleService.QueryStatusesAsync(offset, limit, deviceId, moduleId, ct);
         return Ok(result);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Variable definitions
+    // ──────────────────────────────────────────────
+
+    [HttpGet("{moduleId}/variables")]
+    public async Task<IActionResult> GetVariableDefs(string moduleId, CancellationToken ct)
+    {
+        var defs = await _variableService.GetVariableDefsAsync(moduleId, ct);
+        var items = defs.Select(v => new ModuleVariableDefItem(
+            v.Name, v.Type, v.DefaultValue, v.Description, v.ServerCode is not null, v.ServerCode)).ToList();
+        return Ok(items);
+    }
+
+    [HttpPut("{moduleId}/variables/{varName}")]
+    public async Task<IActionResult> UpsertVariableDef(
+        string moduleId, string varName,
+        [FromBody] UpsertVariableDefRequest? request,
+        CancellationToken ct)
+    {
+        if (request is null)
+            return BadRequest(new ErrorResponse("invalid_request", "Request body is required."));
+
+        var result = await _variableService.UpsertVariableDefAsync(moduleId, varName, request, ct);
+        if (result is null)
+            return NotFound(new ErrorResponse("not_found", "Module not found."));
+
+        return Ok(new ModuleVariableDefItem(
+            result.Name, result.Type, result.DefaultValue, result.Description, result.ServerCode is not null, result.ServerCode));
+    }
+
+    [HttpDelete("{moduleId}/variables/{varName}")]
+    public async Task<IActionResult> DeleteVariableDef(string moduleId, string varName, CancellationToken ct)
+    {
+        var deleted = await _variableService.DeleteVariableDefAsync(moduleId, varName, ct);
+        if (!deleted)
+            return NotFound(new ErrorResponse("not_found", "Variable definition not found."));
+
+        return Ok(new StatusResponse("ok"));
+    }
+
+    // ──────────────────────────────────────────────
+    //  Variable values (per assignment)
+    // ──────────────────────────────────────────────
+
+    [HttpGet("assignments/{assignmentId:guid}/variables")]
+    public async Task<IActionResult> GetAssignmentVariables(Guid assignmentId, CancellationToken ct)
+    {
+        var items = await _variableService.GetVariableValuesWithSourceAsync(assignmentId, ct);
+        return Ok(items);
+    }
+
+    [HttpPut("assignments/{assignmentId:guid}/variables/{varName}")]
+    public async Task<IActionResult> SetAssignmentVariable(
+        Guid assignmentId, string varName,
+        [FromBody] SetVariableValueRequest? request,
+        CancellationToken ct)
+    {
+        if (request is null)
+            return BadRequest(new ErrorResponse("invalid_request", "Request body is required."));
+
+        var ok = await _variableService.SetVariableValueAsync(assignmentId, varName, request.Value, ct);
+        if (!ok)
+            return NotFound(new ErrorResponse("not_found", "Assignment or variable not found."));
+
+        return Ok(new StatusResponse("ok"));
+    }
+
+    [HttpDelete("assignments/{assignmentId:guid}/variables/{varName}")]
+    public async Task<IActionResult> DeleteAssignmentVariable(
+        Guid assignmentId, string varName, CancellationToken ct)
+    {
+        var deleted = await _variableService.DeleteVariableValueAsync(assignmentId, varName, ct);
+        if (!deleted)
+            return NotFound(new ErrorResponse("not_found", "Variable override not found."));
+
+        return Ok(new StatusResponse("ok"));
     }
 }

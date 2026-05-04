@@ -14,6 +14,8 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
     public DbSet<ModuleAssignmentRecord> ModuleAssignments => Set<ModuleAssignmentRecord>();
     public DbSet<ModuleResultRecord> ModuleResults => Set<ModuleResultRecord>();
     public DbSet<ModuleStatusRecord> ModuleStatuses => Set<ModuleStatusRecord>();
+    public DbSet<ModuleVariableDefRecord> ModuleVariableDefs => Set<ModuleVariableDefRecord>();
+    public DbSet<ModuleVariableValueRecord> ModuleVariableValues => Set<ModuleVariableValueRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -140,6 +142,34 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.Property(x => x.ModuleVersion).HasMaxLength(64).IsRequired();
             entity.Property(x => x.DisabledReason).HasMaxLength(512);
             entity.HasIndex(x => new { x.DeviceId, x.ModuleId });
+        });
+
+        modelBuilder.Entity<ModuleVariableDefRecord>(entity =>
+        {
+            entity.ToTable("module_variable_defs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Type).HasMaxLength(16).HasDefaultValue("string").IsRequired();
+            entity.Property(x => x.DefaultValue).HasMaxLength(1024);
+            entity.Property(x => x.Description).HasMaxLength(512);
+            entity.HasOne(x => x.ModuleDefinition)
+                .WithMany(x => x.VariableDefs)
+                .HasForeignKey(x => x.ModuleDefinitionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.ModuleDefinitionId, x.Name }).IsUnique();
+        });
+
+        modelBuilder.Entity<ModuleVariableValueRecord>(entity =>
+        {
+            entity.ToTable("module_variable_values");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.VariableName).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Value).HasMaxLength(1024);
+            entity.HasOne(x => x.ModuleAssignment)
+                .WithMany(x => x.VariableValues)
+                .HasForeignKey(x => x.ModuleAssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.ModuleAssignmentId, x.VariableName }).IsUnique();
         });
     }
 }

@@ -10,4 +10,5 @@ public sealed class ModuleDefinitionRecord
     public DateTimeOffset UpdatedAtUtc { get; set; }
     public ICollection<ModuleVersionRecord> Versions { get; set; } = new List<ModuleVersionRecord>();
     public ICollection<ModuleAssignmentRecord> Assignments { get; set; } = new List<ModuleAssignmentRecord>();
+    public ICollection<ModuleVariableDefRecord> VariableDefs { get; set; } = new List<ModuleVariableDefRecord>();
 }

@@ -170,6 +170,16 @@ def run_control_loop(
             sleep_candidates.append(next_dev_poll_ms)
 
         sleep_until = min(sleep_candidates)
+
+        # Prefetch server-code variables for modules due on next wake (best-effort)
+        if network is None or network_ready["connected"]:
+            upcoming = module_runtime.get_upcoming_modules(next_wake_ms=sleep_until)
+            if upcoming:
+                try:
+                    device_control.prefetch_server_code(upcoming)
+                except Exception as exc:
+                    logger.warn("Module prefetch failed", {"error": str(exc)})
+
         if mode == "development":
             sleep_ms = max(development_sleep_min_ms, min(development_sleep_max_ms, sleep_until - now))
         else:

@@ -483,3 +483,173 @@ def test_quarantine_reenable_via_assignment_clears_disabled_state():
     assert len(statuses) == 1
     assert statuses[0]["disabled"] is False
     assert statuses[0]["module_id"] == "m1"
+
+
+# -- Variable injection --------------------------------------------------------
+
+def test_variable_preamble_empty_when_no_variables():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    assert ModuleRuntime._build_variable_preamble({}) == ""
+
+
+def test_variable_preamble_string_value():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"LABEL": "hello"})
+    assert 'LABEL = "hello"' in preamble
+
+
+def test_variable_preamble_numeric_value():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"RATE": "42"})
+    assert "RATE = 42" in preamble
+
+
+def test_variable_preamble_boolean_true():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"FLAG": "true"})
+    assert "FLAG = True" in preamble
+
+
+def test_variable_preamble_boolean_false():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"FLAG": "false"})
+    assert "FLAG = False" in preamble
+
+
+def test_variable_preamble_none_value():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"X": None})
+    assert "X = None" in preamble
+
+
+def test_variable_preamble_escapes_double_quotes():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"MSG": 'say "hi"'})
+    assert r'MSG = "say \"hi\""' in preamble
+
+
+def test_variable_preamble_multiple_vars():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    preamble = ModuleRuntime._build_variable_preamble({"A": "1", "B": "2"})
+    assert "A = 1" in preamble
+    assert "B = 2" in preamble
+
+
+def test_variables_injected_into_module_scope():
+    """Variables from the assignment are accessible as globals in module code."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(
+        system=system, device_control=client, config=config,
+        utc_now_iso=lambda: "2026-01-01T00:00:00Z"
+    )
+
+    # Module code reads the injected variable
+    source = b"def run(context):\n    return {'got': MY_VAR}\n"
+    fs.write_bytes("modules_cache/m-var/1.0.0.pkg", source)
+
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m-var", "version": "1.0.0",
+                       "interval_ms": 60000, "timeout_ms": 5000,
+                       "variables": {"MY_VAR": "injected_value"}}]},
+        now_ms=0,
+    )
+    result = runtime.tick(now_ms=0)
+
+    assert result["executed"] == 1
+    assert result["success"] == 1
+    payloads = _post_payloads(http)
+    assert payloads[0]["output"]["got"] == "injected_value"
+
+
+def test_module_with_no_variables_runs_normally():
+    """Assignment with no variables dict still runs fine (backward compat)."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(
+        system=system, device_control=client, config=config,
+        utc_now_iso=lambda: "2026-01-01T00:00:00Z"
+    )
+
+    fs.write_bytes("modules_cache/m-novar/1.0.0.pkg", b"def run(context):\n    return {'ok': True}\n")
+
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m-novar", "version": "1.0.0",
+                       "interval_ms": 60000, "timeout_ms": 5000}]},
+        now_ms=0,
+    )
+    result = runtime.tick(now_ms=0)
+
+    assert result["executed"] == 1
+    assert result["success"] == 1
+
+
+def test_get_upcoming_modules_returns_due_modules():
+    from edge.shared.app.module_runtime import ModuleRuntime
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(system=system, device_control=client, config=config)
+
+    runtime.update_assignment(
+        {"modules": [
+            {"module_id": "fast", "version": "1.0", "interval_ms": 60000, "timeout_ms": 5000},
+            {"module_id": "slow", "version": "2.0", "interval_ms": 600000, "timeout_ms": 5000},
+        ]},
+        now_ms=0,
+    )
+    # Both modules start with next_due_ms=0, so both are "due" at t=0
+    # Simulate tick advancing next_due_ms for "fast" to 60000 and "slow" to 600000
+    # by running the tick so schedules advance
+    # Instead, directly check get_upcoming_modules without ticking
+    upcoming = runtime.get_upcoming_modules(next_wake_ms=0)
+    module_ids = [m["module_id"] for m in upcoming]
+    assert "fast" in module_ids
+    assert "slow" in module_ids
+
+
+def test_get_upcoming_modules_excludes_future_modules():
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(system=system, device_control=client, config=config)
+
+    # Seed module with next_due far in future
+    runtime.update_assignment(
+        {"modules": [
+            {"module_id": "m-future", "version": "1.0", "interval_ms": 60000, "timeout_ms": 5000},
+        ]},
+        now_ms=0,
+    )
+    # Manually advance next_due_ms
+    runtime._modules["m-future"].next_due_ms = 100000
+
+    upcoming = runtime.get_upcoming_modules(next_wake_ms=50000)
+    assert len(upcoming) == 0
+
+
+def test_prefetch_server_code_calls_api():
+    """prefetch_server_code POSTs the correct payload to the prefetch endpoint."""
+    import json
+    http = MockHttpClient()
+    config = _config()
+    fs = MockFileSystem()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+
+    modules = [{"module_id": "m1", "version": "1.0.0"}]
+    client.prefetch_server_code(modules)
+
+    prefetch_calls = [c for c in http.calls if c[0] == "POST" and "/prefetch" in c[1]]
+    assert len(prefetch_calls) == 1
+    body = json.loads(prefetch_calls[0][2])
+    assert body["modules"][0]["module_id"] == "m1"

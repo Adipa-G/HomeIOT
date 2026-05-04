@@ -9,10 +9,17 @@ namespace HomeIOT.Api.Controllers;
 public sealed class ModulesController : EdgeApiControllerBase
 {
     private readonly IModuleService _moduleService;
+    private readonly IModuleVariableService _variableService;
+    private readonly IModuleServerCodeService _serverCodeService;
 
-    public ModulesController(IModuleService moduleService)
+    public ModulesController(
+        IModuleService moduleService,
+        IModuleVariableService variableService,
+        IModuleServerCodeService serverCodeService)
     {
         _moduleService = moduleService;
+        _variableService = variableService;
+        _serverCodeService = serverCodeService;
     }
 
     [HttpGet("assignment")]
@@ -85,6 +92,31 @@ public sealed class ModulesController : EdgeApiControllerBase
             return BadRequest(new ErrorResponse("invalid_request", "module_id is required."));
 
         await _moduleService.RecordStatusAsync(request, ct);
+        return Accepted();
+    }
+
+    [HttpPost("prefetch")]
+    public async Task<IActionResult> Prefetch(
+        [FromBody] ModulePrefetchRequest? request, CancellationToken ct)
+    {
+        if (request is null || request.Modules is null || request.Modules.Count == 0)
+            return Accepted();
+
+        var context = GetDeviceRequestContext();
+        if (context is null)
+            return Unauthorized(new ErrorResponse("unauthorized", "Missing request auth context."));
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var item in request.Modules)
+            {
+                if (string.IsNullOrWhiteSpace(item.ModuleId))
+                    continue;
+                await _serverCodeService.RunForModuleAsync(
+                    context.DeviceId, item.ModuleId, CancellationToken.None);
+            }
+        });
+
         return Accepted();
     }
 }

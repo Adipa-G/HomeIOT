@@ -7,6 +7,7 @@ from edge.shared.app.endpoints import (
     DEV_COMMAND_RESULT_PATH_TEMPLATE,
     MODULE_ASSIGNMENT_PATH,
     MODULE_PACKAGE_PATH,
+    MODULE_PREFETCH_PATH,
     MODULE_RESULTS_PATH,
     MODULE_STATUS_PATH,
 )
@@ -53,6 +54,13 @@ class DeviceControlClient:
             self._log_warn("Module package download failed", {"status_code": response.status_code, "module_id": module_id})
             return None
         return response.content
+
+    def prefetch_server_code(self, modules):
+        """Fire-and-forget: ask server to pre-compute variables for upcoming modules."""
+        url = self._config.api_url + MODULE_PREFETCH_PATH
+        payload = json.dumps({"modules": modules})
+        response = self._http.post(url, payload, headers=self._auth_headers())
+        return response.status_code in (200, 201, 202)
 
     def report_module_result(self, payload):
         url = self._config.api_url + MODULE_RESULTS_PATH

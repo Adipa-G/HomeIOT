@@ -12,12 +12,14 @@ namespace HomeIOT.Api.Tests.Controllers;
 public class AdminModulesControllerTests
 {
     private readonly Mock<IModuleService> _mockService;
+    private readonly Mock<IModuleVariableService> _mockVariableService;
     private readonly AdminModulesController _controller;
 
     public AdminModulesControllerTests()
     {
         _mockService = new Mock<IModuleService>();
-        _controller = new AdminModulesController(_mockService.Object)
+        _mockVariableService = new Mock<IModuleVariableService>();
+        _controller = new AdminModulesController(_mockService.Object, _mockVariableService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -97,7 +99,8 @@ public class AdminModulesControllerTests
             "sensor-reader", "Reads sensors", "run",
             "2026-05-30T10:00:00Z", "2026-05-30T10:00:00Z",
             new List<ModuleVersionItem>(),
-            new List<ModuleAssignmentDetail>());
+            new List<ModuleAssignmentDetail>(),
+            new List<ModuleVariableDefItem>());
         _mockService.Setup(s => s.GetModuleAsync("sensor-reader", It.IsAny<CancellationToken>()))
             .ReturnsAsync(detail);
 

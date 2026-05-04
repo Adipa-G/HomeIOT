@@ -15,4 +15,5 @@ public sealed class ModuleAssignmentRecord
     public DeviceRecord Device { get; set; } = null!;
     public ModuleDefinitionRecord ModuleDefinition { get; set; } = null!;
     public ModuleVersionRecord ModuleVersion { get; set; } = null!;
+    public ICollection<ModuleVariableValueRecord> VariableValues { get; set; } = new List<ModuleVariableValueRecord>();
 }

@@ -9,4 +9,5 @@ public sealed record ModuleDetailResponse(
     [property: JsonPropertyName("created_at_utc")] string CreatedAtUtc,
     [property: JsonPropertyName("updated_at_utc")] string UpdatedAtUtc,
     [property: JsonPropertyName("versions")] List<ModuleVersionItem> Versions,
-    [property: JsonPropertyName("assignments")] List<ModuleAssignmentDetail> Assignments);
+    [property: JsonPropertyName("assignments")] List<ModuleAssignmentDetail> Assignments,
+    [property: JsonPropertyName("variable_defs")] List<ModuleVariableDefItem> VariableDefs);

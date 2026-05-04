@@ -12,12 +12,19 @@ namespace HomeIOT.Api.Tests.Controllers;
 public class ModulesControllerTests
 {
     private readonly Mock<IModuleService> _mockService;
+    private readonly Mock<IModuleVariableService> _mockVariableService;
+    private readonly Mock<IModuleServerCodeService> _mockServerCodeService;
     private readonly ModulesController _controller;
 
     public ModulesControllerTests()
     {
         _mockService = new Mock<IModuleService>();
-        _controller = new ModulesController(_mockService.Object)
+        _mockVariableService = new Mock<IModuleVariableService>();
+        _mockServerCodeService = new Mock<IModuleServerCodeService>();
+        _controller = new ModulesController(
+            _mockService.Object,
+            _mockVariableService.Object,
+            _mockServerCodeService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -221,5 +228,50 @@ public class ModulesControllerTests
         var bad = Assert.IsType<BadRequestObjectResult>(result);
         var error = Assert.IsType<ErrorResponse>(bad.Value);
         Assert.Equal("invalid_request", error.Error);
+    }
+
+    // ── Prefetch ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Prefetch_Returns202_WhenValidRequest()
+    {
+        var request = new ModulePrefetchRequest
+        {
+            Modules = new List<ModulePrefetchItem>
+            {
+                new() { ModuleId = "sensor-reader", Version = "1.0.0" },
+            },
+        };
+
+        _mockServerCodeService
+            .Setup(s => s.RunForModuleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await _controller.Prefetch(request, CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+    }
+
+    [Fact]
+    public async Task Prefetch_Returns202_WhenNullBody()
+    {
+        var result = await _controller.Prefetch(null, CancellationToken.None);
+        Assert.IsType<AcceptedResult>(result);
+    }
+
+    [Fact]
+    public async Task Prefetch_Returns401_WhenNoAuthContext()
+    {
+        _controller.HttpContext.Items.Clear();
+
+        var request = new ModulePrefetchRequest
+        {
+            Modules = new List<ModulePrefetchItem> { new() { ModuleId = "m1", Version = "1.0.0" } },
+        };
+        var result = await _controller.Prefetch(request, CancellationToken.None);
+
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result);
+        var error = Assert.IsType<ErrorResponse>(unauthorized.Value);
+        Assert.Equal("unauthorized", error.Error);
     }
 }
