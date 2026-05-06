@@ -282,6 +282,7 @@ class ModuleRuntime:
             "elapsed_ms": elapsed_ms,
             "status": status,
             "output": output,
+            "variable_values": schedule.variables or {},
             "error_message": error_message,
         }
 

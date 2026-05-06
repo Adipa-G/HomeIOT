@@ -34,7 +34,17 @@ def test_module_runtime_reports_success_with_empty_output_for_no_return():
     fs.write_bytes("modules_cache/m1/1.0.0.pkg", b"def run(context):\n    x = 1\n")
 
     runtime.update_assignment(
-        {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 60000, "timeout_ms": 5000}]},
+        {
+            "modules": [
+                {
+                    "module_id": "m1",
+                    "version": "1.0.0",
+                    "interval_ms": 60000,
+                    "timeout_ms": 5000,
+                    "variables": {"TEMP_THRESHOLD": "28"},
+                }
+            ]
+        },
         now_ms=1000,
     )
     result = runtime.tick(now_ms=1000)
@@ -48,6 +58,7 @@ def test_module_runtime_reports_success_with_empty_output_for_no_return():
     assert payload["module_version"] == "1.0.0"
     assert payload["status"] == "success"
     assert payload["output"] == {}
+    assert payload["variable_values"] == {"TEMP_THRESHOLD": "28"}
     assert payload["error_message"] is None
     assert payload["started_at_utc"] == "2026-05-28T14:30:00Z"
     assert payload["finished_at_utc"] == "2026-05-28T14:30:00Z"

@@ -2,11 +2,19 @@ import React, { useState, type FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { ModuleDetailResponse, AssignModuleRequest, PaginatedResponse, DeviceListItem } from '../types/api';
+import type {
+  ModuleDetailResponse,
+  AssignModuleRequest,
+  PaginatedResponse,
+  DeviceListItem,
+  ModuleVariableDefItem,
+  UpsertVariableDefRequest,
+} from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { toast } from '../components/Toast';
 import { formatUtc } from '../lib/format';
+import { ApiError } from '../api/client';
 
 export default function ModuleDetailPage() {
   const { moduleId } = useParams<{ moduleId: string }>();
@@ -21,11 +29,19 @@ export default function ModuleDetailPage() {
   const [versionFile, setVersionFile] = useState<File | null>(null);
   const [versionSource, setVersionSource] = useState('');
   const [uploadMode, setUploadMode] = useState<'file' | 'code'>('file');
+  const [showVersionForm, setShowVersionForm] = useState(false);
 
   const [assignDevice, setAssignDevice] = useState('');
   const [assignVersion, setAssignVersion] = useState('');
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const [varName, setVarName] = useState('');
+  const [varType, setVarType] = useState<'string' | 'number' | 'boolean' | 'json'>('string');
+  const [varDefaultValue, setVarDefaultValue] = useState('');
+  const [varDescription, setVarDescription] = useState('');
+  const [varServerCode, setVarServerCode] = useState('');
+  const [varError, setVarError] = useState('');
+  const [showVariableForm, setShowVariableForm] = useState(false);
 
   const { data: mod, isLoading } = useQuery({
     queryKey: ['module', moduleId],
@@ -38,7 +54,7 @@ export default function ModuleDetailPage() {
   });
 
   const updateModule = useMutation({
-    mutationFn: () => api.put(`/api/admin/modules/${moduleId}`, { name: editName, description: editDesc }),
+    mutationFn: () => api.put(`/api/admin/modules/${moduleId}`, { description: editDesc }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['module', moduleId] }); setEditing(false); toast('Module updated'); },
   });
 
@@ -57,7 +73,12 @@ export default function ModuleDetailPage() {
       }
       return api.post(`/api/admin/modules/${moduleId}/versions`, { version: versionCode, code: versionSource });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['module', moduleId] }); setVersionCode(''); setVersionFile(null); setVersionSource(''); toast('Version uploaded'); },
+    onSuccess: () => {
+      clearVersionForm();
+      setShowVersionForm(false);
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      toast('Version uploaded');
+    },
   });
 
   const deleteVersion = useMutation({
@@ -78,9 +99,90 @@ export default function ModuleDetailPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['module', moduleId] }); toast('Unassigned'); },
   });
 
+  const upsertVariable = useMutation({
+    mutationFn: () => {
+      const trimmedName = varName.trim();
+      if (!trimmedName) {
+        throw new Error('Variable name is required.');
+      }
+
+      const body: UpsertVariableDefRequest = {
+        type: varType,
+        default_value: varDefaultValue.trim() === '' ? null : varDefaultValue,
+        description: varDescription.trim() === '' ? null : varDescription,
+        server_code: varServerCode.trim() === '' ? null : varServerCode,
+      };
+      return api.put<ModuleVariableDefItem>(
+        `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(trimmedName)}`,
+        body,
+      );
+    },
+    onSuccess: () => {
+      clearVariableForm();
+      setShowVariableForm(false);
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      toast('Variable saved');
+    },
+    onError: (err) => {
+      if (err instanceof ApiError) {
+        setVarError(err.error.message);
+        return;
+      }
+      if (err instanceof Error) {
+        setVarError(err.message);
+        return;
+      }
+      setVarError('Failed to save variable');
+    },
+  });
+
+  const deleteVariable = useMutation({
+    mutationFn: (name: string) => api.delete(`/api/admin/modules/${moduleId}/variables/${encodeURIComponent(name)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      toast('Variable deleted');
+    },
+  });
+
   if (isLoading || !mod) return <p className="text-sm text-gray-500">Loading…</p>;
 
-  const startEdit = () => { setEditName(mod.name); setEditDesc(mod.description ?? ''); setEditing(true); };
+  const startEdit = () => { setEditName(mod.module_id); setEditDesc(mod.description ?? ''); setEditing(true); };
+
+  const clearVersionForm = () => {
+    setVersionCode('');
+    setVersionFile(null);
+    setVersionSource('');
+    setUploadMode('file');
+  };
+
+  const startAddVersion = () => {
+    clearVersionForm();
+    setShowVersionForm(true);
+  };
+
+  const clearVariableForm = () => {
+    setVarName('');
+    setVarType('string');
+    setVarDefaultValue('');
+    setVarDescription('');
+    setVarServerCode('');
+    setVarError('');
+  };
+
+  const startAddVariable = () => {
+    clearVariableForm();
+    setShowVariableForm(true);
+  };
+
+  const startEditVariable = (v: ModuleVariableDefItem) => {
+    setVarName(v.name);
+    setVarType((v.type as 'string' | 'number' | 'boolean' | 'json') || 'string');
+    setVarDefaultValue(v.default_value ?? '');
+    setVarDescription(v.description ?? '');
+    setVarServerCode(v.server_code ?? '');
+    setVarError('');
+    setShowVariableForm(true);
+  };
 
   return (
     <div>
@@ -89,7 +191,14 @@ export default function ModuleDetailPage() {
         <div>
           {editing ? (
             <form onSubmit={(e: FormEvent) => { e.preventDefault(); updateModule.mutate(); }} className="space-y-2">
-              <input value={editName} onChange={(e) => setEditName(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-lg font-semibold" />
+              <input
+                value={editName}
+                readOnly
+                disabled
+                aria-label="Module ID"
+                className="rounded border border-gray-300 bg-gray-100 px-2 py-1 text-lg font-semibold text-gray-600"
+              />
+              <p className="text-xs text-gray-500">Module ID cannot be changed for an existing module.</p>
               <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="block w-full sm:w-80 rounded border border-gray-300 px-2 py-1 text-sm" />
               <div className="flex gap-2">
                 <button type="submit" disabled={updateModule.isPending} className="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button>
@@ -98,11 +207,11 @@ export default function ModuleDetailPage() {
             </form>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-gray-900">{mod.name}</h2>
+              <h2 className="text-xl font-semibold text-gray-900">{mod.module_id}</h2>
               {mod.description && <p className="mt-1 text-sm text-gray-600">{mod.description}</p>}
               <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500">
                 <span>ID: <code className="text-xs">{mod.module_id}</code></span>
-                <span>Platform: {mod.platform}</span>
+                <span>Entrypoint: {mod.default_entrypoint}</span>
                 <span>Created: {formatUtc(mod.created_at_utc)}</span>
               </div>
             </>
@@ -120,59 +229,21 @@ export default function ModuleDetailPage() {
 
       {/* Versions */}
       <section className="mb-8">
-        <h3 className="mb-3 text-lg font-medium text-gray-900">Versions</h3>
-        <div className="mb-3 space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="mb-1 block text-xs text-gray-600">Version</label>
-              <input value={versionCode} onChange={(e) => setVersionCode(e.target.value)} placeholder="1.0.0" className="rounded border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setUploadMode('file')} className={`rounded px-2 py-1 text-xs ${uploadMode === 'file' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>File</button>
-              <button type="button" onClick={() => setUploadMode('code')} className={`rounded px-2 py-1 text-xs ${uploadMode === 'code' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>Code</button>
-            </div>
-          </div>
-          {uploadMode === 'file' ? (
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="mb-1 block text-xs text-gray-600">File</label>
-                <input type="file" onChange={(e) => setVersionFile(e.target.files?.[0] ?? null)} className="text-sm" />
-              </div>
-              <button
-                onClick={() => uploadVersion.mutate()}
-                disabled={!versionCode || !versionFile || uploadVersion.isPending}
-                className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-              >
-                Upload
-              </button>
-            </div>
-          ) : (
-            <div>
-              <label className="mb-1 block text-xs text-gray-600">Code</label>
-              <textarea
-                value={versionSource}
-                onChange={(e) => setVersionSource(e.target.value)}
-                rows={10}
-                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm focus:border-blue-500 focus:outline-none"
-                placeholder={"def run(ctx):\n    pass"}
-              />
-              {!versionCode && versionSource && (
-                <p className="mt-1 text-xs text-amber-600">Enter a version number above to save.</p>
-              )}
-              <button
-                onClick={() => uploadVersion.mutate()}
-                disabled={!versionCode || !versionSource || uploadVersion.isPending}
-                className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-              >
-                Save Version
-              </button>
-            </div>
-          )}
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-medium text-gray-900">Versions</h3>
+          <button
+            type="button"
+            onClick={startAddVersion}
+            className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+          >
+            + Add Version
+          </button>
         </div>
+
         {mod.versions.length === 0 ? (
           <p className="text-sm text-gray-500">No versions yet.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
@@ -221,6 +292,243 @@ export default function ModuleDetailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {showVersionForm && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">Add Version</h4>
+              <button
+                type="button"
+                onClick={() => { clearVersionForm(); setShowVersionForm(false); }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="mb-3 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-gray-600">Version</label>
+                <input
+                  value={versionCode}
+                  onChange={(e) => setVersionCode(e.target.value)}
+                  placeholder="1.0.0"
+                  className="rounded border border-gray-300 px-2 py-1 text-sm"
+                />
+              </div>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('file')}
+                  className={`rounded px-2 py-1 text-xs ${uploadMode === 'file' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
+                >
+                  File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('code')}
+                  className={`rounded px-2 py-1 text-xs ${uploadMode === 'code' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}
+                >
+                  Code
+                </button>
+              </div>
+            </div>
+
+            {uploadMode === 'file' ? (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-600">File</label>
+                  <input type="file" onChange={(e) => setVersionFile(e.target.files?.[0] ?? null)} className="text-sm" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => uploadVersion.mutate()}
+                  disabled={!versionCode || !versionFile || uploadVersion.isPending}
+                  className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                >
+                  Upload
+                </button>
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1 block text-xs text-gray-600">Code</label>
+                <textarea
+                  value={versionSource}
+                  onChange={(e) => setVersionSource(e.target.value)}
+                  rows={10}
+                  className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder={"def run(ctx):\n    pass"}
+                />
+                {!versionCode && versionSource && (
+                  <p className="mt-1 text-xs text-amber-600">Enter a version number above to save.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => uploadVersion.mutate()}
+                  disabled={!versionCode || !versionSource || uploadVersion.isPending}
+                  className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                >
+                  Save Version
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Variables */}
+      <section className="mb-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-medium text-gray-900">Variables</h3>
+          <button
+            type="button"
+            onClick={startAddVariable}
+            className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+          >
+            + Add Variable
+          </button>
+        </div>
+
+        {/* Variable List */}
+        {(mod.variable_defs ?? []).length === 0 ? (
+          <p className="text-sm text-gray-500">No variable definitions yet.</p>
+        ) : (
+          <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Default</th>
+                  <th className="px-4 py-3">Server Code</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(mod.variable_defs ?? []).map((v) => (
+                  <tr key={v.name} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono">{v.name}</td>
+                    <td className="px-4 py-3">{v.type}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{v.default_value ?? '—'}</td>
+                    <td className="px-4 py-3">{v.has_server_code ? 'Yes' : 'No'}</td>
+                    <td className="px-4 py-3 text-right space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => startEditVariable(v)}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <ConfirmModal title="Delete variable?" onConfirm={() => deleteVariable.mutateAsync(v.name)}>
+                        {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
+                      </ConfirmModal>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Variable Form (Collapsible) */}
+        {showVariableForm && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">{varName.trim() ? `Edit: ${varName}` : 'Add Variable'}</h4>
+              <button
+                type="button"
+                onClick={() => { clearVariableForm(); setShowVariableForm(false); }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600">
+              Server code is scoped per variable. Editing a variable loads its current server code.
+            </div>
+            {varError && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-700">{varError}</p>}
+
+            <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="var-name" className="mb-1 block text-xs text-gray-600">Variable name</label>
+                  <input
+                    id="var-name"
+                    value={varName}
+                    onChange={(e) => setVarName(e.target.value)}
+                    placeholder="e.g. TEMP_THRESHOLD"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="var-type" className="mb-1 block text-xs text-gray-600">Type</label>
+                  <select
+                    id="var-type"
+                    value={varType}
+                    onChange={(e) => setVarType(e.target.value as 'string' | 'number' | 'boolean' | 'json')}
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  >
+                    <option value="string">string</option>
+                    <option value="number">number</option>
+                    <option value="boolean">boolean</option>
+                    <option value="json">json</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="var-default-value" className="mb-1 block text-xs text-gray-600">Default value</label>
+                  <input
+                    id="var-default-value"
+                    value={varDefaultValue}
+                    onChange={(e) => setVarDefaultValue(e.target.value)}
+                    placeholder="optional"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="var-description" className="mb-1 block text-xs text-gray-600">Description</label>
+                  <input
+                    id="var-description"
+                    value={varDescription}
+                    onChange={(e) => setVarDescription(e.target.value)}
+                    placeholder="optional"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="var-server-code" className="mb-1 block text-xs text-gray-600">Server code (optional)</label>
+                <textarea
+                  id="var-server-code"
+                  value={varServerCode}
+                  onChange={(e) => setVarServerCode(e.target.value)}
+                  rows={6}
+                  className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm"
+                  placeholder={"// Example (C# script)\nreturn 42;"}
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => upsertVariable.mutate()}
+                  disabled={!varName.trim() || upsertVariable.isPending}
+                  className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {upsertVariable.isPending ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { clearVariableForm(); setShowVariableForm(false); }}
+                  className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>
@@ -279,15 +587,15 @@ export default function ModuleDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {mod.assignments.map((a) => (
-                  <tr key={a.assignment_id} className="hover:bg-gray-50">
+                  <tr key={a.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono">{a.device_id}</td>
                     <td className="px-4 py-3 font-mono">{a.version ?? 'latest'}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge text={a.status} variant={a.status === 'active' ? 'green' : a.status === 'pending' ? 'yellow' : 'gray'} />
+                      <StatusBadge text={a.enabled ? 'active' : 'disabled'} variant={a.enabled ? 'green' : 'gray'} />
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{formatUtc(a.assigned_at_utc)}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatUtc(a.created_at_utc)}</td>
                     <td className="px-4 py-3 text-right">
-                      <ConfirmModal title="Remove assignment?" onConfirm={() => deleteAssignment.mutateAsync(a.assignment_id)}>
+                      <ConfirmModal title="Remove assignment?" onConfirm={() => deleteAssignment.mutateAsync(a.id)}>
                         {(open) => <button onClick={open} className="text-red-600 hover:underline">Remove</button>}
                       </ConfirmModal>
                     </td>

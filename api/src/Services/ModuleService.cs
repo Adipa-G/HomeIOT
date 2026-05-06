@@ -118,6 +118,7 @@ public sealed class ModuleService : IModuleService
             ElapsedMs = request.ElapsedMs,
             Status = request.Status!,
             Output = request.Output is not null ? JsonSerializer.Serialize(request.Output) : null,
+            VariableValues = request.VariableValues is not null ? JsonSerializer.Serialize(request.VariableValues) : null,
             ErrorMessage = request.ErrorMessage,
             ReceivedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -445,6 +446,7 @@ public sealed class ModuleService : IModuleService
                 r.ElapsedMs,
                 r.ErrorMessage,
                 r.Output,
+                r.VariableValues,
                 EndpointValidation.ToUtcZ(r.StartedAtUtc),
                 EndpointValidation.ToUtcZ(r.FinishedAtUtc)))
             .ToListAsync(ct);

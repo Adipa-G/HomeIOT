@@ -31,6 +31,9 @@ public sealed class ModuleResultRequest
     [JsonPropertyName("output")]
     public object? Output { get; set; }
 
+    [JsonPropertyName("variable_values")]
+    public object? VariableValues { get; set; }
+
     [JsonPropertyName("error_message")]
     public string? ErrorMessage { get; set; }
 }

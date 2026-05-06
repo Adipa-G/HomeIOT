@@ -193,13 +193,14 @@ export default function DeviceDetailPage() {
                       <th className="px-4 py-3">Version</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Duration</th>
+                      <th className="px-4 py-3">Variables</th>
                       <th className="px-4 py-3">Finished</th>
                       <th className="px-4 py-3">Error</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {moduleHistory.data.items.length === 0 ? (
-                      <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No results</td></tr>
+                      <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No results</td></tr>
                     ) : moduleHistory.data.items.map((r) => {
                       const isSuccess = r.status === 'success' || r.status === 'ok';
                       const expanded = expandedResultId === r.id;
@@ -213,12 +214,18 @@ export default function DeviceDetailPage() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-gray-600">{r.elapsed_ms != null ? `${r.elapsed_ms} ms` : '—'}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">{formatVariablePreview(r.variable_values)}</td>
                             <td className="px-4 py-3 text-gray-600">{formatUtc(r.finished_at_utc)}</td>
                             <td className="px-4 py-3 text-red-600 text-xs">{r.error_message ?? '—'}</td>
                           </tr>
                           {expanded && (
                             <tr>
-                              <td colSpan={5} className="bg-gray-900 px-6 py-3">
+                              <td colSpan={6} className="bg-gray-900 px-6 py-3">
+                                <div className="mb-2 text-xs text-gray-300">Variables used:</div>
+                                <div className="mb-3 text-xs font-mono text-gray-200 whitespace-pre-wrap">
+                                  {r.variable_values ? formatOutput(r.variable_values) : <span className="text-gray-500">No variables</span>}
+                                </div>
+                                <div className="mb-2 text-xs text-gray-300">Output:</div>
                                 <div className="text-xs font-mono text-gray-200 whitespace-pre-wrap">
                                   {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
                                 </div>
@@ -292,6 +299,25 @@ function formatOutput(raw: string): string {
   try {
     const parsed = JSON.parse(raw);
     return JSON.stringify(parsed, null, 2);
+  } catch {
+    return raw;
+  }
+}
+
+function formatVariablePreview(raw: string | null): string {
+  if (!raw) return '—';
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const entries = Object.entries(parsed ?? {});
+    if (entries.length === 0) return '—';
+
+    const preview = entries
+      .slice(0, 2)
+      .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+      .join(', ');
+
+    return entries.length > 2 ? `${preview} +${entries.length - 2} more` : preview;
   } catch {
     return raw;
   }

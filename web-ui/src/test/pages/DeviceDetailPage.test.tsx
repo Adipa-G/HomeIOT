@@ -78,6 +78,7 @@ const mockModuleResults = {
       elapsed_ms: 42,
       error_message: null,
       output: JSON.stringify({ temperature: 23.5 }),
+      variable_values: JSON.stringify({ TEMP_THRESHOLD: 28, MODE: 'AUTO' }),
       started_at_utc: '2026-05-30T10:00:00Z',
       finished_at_utc: '2026-05-30T10:00:00Z',
     },
@@ -91,6 +92,7 @@ const mockModuleResults = {
       elapsed_ms: 5,
       error_message: 'NameError: x not defined',
       output: null,
+      variable_values: JSON.stringify({ BLINK_MS: 500 }),
       started_at_utc: '2026-05-30T09:55:00Z',
       finished_at_utc: '2026-05-30T09:55:00Z',
     },
@@ -110,6 +112,7 @@ const mockModuleHistory = {
       elapsed_ms: 42,
       error_message: null,
       output: JSON.stringify({ temperature: 23.5 }),
+      variable_values: JSON.stringify({ TEMP_THRESHOLD: 28, MODE: 'AUTO' }),
       started_at_utc: '2026-05-30T10:00:00Z',
       finished_at_utc: '2026-05-30T10:00:00Z',
     },
@@ -123,6 +126,7 @@ const mockModuleHistory = {
       elapsed_ms: 3,
       error_message: 'OSError: sensor timeout',
       output: null,
+      variable_values: JSON.stringify({ TEMP_THRESHOLD: 28 }),
       started_at_utc: '2026-05-30T09:50:00Z',
       finished_at_utc: '2026-05-30T09:50:00Z',
     },
@@ -256,6 +260,7 @@ describe('DeviceDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText('sensor_read — Run History')).toBeInTheDocument();
     });
+    expect(screen.getAllByText(/TEMP_THRESHOLD=28/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('OSError: sensor timeout')).toBeInTheDocument();
     expect(screen.getByText('← All modules')).toBeInTheDocument();
 
@@ -266,5 +271,7 @@ describe('DeviceDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/"temperature"/)).toBeInTheDocument();
     });
+    expect(screen.getByText('Variables used:')).toBeInTheDocument();
+    expect(screen.getAllByText(/"TEMP_THRESHOLD": 28/).length).toBeGreaterThanOrEqual(1);
   });
 });

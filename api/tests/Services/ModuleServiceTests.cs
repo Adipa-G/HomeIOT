@@ -144,6 +144,7 @@ public class ModuleServiceTests : IDisposable
             ElapsedMs = 1000,
             Status = "success",
             Output = new { temperature = 22.5 },
+            VariableValues = new { TEMP_THRESHOLD = 28, MODE = "AUTO" },
         };
 
         await _service.RecordResultAsync(request);
@@ -153,6 +154,8 @@ public class ModuleServiceTests : IDisposable
         Assert.Equal("sensor-reader", stored.ModuleId);
         Assert.Equal("success", stored.Status);
         Assert.Equal(1000, stored.ElapsedMs);
+        Assert.Contains("TEMP_THRESHOLD", stored.VariableValues);
+        Assert.Contains("28", stored.VariableValues);
     }
 
     [Fact]

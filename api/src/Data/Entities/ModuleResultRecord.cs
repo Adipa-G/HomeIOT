@@ -12,6 +12,7 @@ public sealed class ModuleResultRecord
     public int ElapsedMs { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Output { get; set; }
+    public string? VariableValues { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTimeOffset ReceivedAtUtc { get; set; }
 }

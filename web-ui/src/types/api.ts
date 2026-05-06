@@ -91,6 +91,23 @@ export interface ModuleDetailResponse {
   updated_at_utc: string;
   versions: ModuleVersionItem[];
   assignments: ModuleAssignmentDetail[];
+  variable_defs: ModuleVariableDefItem[];
+}
+
+export interface ModuleVariableDefItem {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'json' | string;
+  default_value: string | null;
+  description: string | null;
+  has_server_code: boolean;
+  server_code?: string | null;
+}
+
+export interface UpsertVariableDefRequest {
+  type?: string;
+  default_value?: string | null;
+  description?: string | null;
+  server_code?: string | null;
 }
 
 export interface ModuleVersionItem {
@@ -158,6 +175,7 @@ export interface ModuleResultListItem {
   elapsed_ms: number;
   error_message: string | null;
   output: string | null;
+  variable_values: string | null;
   started_at_utc: string;
   finished_at_utc: string;
 }

@@ -130,6 +130,7 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.Property(x => x.ModuleVersion).HasMaxLength(64).IsRequired();
             entity.Property(x => x.RunId).HasMaxLength(256).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.VariableValues);
             entity.HasIndex(x => new { x.DeviceId, x.ModuleId });
         });
 
