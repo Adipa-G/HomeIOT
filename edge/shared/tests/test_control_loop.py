@@ -96,6 +96,8 @@ class _FakeDeviceControl:
         self.assignment_calls = 0
         self.dev_calls = 0
         self.ensure_calls = 0
+        self.prefetch_calls = 0
+        self.prefetch_payloads = []
 
     def get_module_assignment(self, _):
         self.assignment_calls += 1
@@ -116,6 +118,11 @@ class _FakeDeviceControl:
     @staticmethod
     def should_execute_dev_command(command, _):
         return bool(command)
+
+    def prefetch_server_code(self, modules):
+        self.prefetch_calls += 1
+        self.prefetch_payloads.append(modules)
+        return True
 
 
 class _FakeModuleRuntime:
@@ -710,3 +717,38 @@ def test_mode_switches_on_first_heartbeat_returning_new_mode():
     # A single "Mode changed" log is emitted
     assert len(mode_change_logs) == 1
     assert mode_change_logs[0][1] == {"from": "production", "to": "development"}
+
+
+def test_prefetch_uses_next_actual_loop_wake_when_sleep_is_clamped():
+    system = _FakeSystem()
+    presence = _FakePresence(
+        {
+            "mode": "production",
+            "next_heartbeat_ms": 200,
+            "module_assignment_poll_interval_ms": 60000,
+        }
+    )
+    device_control = _FakeDeviceControl(assignment=None)
+    logger = _FakeLogger()
+
+    class _RuntimeWithImminentModule(_FakeModuleRuntime):
+        def get_upcoming_modules(self, next_wake_ms=0):
+            # Simulate a module due at 550ms.
+            # With now=100ms and production min sleep=500ms, next loop wake is 600ms,
+            # so this should be prefetched.
+            return [{"module_id": "temp-reader", "version": "1.0.0"}] if next_wake_ms >= 550 else []
+
+    module_runtime = _RuntimeWithImminentModule()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        max_iterations=1,
+    )
+
+    assert device_control.prefetch_calls == 1
+    assert device_control.prefetch_payloads[0][0]["module_id"] == "temp-reader"

@@ -33,6 +33,7 @@ export default function ModuleDetailPage() {
 
   const [assignDevice, setAssignDevice] = useState('');
   const [assignVersion, setAssignVersion] = useState('');
+  const [assignIntervalMs, setAssignIntervalMs] = useState('');
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const [varName, setVarName] = useState('');
@@ -88,10 +89,29 @@ export default function ModuleDetailPage() {
 
   const assignModule = useMutation({
     mutationFn: () => {
-      const body: AssignModuleRequest = { device_id: assignDevice, version: assignVersion || undefined };
+      const trimmedInterval = assignIntervalMs.trim();
+      const intervalMs = trimmedInterval ? Number.parseInt(trimmedInterval, 10) : undefined;
+      if (trimmedInterval && (!Number.isFinite(intervalMs) || intervalMs <= 0)) {
+        throw new Error('Interval must be a positive number.');
+      }
+
+      const body: AssignModuleRequest = {
+        device_id: assignDevice,
+        version: assignVersion || undefined,
+        interval_ms: intervalMs,
+      };
       return api.post(`/api/admin/modules/${moduleId}/assignments`, body);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['module', moduleId] }); setAssignDevice(''); setAssignVersion(''); toast('Assigned'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      setAssignDevice('');
+      setAssignVersion('');
+      setAssignIntervalMs('');
+      toast('Assigned');
+    },
+    onError: (err) => {
+      toast(err instanceof Error ? err.message : 'Failed to assign module');
+    },
   });
 
   const deleteAssignment = useMutation({
@@ -538,8 +558,9 @@ export default function ModuleDetailPage() {
         <h3 className="mb-3 text-lg font-medium text-gray-900">Assignments</h3>
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <div>
-            <label className="mb-1 block text-xs text-gray-600">Device</label>
+            <label htmlFor="assign-device" className="mb-1 block text-xs text-gray-600">Device</label>
             <select
+              id="assign-device"
               value={assignDevice}
               onChange={(e) => setAssignDevice(e.target.value)}
               className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[180px]"
@@ -551,8 +572,9 @@ export default function ModuleDetailPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-600">Version</label>
+            <label htmlFor="assign-version" className="mb-1 block text-xs text-gray-600">Version</label>
             <select
+              id="assign-version"
               value={assignVersion}
               onChange={(e) => setAssignVersion(e.target.value)}
               className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[130px]"
@@ -562,6 +584,18 @@ export default function ModuleDetailPage() {
                 <option key={v.version} value={v.version}>{v.version}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label htmlFor="assign-interval-ms" className="mb-1 block text-xs text-gray-600">Interval (ms)</label>
+            <input
+              id="assign-interval-ms"
+              type="number"
+              min={1}
+              value={assignIntervalMs}
+              onChange={(e) => setAssignIntervalMs(e.target.value)}
+              placeholder="60000"
+              className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[130px]"
+            />
           </div>
           <button
             onClick={() => assignModule.mutate()}
@@ -580,6 +614,7 @@ export default function ModuleDetailPage() {
                 <tr>
                   <th className="px-4 py-3">Device</th>
                   <th className="px-4 py-3">Version</th>
+                  <th className="px-4 py-3">Interval</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3"></th>
@@ -590,6 +625,7 @@ export default function ModuleDetailPage() {
                   <tr key={a.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono">{a.device_id}</td>
                     <td className="px-4 py-3 font-mono">{a.version ?? 'latest'}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{a.interval_ms} ms</td>
                     <td className="px-4 py-3">
                       <StatusBadge text={a.enabled ? 'active' : 'disabled'} variant={a.enabled ? 'green' : 'gray'} />
                     </td>

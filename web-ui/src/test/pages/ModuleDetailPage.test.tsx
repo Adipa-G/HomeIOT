@@ -245,4 +245,38 @@ describe('ModuleDetailPage', () => {
       );
     });
   });
+
+  it('shows assignment interval field and sends it in assign payload', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/devices')) {
+        return { items: [{ device_id: 'esp32-001' }], total: 1, offset: 0, limit: 200 };
+      }
+      return mockModule;
+    });
+    vi.mocked(api.post).mockResolvedValue({});
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Assignments')).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Interval (ms)')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Device'), 'esp32-001');
+    await user.selectOptions(screen.getByLabelText('Version'), '1.0.0');
+    await user.type(screen.getByLabelText('Interval (ms)'), '45000');
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        '/api/admin/modules/sensor-reader/assignments',
+        expect.objectContaining({
+          device_id: 'esp32-001',
+          version: '1.0.0',
+          interval_ms: 45000,
+        }),
+      );
+    });
+  });
 });
