@@ -13,10 +13,9 @@ public sealed class ModuleServerCodeService : IModuleServerCodeService
     private static readonly ScriptOptions ScriptOptions = ScriptOptions.Default
         .WithImports(
             "System",
-            "System.Collections.Generic",
-            "System.Linq",
-            "System.Threading.Tasks")
-        .WithReferences(typeof(object).Assembly);
+            "System.Linq"
+           )
+        .WithReferences(typeof(object).Assembly, typeof(Enumerable).Assembly);
 
     private static readonly TimeSpan ExecutionTimeout = TimeSpan.FromSeconds(5);
 
@@ -36,31 +35,39 @@ public sealed class ModuleServerCodeService : IModuleServerCodeService
 
     public async Task RunForModuleAsync(string deviceId, string moduleId, CancellationToken ct = default)
     {
-        // Find the assignment for this device+module
-        var assignment = await _db.ModuleAssignments
-            .AsNoTracking()
-            .Include(a => a.ModuleDefinition)
-                .ThenInclude(d => d.VariableDefs)
-            .Include(a => a.Device)
-            .Where(a => a.Device.DeviceId == deviceId && a.ModuleDefinition.ModuleId == moduleId)
-            .FirstOrDefaultAsync(ct);
-
-        if (assignment is null)
-            return;
-
-        var varsWithCode = assignment.ModuleDefinition.VariableDefs
-            .Where(v => !string.IsNullOrWhiteSpace(v.ServerCode))
-            .ToList();
-
-        if (varsWithCode.Count == 0)
-            return;
-
-        var dataAccess = new ModuleDataAccess(_db, deviceId);
-
-        foreach (var varDef in varsWithCode)
+        try
         {
-            await ExecuteVariableCodeAsync(assignment.Id, deviceId, moduleId, varDef, dataAccess, ct);
+            // Find the assignment for this device+module
+            var assignment = await _db.ModuleAssignments
+                .AsNoTracking()
+                .Include(a => a.ModuleDefinition)
+                    .ThenInclude(d => d.VariableDefs)
+                .Include(a => a.Device)
+                .Where(a => a.Device.DeviceId == deviceId && a.ModuleDefinition.ModuleId == moduleId)
+                .FirstOrDefaultAsync(ct);
+
+            if (assignment is null)
+                return;
+
+            var varsWithCode = assignment.ModuleDefinition.VariableDefs
+                .Where(v => !string.IsNullOrWhiteSpace(v.ServerCode))
+                .ToList();
+
+            if (varsWithCode.Count == 0)
+                return;
+
+            var dataAccess = new ModuleDataAccess(_db, deviceId);
+
+            foreach (var varDef in varsWithCode)
+            {
+                await ExecuteVariableCodeAsync(assignment.Id, deviceId, moduleId, varDef, dataAccess, ct);
+            }
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running server code for {DeviceId}/{ModuleId}", deviceId, moduleId);
+        }
+        
     }
 
     private async Task ExecuteVariableCodeAsync(

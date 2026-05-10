@@ -246,7 +246,7 @@ describe('ModuleDetailPage', () => {
     });
   });
 
-  it('shows assignment interval field and sends it in assign payload', async () => {
+  it('shows assignment schedule fields and sends them in assign payload', async () => {
     const user = userEvent.setup();
     vi.mocked(api.get).mockImplementation(async (path: string) => {
       if (path.startsWith('/api/admin/devices')) {
@@ -263,9 +263,11 @@ describe('ModuleDetailPage', () => {
     });
 
     expect(screen.getByLabelText('Interval (ms)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Timeout (ms)')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Device'), 'esp32-001');
     await user.selectOptions(screen.getByLabelText('Version'), '1.0.0');
     await user.type(screen.getByLabelText('Interval (ms)'), '45000');
+    await user.type(screen.getByLabelText('Timeout (ms)'), '7000');
     await user.click(screen.getByRole('button', { name: 'Assign' }));
 
     await waitFor(() => {
@@ -275,6 +277,7 @@ describe('ModuleDetailPage', () => {
           device_id: 'esp32-001',
           version: '1.0.0',
           interval_ms: 45000,
+          timeout_ms: 7000,
         }),
       );
     });

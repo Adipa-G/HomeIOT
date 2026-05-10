@@ -58,9 +58,21 @@ class DeviceControlClient:
     def prefetch_server_code(self, modules):
         """Fire-and-forget: ask server to pre-compute variables for upcoming modules."""
         url = self._config.api_url + MODULE_PREFETCH_PATH
-        payload = json.dumps({"modules": modules})
+        payload = {"modules": modules}
+        self._log_info(
+            "Sending module prefetch",
+            {
+                "url": url,
+                "module_count": len(modules) if isinstance(modules, list) else 0,
+            },
+        )
         response = self._http.post(url, payload, headers=self._auth_headers())
-        return response.status_code in (200, 201, 202)
+        ok = response.status_code in (200, 201, 202)
+        if ok:
+            self._log_info("Module prefetch accepted", {"status_code": response.status_code})
+        else:
+            self._log_warn("Module prefetch request failed", {"status_code": response.status_code})
+        return ok
 
     def report_module_result(self, payload):
         url = self._config.api_url + MODULE_RESULTS_PATH
@@ -186,3 +198,7 @@ class DeviceControlClient:
     def _log_warn(self, message, context=None):
         if self._logger is not None:
             self._logger.warn(message, context)
+
+    def _log_info(self, message, context=None):
+        if self._logger is not None:
+            self._logger.info(message, context)

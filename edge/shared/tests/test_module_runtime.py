@@ -651,7 +651,6 @@ def test_get_upcoming_modules_excludes_future_modules():
 
 def test_prefetch_server_code_calls_api():
     """prefetch_server_code POSTs the correct payload to the prefetch endpoint."""
-    import json
     http = MockHttpClient()
     config = _config()
     fs = MockFileSystem()
@@ -662,5 +661,5 @@ def test_prefetch_server_code_calls_api():
 
     prefetch_calls = [c for c in http.calls if c[0] == "POST" and "/prefetch" in c[1]]
     assert len(prefetch_calls) == 1
-    body = json.loads(prefetch_calls[0][2])
+    body = prefetch_calls[0][2]
     assert body["modules"][0]["module_id"] == "m1"

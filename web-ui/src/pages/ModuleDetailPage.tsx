@@ -34,6 +34,7 @@ export default function ModuleDetailPage() {
   const [assignDevice, setAssignDevice] = useState('');
   const [assignVersion, setAssignVersion] = useState('');
   const [assignIntervalMs, setAssignIntervalMs] = useState('');
+  const [assignTimeoutMs, setAssignTimeoutMs] = useState('');
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const [varName, setVarName] = useState('');
@@ -95,10 +96,17 @@ export default function ModuleDetailPage() {
         throw new Error('Interval must be a positive number.');
       }
 
+      const trimmedTimeout = assignTimeoutMs.trim();
+      const timeoutMs = trimmedTimeout ? Number.parseInt(trimmedTimeout, 10) : undefined;
+      if (trimmedTimeout && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+        throw new Error('Timeout must be a positive number.');
+      }
+
       const body: AssignModuleRequest = {
         device_id: assignDevice,
         version: assignVersion || undefined,
         interval_ms: intervalMs,
+        timeout_ms: timeoutMs,
       };
       return api.post(`/api/admin/modules/${moduleId}/assignments`, body);
     },
@@ -107,6 +115,7 @@ export default function ModuleDetailPage() {
       setAssignDevice('');
       setAssignVersion('');
       setAssignIntervalMs('');
+      setAssignTimeoutMs('');
       toast('Assigned');
     },
     onError: (err) => {
@@ -597,6 +606,18 @@ export default function ModuleDetailPage() {
               className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[130px]"
             />
           </div>
+          <div>
+            <label htmlFor="assign-timeout-ms" className="mb-1 block text-xs text-gray-600">Timeout (ms)</label>
+            <input
+              id="assign-timeout-ms"
+              type="number"
+              min={1}
+              value={assignTimeoutMs}
+              onChange={(e) => setAssignTimeoutMs(e.target.value)}
+              placeholder="5000"
+              className="rounded border border-gray-300 px-2 py-1 text-sm min-w-[130px]"
+            />
+          </div>
           <button
             onClick={() => assignModule.mutate()}
             disabled={!assignDevice || !assignVersion || assignModule.isPending}
@@ -615,6 +636,7 @@ export default function ModuleDetailPage() {
                   <th className="px-4 py-3">Device</th>
                   <th className="px-4 py-3">Version</th>
                   <th className="px-4 py-3">Interval</th>
+                  <th className="px-4 py-3">Timeout</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3"></th>
@@ -626,6 +648,7 @@ export default function ModuleDetailPage() {
                     <td className="px-4 py-3 font-mono">{a.device_id}</td>
                     <td className="px-4 py-3 font-mono">{a.version ?? 'latest'}</td>
                     <td className="px-4 py-3 font-mono text-xs">{a.interval_ms} ms</td>
+                    <td className="px-4 py-3 font-mono text-xs">{a.timeout_ms} ms</td>
                     <td className="px-4 py-3">
                       <StatusBadge text={a.enabled ? 'active' : 'disabled'} variant={a.enabled ? 'green' : 'gray'} />
                     </td>

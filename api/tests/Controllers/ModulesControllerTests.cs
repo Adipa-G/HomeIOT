@@ -5,6 +5,7 @@ using HomeIOT.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace HomeIOT.Api.Tests.Controllers;
@@ -21,10 +22,13 @@ public class ModulesControllerTests
         _mockService = new Mock<IModuleService>();
         _mockVariableService = new Mock<IModuleVariableService>();
         _mockServerCodeService = new Mock<IModuleServerCodeService>();
+        var scopeFactory = new TestScopeFactory(_mockServerCodeService.Object);
+
         _controller = new ModulesController(
             _mockService.Object,
             _mockVariableService.Object,
-            _mockServerCodeService.Object)
+            _mockServerCodeService.Object,
+            scopeFactory)
         {
             ControllerContext = new ControllerContext
             {
@@ -33,6 +37,30 @@ public class ModulesControllerTests
         };
         _controller.HttpContext.SetDeviceRequestContext(
             new DeviceRequestContext("dev-001", "api-key", null));
+    }
+
+    private sealed class TestScopeFactory : IServiceScopeFactory
+    {
+        private readonly IModuleServerCodeService _svc;
+        public TestScopeFactory(IModuleServerCodeService svc) => _svc = svc;
+        public IServiceScope CreateScope() => new TestScope(_svc);
+
+        private sealed class TestScope : IServiceScope
+        {
+            public IServiceProvider ServiceProvider { get; }
+            public TestScope(IModuleServerCodeService svc)
+            {
+                ServiceProvider = new TestProvider(svc);
+            }
+            public void Dispose() { }
+
+            private sealed class TestProvider : IServiceProvider
+            {
+                private readonly IModuleServerCodeService _svc;
+                public TestProvider(IModuleServerCodeService svc) => _svc = svc;
+                public object? GetService(Type serviceType) => serviceType == typeof(IModuleServerCodeService) ? _svc : null;
+            }
+        }
     }
 
     [Fact]

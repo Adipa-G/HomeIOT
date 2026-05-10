@@ -752,3 +752,79 @@ def test_prefetch_uses_next_actual_loop_wake_when_sleep_is_clamped():
 
     assert device_control.prefetch_calls == 1
     assert device_control.prefetch_payloads[0][0]["module_id"] == "temp-reader"
+
+
+def test_prefetch_logs_warning_when_server_rejects_request():
+    system = _FakeSystem()
+    presence = _FakePresence(
+        {
+            "mode": "production",
+            "next_heartbeat_ms": 200,
+            "module_assignment_poll_interval_ms": 60000,
+        }
+    )
+    logger = _FakeLogger()
+
+    class _DeviceControlRejectingPrefetch(_FakeDeviceControl):
+        def prefetch_server_code(self, modules):
+            self.prefetch_calls += 1
+            self.prefetch_payloads.append(modules)
+            return False
+
+    class _RuntimeWithImminentModule(_FakeModuleRuntime):
+        def get_upcoming_modules(self, next_wake_ms=0):
+            return [{"module_id": "temp-reader", "version": "1.0.0"}] if next_wake_ms >= 550 else []
+
+    device_control = _DeviceControlRejectingPrefetch(assignment=None)
+    module_runtime = _RuntimeWithImminentModule()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        max_iterations=1,
+    )
+
+    assert device_control.prefetch_calls == 1
+    assert logger.warn_calls >= 1
+
+
+def test_prefetch_uses_heartbeat_horizon_in_development_mode():
+    system = _FakeSystem()
+    presence = _FakePresence(
+        {
+            "mode": "development",
+            "next_heartbeat_ms": 30000,
+            "dev_poll_interval_ms": 2000,
+            "module_assignment_poll_interval_ms": 60000,
+        }
+    )
+    device_control = _FakeDeviceControl(assignment=None)
+    logger = _FakeLogger()
+
+    class _RuntimeDueBeforeHeartbeat(_FakeModuleRuntime):
+        def get_upcoming_modules(self, next_wake_ms=0):
+            # With now=100ms, development next loop wake is typically ~150ms
+            # (clamped by development min sleep), which is too short.
+            # Using heartbeat horizon (~30100ms) should include this module.
+            return [{"module_id": "temp-reader", "version": "1.0.0"}] if next_wake_ms >= 5000 else []
+
+    module_runtime = _RuntimeDueBeforeHeartbeat()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        max_iterations=1,
+    )
+
+    assert device_control.prefetch_calls == 1
+    assert device_control.prefetch_payloads[0][0]["module_id"] == "temp-reader"
+
+

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HomeIOT.Api.Controllers;
 
@@ -11,15 +12,18 @@ public sealed class ModulesController : EdgeApiControllerBase
     private readonly IModuleService _moduleService;
     private readonly IModuleVariableService _variableService;
     private readonly IModuleServerCodeService _serverCodeService;
+    private readonly IServiceScopeFactory? _scopeFactory;
 
     public ModulesController(
         IModuleService moduleService,
         IModuleVariableService variableService,
-        IModuleServerCodeService serverCodeService)
+        IModuleServerCodeService serverCodeService,
+        IServiceScopeFactory? scopeFactory = null)
     {
         _moduleService = moduleService;
         _variableService = variableService;
         _serverCodeService = serverCodeService;
+        _scopeFactory = scopeFactory;
     }
 
     [HttpGet("assignment")]
@@ -112,8 +116,28 @@ public sealed class ModulesController : EdgeApiControllerBase
             {
                 if (string.IsNullOrWhiteSpace(item.ModuleId))
                     continue;
-                await _serverCodeService.RunForModuleAsync(
-                    context.DeviceId, item.ModuleId, CancellationToken.None);
+
+                var deviceId = context.DeviceId;
+                var moduleId = item.ModuleId.Trim();
+
+                if (_scopeFactory is not null)
+                {
+                    try
+                    {
+                        using var scope = _scopeFactory.CreateScope();
+                        var svc = (IModuleServerCodeService?)scope.ServiceProvider.GetService(typeof(IModuleServerCodeService));
+                        if (svc is not null)
+                            await svc.RunForModuleAsync(deviceId, moduleId, CancellationToken.None);
+                    }
+                    catch
+                    {
+                        // swallow exceptions from background prefetch
+                    }
+                }
+                else
+                {
+                    await _serverCodeService.RunForModuleAsync(deviceId, moduleId, CancellationToken.None);
+                }
             }
         });
 
