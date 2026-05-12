@@ -41,6 +41,18 @@ async function request<T>(
     } catch {
       error = { code: 'unknown', message: res.statusText };
     }
+
+    if (res.status === 401) {
+      try {
+        localStorage.removeItem('auth_token');
+      } catch {
+        // ignore
+      }
+      if (typeof window !== 'undefined' && window.location) {
+        window.location.replace('/login');
+      }
+    }
+
     throw new ApiError(res.status, error);
   }
 

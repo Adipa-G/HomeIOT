@@ -113,4 +113,25 @@ describe('api client', () => {
     const headers = call[1]?.headers as Record<string, string>;
     expect(headers['Content-Type']).toBeUndefined();
   });
+
+  it('clears token and redirects to login on 401', async () => {
+    localStorage.setItem('auth_token', 'secret');
+
+    const replaceMock = vi.fn();
+    const origLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      value: { ...origLocation, replace: replaceMock },
+      writable: true,
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ code: 'unauthorized', message: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    await expect(api.get('/api/protected')).rejects.toBeInstanceOf(ApiError);
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(replaceMock).toHaveBeenCalledWith('/login');
+
+    Object.defineProperty(window, 'location', { value: origLocation });
+  });
 });

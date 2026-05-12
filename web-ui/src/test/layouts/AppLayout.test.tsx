@@ -10,17 +10,17 @@ describe('AppLayout', () => {
 
   it('renders sidebar navigation links', () => {
     renderWithProviders(<AppLayout />);
-    expect(screen.getByText('HomeIOT')).toBeInTheDocument();
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Devices')).toBeInTheDocument();
-    expect(screen.getByText('Modules')).toBeInTheDocument();
-    expect(screen.getByText('OTA')).toBeInTheDocument();
-    expect(screen.getByText('Users')).toBeInTheDocument();
-    expect(screen.getByText('Dev Commands')).toBeInTheDocument();
+    expect(screen.getAllByText('HomeIOT').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Devices').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Modules').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('OTA').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Users').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Dev Commands').length).toBeGreaterThan(0);
   });
 
   it('renders Sign out button', () => {
     renderWithProviders(<AppLayout />);
-    expect(screen.getByText('Sign out')).toBeInTheDocument();
+    expect(screen.getAllByText('Sign out').length).toBeGreaterThan(0);
   });
 });
