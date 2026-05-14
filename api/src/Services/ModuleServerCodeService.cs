@@ -13,9 +13,12 @@ public sealed class ModuleServerCodeService : IModuleServerCodeService
     private static readonly ScriptOptions ScriptOptions = ScriptOptions.Default
         .WithImports(
             "System",
-            "System.Linq"
+            "System.Linq",
+            "System.Net.Http",
+            "System.Threading.Tasks",
+            "System.Text.Json"
            )
-        .WithReferences(typeof(object).Assembly, typeof(Enumerable).Assembly);
+        .WithReferences(typeof(object).Assembly, typeof(Enumerable).Assembly, typeof(HttpClient).Assembly, typeof(Task).Assembly, typeof(JsonSerializer).Assembly);
 
     private static readonly TimeSpan ExecutionTimeout = TimeSpan.FromSeconds(5);
 
