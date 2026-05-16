@@ -196,8 +196,8 @@ public sealed class AdminModulesController : UserApiControllerBase
         return Ok(new UpdateAssignmentResponse(Status: "ok", Id: assignment.Id));
     }
 
-    [HttpDelete("assignments/{assignmentId:guid}")]
-    public async Task<IActionResult> RemoveAssignment(Guid assignmentId, CancellationToken ct)
+    [HttpDelete("{moduleId}/assignments/{assignmentId:guid}")]
+    public async Task<IActionResult> RemoveAssignment(string moduleId, Guid assignmentId, CancellationToken ct)
     {
         var removed = await _moduleService.RemoveAssignmentAsync(assignmentId, ct);
         if (!removed)

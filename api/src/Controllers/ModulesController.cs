@@ -134,10 +134,6 @@ public sealed class ModulesController : EdgeApiControllerBase
                         // swallow exceptions from background prefetch
                     }
                 }
-                else
-                {
-                    await _serverCodeService.RunForModuleAsync(deviceId, moduleId, CancellationToken.None);
-                }
             }
         });
 

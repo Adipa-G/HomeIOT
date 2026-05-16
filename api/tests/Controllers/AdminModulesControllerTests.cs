@@ -226,7 +226,7 @@ public class AdminModulesControllerTests
         _mockService.Setup(s => s.RemoveAssignmentAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await _controller.RemoveAssignment(Guid.NewGuid(), CancellationToken.None);
+        var result = await _controller.RemoveAssignment("sensor-reader", Guid.NewGuid(), CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var payload = Assert.IsType<StatusResponse>(ok.Value);
@@ -239,7 +239,7 @@ public class AdminModulesControllerTests
         _mockService.Setup(s => s.RemoveAssignmentAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var result = await _controller.RemoveAssignment(Guid.NewGuid(), CancellationToken.None);
+        var result = await _controller.RemoveAssignment("sensor-reader", Guid.NewGuid(), CancellationToken.None);
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
