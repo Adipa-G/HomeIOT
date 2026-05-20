@@ -11,6 +11,7 @@ import type {
   UpsertVariableDefRequest,
 } from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
+import AssignmentVariablesPanel from '../components/AssignmentVariablesPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { toast } from '../components/Toast';
 import { formatUtc } from '../lib/format';
@@ -35,6 +36,7 @@ export default function ModuleDetailPage() {
   const [assignVersion, setAssignVersion] = useState('');
   const [assignIntervalMs, setAssignIntervalMs] = useState('');
   const [assignTimeoutMs, setAssignTimeoutMs] = useState('');
+  const [expandedAssignmentId, setExpandedAssignmentId] = useState<string | null>(null);
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const [varName, setVarName] = useState('');
@@ -654,9 +656,12 @@ export default function ModuleDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{formatUtc(a.created_at_utc)}</td>
                     <td className="px-4 py-3 text-right">
-                      <ConfirmModal title="Remove assignment?" onConfirm={() => deleteAssignment.mutateAsync(a.id)}>
-                        {(open) => <button onClick={open} className="text-red-600 hover:underline">Remove</button>}
-                      </ConfirmModal>
+                      <div className="flex items-center justify-end gap-3">
+                        <button onClick={() => setExpandedAssignmentId(expandedAssignmentId === a.id ? null : a.id)} className="text-blue-600 hover:underline">Edit variables</button>
+                        <ConfirmModal title="Remove assignment?" onConfirm={() => deleteAssignment.mutateAsync(a.id)}>
+                          {(open) => <button onClick={open} className="text-red-600 hover:underline">Remove</button>}
+                        </ConfirmModal>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -665,6 +670,14 @@ export default function ModuleDetailPage() {
           </div>
         )}
       </section>
+      {mod.assignments.map((a) => (
+        expandedAssignmentId === a.id ? (
+          <div key={`${a.id}-panel`} className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h4 className="mb-3 text-sm font-medium text-gray-900">Variables for {a.device_id}</h4>
+            <AssignmentVariablesPanel assignmentId={a.id} />
+          </div>
+        ) : null
+      ))}
     </div>
   );
 }

@@ -407,4 +407,47 @@ public class AdminModulesControllerTests
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
+
+    [Fact]
+    public async Task GetAssignmentVariables_ReturnsOk_WithItems()
+    {
+        var items = new List<ModuleVariableValueItem>
+        {
+            new("X", "1", "override", null),
+        };
+        _mockVariableService.Setup(s => s.GetVariableValuesWithSourceAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(items);
+
+        var result = await _controller.GetAssignmentVariables(Guid.NewGuid(), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<List<ModuleVariableValueItem>>(ok.Value);
+        Assert.Single(payload);
+    }
+
+    [Fact]
+    public async Task SetAssignmentVariable_ReturnsOk_WhenSet()
+    {
+        _mockVariableService.Setup(s => s.SetVariableValueAsync(It.IsAny<Guid>(), "X", "1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await _controller.SetAssignmentVariable(Guid.NewGuid(), "X", new SetVariableValueRequest { Value = "1" }, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
+    }
+
+    [Fact]
+    public async Task DeleteAssignmentVariable_ReturnsOk_WhenDeleted()
+    {
+        _mockVariableService.Setup(s => s.DeleteVariableValueAsync(It.IsAny<Guid>(), "X", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await _controller.DeleteAssignmentVariable(Guid.NewGuid(), "X", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
+    }
 }

@@ -131,6 +131,17 @@ export interface ModuleAssignmentDetail {
   updated_at_utc: string;
 }
 
+export interface ModuleVariableValueItem {
+  variable_name: string;
+  value: string | null;
+  source: 'override' | 'server_computed' | 'default' | string;
+  last_computed_at_utc?: string | null;
+}
+
+export interface SetVariableValueRequest {
+  value?: string | null;
+}
+
 export interface CreateModuleRequest {
   module_id: string;
   description?: string;
