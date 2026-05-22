@@ -45,6 +45,7 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.Property(x => x.Ip).HasMaxLength(128);
             entity.Property(x => x.Mode).HasMaxLength(32).HasDefaultValue("production");
             entity.HasIndex(x => x.DeviceId).IsUnique();
+            entity.HasAlternateKey(x => x.DeviceId);
         });
 
         modelBuilder.Entity<HeartbeatRecord>(entity =>
@@ -107,7 +108,7 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Entrypoint).HasMaxLength(128).HasDefaultValue("run");
             entity.HasOne(x => x.Device)
-                .WithMany()
+                .WithMany(x => x.ModuleAssignments)
                 .HasForeignKey(x => x.DeviceRecordId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(x => x.ModuleDefinition)
@@ -132,6 +133,11 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.Property(x => x.Status).HasMaxLength(32).IsRequired();
             entity.Property(x => x.VariableValues);
             entity.HasIndex(x => new { x.DeviceId, x.ModuleId });
+            entity.HasOne<DeviceRecord>()
+                .WithMany()
+                .HasForeignKey(x => x.DeviceId)
+                .HasPrincipalKey(d => d.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ModuleStatusRecord>(entity =>
@@ -143,6 +149,11 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.Property(x => x.ModuleVersion).HasMaxLength(64).IsRequired();
             entity.Property(x => x.DisabledReason).HasMaxLength(512);
             entity.HasIndex(x => new { x.DeviceId, x.ModuleId });
+            entity.HasOne<DeviceRecord>()
+                .WithMany()
+                .HasForeignKey(x => x.DeviceId)
+                .HasPrincipalKey(d => d.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ModuleVariableDefRecord>(entity =>

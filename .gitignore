@@ -65,3 +65,6 @@ TestResults/
 *.zip
 *.tar.gz
 /api/artifacts/**/*
+/api/Data/**/*
+/api/modules/**/*
+/edge/tools/generated/**/*

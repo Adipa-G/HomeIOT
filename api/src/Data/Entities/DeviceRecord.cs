@@ -14,4 +14,5 @@ public sealed class DeviceRecord
     public DateTimeOffset? LastHeartbeatAtUtc { get; set; }
     public ICollection<HeartbeatRecord> Heartbeats { get; set; } = new List<HeartbeatRecord>();
     public ICollection<LogBatchRecord> LogBatches { get; set; } = new List<LogBatchRecord>();
+    public ICollection<ModuleAssignmentRecord> ModuleAssignments { get; set; } = new List<ModuleAssignmentRecord>();
 }
