@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: homeiot-api
+    ports:
+      - "5228:5228"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:5228
+      # Change these for production
+      ADMIN_USERNAME: Admin
+      ADMIN_PASSWORD: "123"
+    volumes:
+      # Persist SQLite database between container restarts
+      - ./data:/app/data
+      # Persist OTA artifacts
+      - ./api/artifacts:/app/artifacts
+      # Persist uploaded modules
+      - ./api/modules:/app/modules
+    restart: unless-stopped
+    networks:
+      - homeiot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5228/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  homeiot-network:
+    driver: bridge

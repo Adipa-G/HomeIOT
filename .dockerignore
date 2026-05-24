@@ -1,0 +1,54 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+bin
+obj
+
+# Node modules (not needed for .NET build)
+node_modules
+
+# Python virtual environment
+.venv
+venv
+__pycache__
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+*.user
+*.suo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in runtime)
+README.md
+docs
+*.md
+
+# Test files (not needed in production image)
+api/tests
+
+# Local development files
+*.log
+*.tmp
+.env
+.env.local
+
+# OTA artifacts and modules (will be mounted as volumes)
+# Keep them out of image, use volume mounts instead
+api/artifacts
+api/modules
+data
+
+# Docker files
+docker-compose.yml
+Dockerfile
+.dockerignore
