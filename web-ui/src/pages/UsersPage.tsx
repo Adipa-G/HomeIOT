@@ -93,7 +93,7 @@ export default function UsersPage() {
                   <td className="px-4 py-3 text-gray-600">{u.created_at_utc}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => setChangePw({ username: u.username, password: '' })} className="mr-3 text-blue-600 hover:underline">Password</button>
-                    <ConfirmModal title="Delete user?" description={`Delete ${u.username}?`} onConfirm={() => deleteUser.mutateAsync(u.username)}>
+                    <ConfirmModal title="Delete user?" description={`Delete ${u.username}?`} onConfirm={async () => { await deleteUser.mutateAsync(u.username); }}>
                       {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
                     </ConfirmModal>
                   </td>

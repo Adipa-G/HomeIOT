@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import type { ModuleStatusListItem, PaginatedResponse } from '../types/api';
 import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
-import { formatUtc, formatBytes } from '../lib/format';
+import { formatUtc } from '../lib/format';
 
 export default function ModuleStatusesPage() {
   const [offset, setOffset] = useState(0);
@@ -44,10 +44,10 @@ export default function ModuleStatusesPage() {
                   <tr key={s.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-gray-600">{s.device_id}</td>
                     <td className="px-4 py-3 font-mono text-gray-600">{s.module_id}</td>
-                    <td className="px-4 py-3 font-mono text-gray-600">{s.version}</td>
-                    <td className="px-4 py-3"><StatusBadge text={s.state} variant={s.state === 'running' ? 'green' : s.state === 'error' ? 'red' : 'gray'} /></td>
-                    <td className="px-4 py-3 text-gray-600">{s.memory_bytes != null ? formatBytes(s.memory_bytes) : '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatUtc(s.updated_at_utc)}</td>
+                    <td className="px-4 py-3 font-mono text-gray-600">{s.module_version}</td>
+                    <td className="px-4 py-3"><StatusBadge text={s.disabled ? 'disabled' : 'active'} variant={s.disabled ? 'red' : 'green'} /></td>
+                    <td className="px-4 py-3 text-gray-600">{s.disabled_reason || '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatUtc(s.received_at_utc)}</td>
                   </tr>
                 ))}
               </tbody>

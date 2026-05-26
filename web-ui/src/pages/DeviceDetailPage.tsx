@@ -16,9 +16,8 @@ export default function DeviceDetailPage() {
   const [tab, setTab] = useState<'heartbeats' | 'logs' | 'modules'>('heartbeats');
   const [hbOffset, setHbOffset] = useState(0);
   const [logOffset, setLogOffset] = useState(0);
-  const [modOffset, setModOffset] = useState(0);
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [modHistoryOffset, setModHistoryOffset] = useState(0);
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
 
   const { data: device, isLoading } = useQuery({
@@ -39,8 +38,8 @@ export default function DeviceDetailPage() {
   });
 
   const moduleResults = useQuery({
-    queryKey: ['moduleResults', deviceId, modOffset],
-    queryFn: () => api.get<PaginatedResponse<ModuleResultListItem>>(`/api/admin/modules/results?device_id=${deviceId}&offset=${modOffset}&limit=100`),
+    queryKey: ['moduleResults', deviceId],
+    queryFn: () => api.get<PaginatedResponse<ModuleResultListItem>>(`/api/admin/modules/results?device_id=${deviceId}&limit=100`),
     enabled: tab === 'modules' && selectedModule === null,
   });
 
@@ -84,7 +83,7 @@ export default function DeviceDetailPage() {
           <button onClick={() => toggleMode.mutate()} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
             Switch to {device.mode === 'production' ? 'development' : 'production'}
           </button>
-          <ConfirmModal title="Delete device?" description={`This will permanently delete ${device.device_id} and all its data.`} onConfirm={() => deleteDevice.mutateAsync()}>
+          <ConfirmModal title="Delete device?" description={`This will permanently delete ${device.device_id} and all its data.`} onConfirm={async () => { await deleteDevice.mutateAsync(); }}>
             {(open) => <button onClick={open} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700">Delete</button>}
           </ConfirmModal>
         </div>

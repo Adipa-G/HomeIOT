@@ -15,12 +15,12 @@ services:
       ADMIN_USERNAME: Admin
       ADMIN_PASSWORD: "123"
     volumes:
-      # Persist SQLite database between container restarts
-      - ./data:/app/data
-      # Persist OTA artifacts
-      - ./api/artifacts:/app/artifacts
-      # Persist uploaded modules
-      - ./api/modules:/app/modules
+      # Persist SQLite database between container restarts (named volume for portability)
+      - homeiot-data:/app/data
+      # Persist OTA artifacts (named volume for portability)
+      - homeiot-artifacts:/app/artifacts
+      # Persist uploaded modules (named volume for portability)
+      - homeiot-modules:/app/modules
     restart: unless-stopped
     networks:
       - homeiot-network
@@ -30,6 +30,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  homeiot-data:
+    driver: local
+  homeiot-artifacts:
+    driver: local
+  homeiot-modules:
+    driver: local
 
 networks:
   homeiot-network:

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { OtaReleaseListItem } from '../types/api';
 import { toast } from '../components/Toast';
-import { formatUtc } from '../lib/format';
+import { formatBytes } from '../lib/format';
 
 export default function OtaReleasesPage() {
   const { platform } = useParams<{ platform: string }>();
@@ -64,7 +64,7 @@ export default function OtaReleasesPage() {
                     <Link to={`/ota/${platform}/${r.version}`} className="font-mono text-blue-600 hover:underline">{r.version}</Link>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{r.file_count}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatUtc(r.created_at_utc)}</td>
+                  <td className="px-4 py-3 text-gray-600">{formatBytes(r.total_size_bytes)}</td>
                 </tr>
               ))}
             </tbody>

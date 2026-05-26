@@ -50,11 +50,11 @@ export default function ModuleResultsPage() {
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-gray-600">{r.device_id}</td>
                     <td className="px-4 py-3 font-mono text-gray-600">{r.module_id}</td>
-                    <td className="px-4 py-3 font-mono text-gray-600">{r.version}</td>
-                    <td className="px-4 py-3"><StatusBadge text={r.success ? 'pass' : 'fail'} variant={r.success ? 'green' : 'red'} /></td>
-                    <td className="px-4 py-3 text-gray-600">{formatMs(r.duration_ms)}</td>
+                    <td className="px-4 py-3 font-mono text-gray-600">{r.module_version}</td>
+                    <td className="px-4 py-3"><StatusBadge text={r.status === 'success' ? 'pass' : 'fail'} variant={r.status === 'success' ? 'green' : 'red'} /></td>
+                    <td className="px-4 py-3 text-gray-600">{formatMs(r.elapsed_ms)}</td>
                     <td className="max-w-xs truncate px-4 py-3 text-gray-600">{r.output ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatUtc(r.reported_at_utc)}</td>
+                    <td className="px-4 py-3 text-gray-600">{formatUtc(r.finished_at_utc)}</td>
                   </tr>
                 ))}
               </tbody>

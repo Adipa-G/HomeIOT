@@ -30,7 +30,7 @@ export default function OtaDetailPage() {
           <h2 className="text-xl font-semibold text-gray-900">{platform} v{data.version}</h2>
           <p className="mt-1 text-sm text-gray-500">{data.manifest.length} file{data.manifest.length !== 1 ? 's' : ''}</p>
         </div>
-        <ConfirmModal title="Delete release?" description={`This will permanently delete ${platform} v${data.version}.`} onConfirm={() => deleteRelease.mutateAsync()}>
+        <ConfirmModal title="Delete release?" description={`This will permanently delete ${platform} v${data.version}.`} onConfirm={async () => { await deleteRelease.mutateAsync(); }}>
           {(open) => <button onClick={open} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700">Delete</button>}
         </ConfirmModal>
       </div>

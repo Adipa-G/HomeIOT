@@ -8,7 +8,7 @@ vi.mock('../../api/client', () => ({
     post: vi.fn(),
   },
   ApiError: class extends Error {
-    constructor(public status: number, public error: { code: string; message: string }) {
+    constructor(_status: number, error: { code: string; message: string }) {
       super(error.message);
     }
   },

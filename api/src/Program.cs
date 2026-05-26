@@ -156,10 +156,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<DeviceAuthMiddleware>();
 
-// Health check endpoint
-app.MapGet("/", () => Results.Ok(new { status = "ok", service = "HomeIOT API" }));
+// Serve static files from wwwroot (React app)
+app.UseStaticFiles();
 
 // Register MVC controller endpoints
 app.MapControllers();
+
+// Health check endpoint (moved to /health so root serves React app)
+app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "HomeIOT API" }));
+
+// Fallback route for SPA — serve index.html for unmatched routes
+app.MapFallbackToFile("index.html");
 
 app.Run();

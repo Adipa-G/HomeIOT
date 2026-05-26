@@ -7,8 +7,11 @@
 bin
 obj
 
-# Node modules (not needed for .NET build)
+# Node modules and build outputs (not needed for .NET build)
 node_modules
+web-ui/node_modules
+web-ui/.pytest_cache
+web-ui/dist
 
 # Python virtual environment
 .venv
@@ -35,6 +38,8 @@ docs
 
 # Test files (not needed in production image)
 api/tests
+edge/shared/tests
+web-ui/src/test
 
 # Local development files
 *.log

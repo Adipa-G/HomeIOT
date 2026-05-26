@@ -14,7 +14,7 @@ describe('AssignmentVariablesPanel', () => {
       { variable_name: 'TEMP_THRESHOLD', value: '25', source: 'default', last_computed_at_utc: null },
     ];
 
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 

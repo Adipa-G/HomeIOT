@@ -94,19 +94,19 @@ export default function ModuleDetailPage() {
     mutationFn: () => {
       const trimmedInterval = assignIntervalMs.trim();
       const intervalMs = trimmedInterval ? Number.parseInt(trimmedInterval, 10) : undefined;
-      if (trimmedInterval && (!Number.isFinite(intervalMs) || intervalMs <= 0)) {
+      if (trimmedInterval && intervalMs && (!Number.isFinite(intervalMs) || intervalMs <= 0)) {
         throw new Error('Interval must be a positive number.');
       }
 
       const trimmedTimeout = assignTimeoutMs.trim();
       const timeoutMs = trimmedTimeout ? Number.parseInt(trimmedTimeout, 10) : undefined;
-      if (trimmedTimeout && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+      if (trimmedTimeout && timeoutMs && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
         throw new Error('Timeout must be a positive number.');
       }
 
       const body: AssignModuleRequest = {
         device_id: assignDevice,
-        version: assignVersion || undefined,
+        version: assignVersion,
         interval_ms: intervalMs,
         timeout_ms: timeoutMs,
       };
@@ -251,7 +251,7 @@ export default function ModuleDetailPage() {
         {!editing && (
           <div className="flex shrink-0 gap-2">
             <button onClick={startEdit} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">Edit</button>
-            <ConfirmModal title="Delete module?" description="All versions and assignments will also be removed." onConfirm={() => deleteModule.mutateAsync()}>
+            <ConfirmModal title="Delete module?" description="All versions and assignments will also be removed." onConfirm={async () => { await deleteModule.mutateAsync(); }}>
               {(open) => <button onClick={open} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700">Delete</button>}
             </ConfirmModal>
           </div>
@@ -289,7 +289,7 @@ export default function ModuleDetailPage() {
                   <React.Fragment key={v.version}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono">{v.version}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{v.sha256?.slice(0, 16)}…</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{v.package_hash?.slice(0, 16)}…</td>
                       <td className="px-4 py-3 text-gray-600">{formatUtc(v.created_at_utc)}</td>
                       <td className="px-4 py-3 text-right space-x-3">
                         <button
@@ -303,7 +303,7 @@ export default function ModuleDetailPage() {
                         >
                           {expandedVersion === v.version ? 'Hide' : 'View'}
                         </button>
-                        <ConfirmModal title="Delete version?" onConfirm={() => deleteVersion.mutateAsync(v.version)}>
+                        <ConfirmModal title="Delete version?" onConfirm={async () => { await deleteVersion.mutateAsync(v.version); }}>
                           {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
                         </ConfirmModal>
                       </td>
@@ -452,7 +452,7 @@ export default function ModuleDetailPage() {
                       >
                         Edit
                       </button>
-                      <ConfirmModal title="Delete variable?" onConfirm={() => deleteVariable.mutateAsync(v.name)}>
+                      <ConfirmModal title="Delete variable?" onConfirm={async () => { await deleteVariable.mutateAsync(v.name); }}>
                         {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
                       </ConfirmModal>
                     </td>
@@ -658,7 +658,7 @@ export default function ModuleDetailPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <button onClick={() => setExpandedAssignmentId(expandedAssignmentId === a.id ? null : a.id)} className="text-blue-600 hover:underline">Edit variables</button>
-                        <ConfirmModal title="Remove assignment?" onConfirm={() => deleteAssignment.mutateAsync(a.id)}>
+                        <ConfirmModal title="Remove assignment?" onConfirm={async () => { await deleteAssignment.mutateAsync(a.id); }}>
                           {(open) => <button onClick={open} className="text-red-600 hover:underline">Remove</button>}
                         </ConfirmModal>
                       </div>

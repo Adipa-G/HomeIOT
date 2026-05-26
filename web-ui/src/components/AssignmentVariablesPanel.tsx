@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
 import type { ModuleVariableValueItem } from '../types/api';
@@ -83,7 +83,7 @@ export function AssignmentVariablesPanel({ assignmentId }: Props) {
                         >
                           Save
                         </button>
-                        <ConfirmModal title="Remove override?" onConfirm={() => deleteMutation.mutateAsync(it.variable_name)}>
+                        <ConfirmModal title="Remove override?" onConfirm={async () => { await deleteMutation.mutateAsync(it.variable_name); }}>
                           {(open) => <button onClick={open} className="text-red-600 hover:underline">Remove</button>}
                         </ConfirmModal>
                       </>
