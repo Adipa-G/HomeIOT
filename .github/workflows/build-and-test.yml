@@ -128,7 +128,7 @@ jobs:
       - name: Run Playwright E2E tests
         working-directory: ./web-ui
         run: |
-          BASE_URL=http://localhost:5228 npm run test:e2e
+          BASE_URL=http://localhost:8080 npm run test:e2e
 
       - name: Upload Playwright report
         if: always()
