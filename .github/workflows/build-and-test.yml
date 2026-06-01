@@ -44,7 +44,9 @@ jobs:
 
       - name: Restore dependencies
         working-directory: ./api
-        run: dotnet restore
+        run: |
+          dotnet restore src/api.csproj
+          dotnet restore tests/homeiot.api.tests.csproj
 
       - name: Run tests
         working-directory: ./api/tests
