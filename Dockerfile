@@ -52,6 +52,9 @@ COPY --from=react-build /src/web-ui/dist ./wwwroot
 # Create data directory for SQLite database (will be mounted as volume)
 RUN mkdir -p data
 
+# Set ASP.NET Core to listen on port 5228
+ENV ASPNETCORE_URLS=http://0.0.0.0:5228
+
 # Expose port for API
 EXPOSE 5228
 
