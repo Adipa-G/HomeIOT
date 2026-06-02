@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: homeiot-api
+    container_name: homeiot
     ports:
       - "5228:5228"
     environment:

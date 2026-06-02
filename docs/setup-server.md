@@ -260,7 +260,7 @@ Docker Compose creates an internal network, so hostname resolution is handled au
    ```yaml
    services:
      api:
-       container_name: homeiot-api
+       container_name: homeiot
        networks:
          - homeiot-network
    ```
