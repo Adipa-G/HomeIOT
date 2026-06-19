@@ -142,7 +142,9 @@ describe('DeviceDetailPage', () => {
 
   it('renders device info', async () => {
     vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
       if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
+      if (url.includes('/logs')) return Promise.resolve(mockLogs);
       return Promise.resolve(mockDevice);
     });
     renderWithProviders(<DeviceDetailPage />);
@@ -156,8 +158,9 @@ describe('DeviceDetailPage', () => {
   it('switches to logs tab and shows entries sorted descending', async () => {
     const user = userEvent.setup();
     vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
+      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
       if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
+      if (url.includes('/logs')) return Promise.resolve(mockLogs);
       return Promise.resolve(mockDevice);
     });
     renderWithProviders(<DeviceDetailPage />);
@@ -182,8 +185,9 @@ describe('DeviceDetailPage', () => {
   it('shows log entries in descending order (newest batch first)', async () => {
     const user = userEvent.setup();
     vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
+      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
       if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
+      if (url.includes('/logs')) return Promise.resolve(mockLogs);
       return Promise.resolve(mockDevice);
     });
     renderWithProviders(<DeviceDetailPage />);

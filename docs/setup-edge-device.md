@@ -1,14 +1,79 @@
 # Edge Device Setup Guide
 
-This guide walks you through provisioning and deploying firmware to an ESP32 or Raspberry Pi Pico device.
+This guide walks you through provisioning and deploying firmware to an ESP32 or Raspberry Pi Pico device, or running a PC simulator for development.
 
 ## Prerequisites
 
 - **Server running** — Verify at `http://localhost:5228` (see [Server Setup](setup-server.md))
 - **Python 3.8+** — Required for provisioning and deployment tools
-- **mpremote installed** — `pip install mpremote`
-- **Device connected via USB** — ESP32 or Raspberry Pi Pico
-- **WiFi credentials** — SSID and password for the device to connect
+- **mpremote installed** — `pip install mpremote` (for real devices only)
+- **Device connected via USB** — ESP32 or Raspberry Pi Pico (for real devices only)
+- **WiFi credentials** — SSID and password for the device to connect (for real devices only)
+
+---
+
+## Alternative: Running a PC Simulator
+
+If you don't have a physical device, you can run a simulator on your PC to test edge logic without hardware.
+
+### Quick Start
+
+1. **Generate simulator config**
+   ```bash
+   cp edge/simulator/config.template.json simulator-config.json
+   
+   # Edit simulator-config.json to match your server setup:
+   # - Set "api_url" to your local API (e.g., "http://localhost:5228")
+   # - Set "api_key" to a valid device API key
+   # - Optionally customize "device_id" (e.g., "my-simulator-01")
+   ```
+
+2. **Run the simulator**
+   ```bash
+   python edge/simulator/worker.py --config simulator-config.json
+   ```
+
+3. **View in dashboard**
+   - Open web UI at `http://localhost:5173`
+   - Go to **Admin → Devices**
+   - Find your simulator device (device ID from config)
+   - View logs, heartbeats, and module assignments in real-time
+
+### Simulator Features
+
+- ✅ Runs the same control loop as real devices
+- ✅ Connects to real API (requires running server)
+- ✅ Real module execution (modules run as CPython, not MicroPython)
+- ✅ Real heartbeats and dev command polling
+- ✅ Logs appear in web dashboard like real devices
+
+### CLI Options
+
+```bash
+python edge/simulator/worker.py \
+  --config simulator-config.json \      # Config file path (default: config.json)
+  --device-id test-device-001 \          # Override device ID from config
+  --api-url http://your-api:5228 \      # Override API URL from config
+  --api-key your-key-here \              # Override API key from config
+  --max-iterations 10                    # Stop after N control loop iterations (for testing)
+```
+
+### Troubleshooting the Simulator
+
+**Simulator won't connect to API:**
+- Verify server is running: `http://localhost:5228`
+- Check API URL in config file
+- Verify API key is valid
+
+**Module execution errors:**
+- Modules run as standard Python (not MicroPython)
+- Check if modules use MicroPython-specific imports (e.g., `machine`, `utime`)
+- Modules requiring hardware won't work in simulator
+
+**Device doesn't appear in dashboard:**
+- Wait 30+ seconds for first heartbeat
+- Check API logs for registration errors
+- Verify device ID is unique
 
 ---
 

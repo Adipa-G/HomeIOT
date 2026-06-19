@@ -1,0 +1,70 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": ".NET API",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "dotnet: build api",
+      "program": "${workspaceFolder}/api/src/bin/Debug/net8.0/api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/api/src",
+      "stopAtEntry": false,
+      "noDebug": true,
+      "console": "integratedTerminal",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://0.0.0.0:5228"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/api/ping"
+      }
+    },
+    {
+      "name": ".NET API (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "dotnet: build api",
+      "program": "${workspaceFolder}/api/src/bin/Debug/net8.0/api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/api/src",
+      "stopAtEntry": false,
+      "console": "integratedTerminal",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://0.0.0.0:5228"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/api/ping"
+      }
+    },
+    {
+      "name": ".NET API (Attach)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    },
+    {
+      "name": "Python Edge Tests (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "edge"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": ".NET API Tests",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "dotnet test api/tests/homeiot.api.tests.csproj"
+    }
+  ]
+}
