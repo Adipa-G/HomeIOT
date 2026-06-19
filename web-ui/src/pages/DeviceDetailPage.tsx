@@ -13,7 +13,7 @@ export default function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'heartbeats' | 'logs' | 'modules'>('heartbeats');
+  const [tab, setTab] = useState<'heartbeats' | 'logs' | 'modules'>('modules');
   const [hbOffset, setHbOffset] = useState(0);
   const [logOffset, setLogOffset] = useState(0);
   const [modHistoryOffset, setModHistoryOffset] = useState(0);
@@ -100,9 +100,9 @@ export default function DeviceDetailPage() {
 
       {/* Tabs */}
       <div className="mb-4 flex border-b border-gray-200">
+        <button className={tabClass('modules')} onClick={() => setTab('modules')}>Modules</button>
         <button className={tabClass('heartbeats')} onClick={() => setTab('heartbeats')}>Heartbeats</button>
         <button className={tabClass('logs')} onClick={() => setTab('logs')}>Logs</button>
-        <button className={tabClass('modules')} onClick={() => setTab('modules')}>Modules</button>
       </div>
 
       {tab === 'heartbeats' && (

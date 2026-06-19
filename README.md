@@ -326,7 +326,7 @@ For more, see the detailed guides linked above.
 
 ## License
 
-[Your License Here]
+GNU AFFERO GENERAL PUBLIC LICENSE Version 3
 
 ## Support
 

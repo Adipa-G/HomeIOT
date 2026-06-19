@@ -78,107 +78,7 @@ docker-compose --version
 
 Both should output version information. If not installed, [download Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
-### Step 2: Create `docker-compose.yml`
-
-In the project root directory, create a file named `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "5228:5228"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://0.0.0.0:5228
-      # Optional: Set default admin password (change after first login)
-      ADMIN_PASSWORD: "123"
-    volumes:
-      # Persist database between container restarts
-      - ./data:/app/data
-      # Persist OTA artifacts
-      - ./api/artifacts:/app/artifacts
-      # Persist uploaded modules
-      - ./api/modules:/app/modules
-    restart: unless-stopped
-    networks:
-      - homeiot-network
-
-networks:
-  homeiot-network:
-    driver: bridge
-```
-
-### Step 3: Create `Dockerfile`
-
-In the project root, create a file named `Dockerfile`:
-
-```dockerfile
-# Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-
-WORKDIR /src
-
-# Copy project files
-COPY ["api/src/api.csproj", "api/src/"]
-COPY ["api/tests/homeiot.api.tests.csproj", "api/tests/"]
-
-# Restore dependencies
-RUN dotnet restore "api/src/api.csproj"
-
-# Copy full source
-COPY . .
-
-# Build release
-RUN dotnet build "api/src/api.csproj" -c Release -o /app/build
-
-# Publish stage
-FROM build AS publish
-
-RUN dotnet publish "api/src/api.csproj" -c Release -o /app/publish
-
-# Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
-
-WORKDIR /app
-
-# Copy published application
-COPY --from=publish /app/publish .
-
-# Create data directory for SQLite
-RUN mkdir -p data
-
-EXPOSE 5228
-
-ENTRYPOINT ["dotnet", "api.dll"]
-```
-
-### Step 4: Create `.dockerignore`
-
-In the project root, create a file named `.dockerignore`:
-
-```
-.git
-.gitignore
-bin
-obj
-node_modules
-.venv
-.DS_Store
-*.swp
-*.swo
-*~
-.vscode
-.idea
-README.md
-docs
-```
-
-### Step 5: Start the Container
+### Step 2: Start the Container
 
 ```bash
 # Start services in background
@@ -194,7 +94,7 @@ api  | info: Microsoft.Hosting.Lifetime[14]
 api  |      Now listening on: http://0.0.0.0:5228
 ```
 
-### Step 6: Access the Server
+### Step 3: Access the Server
 
 Open your browser and navigate to:
 ```
