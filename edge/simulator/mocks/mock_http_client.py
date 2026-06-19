@@ -1,5 +1,4 @@
 """Mock HTTP client HAL for PC simulator."""
-import requests
 from io import BytesIO
 
 from edge.shared.hal.interfaces import IHttpClient, HttpResponse
@@ -31,6 +30,8 @@ class SimulatorHttpClient(IHttpClient):
 
     def get(self, url: str, headers=None) -> HttpResponse:
         """Perform GET request."""
+        import requests
+        
         response = requests.get(url, headers=headers, timeout=_REQUEST_TIMEOUT_S)
         return HttpResponse(
             status_code=response.status_code,
@@ -40,6 +41,8 @@ class SimulatorHttpClient(IHttpClient):
 
     def post(self, url: str, data, headers=None, timeout_s=None) -> HttpResponse:
         """Perform POST request with JSON data."""
+        import requests
+        
         timeout = timeout_s if timeout_s is not None else _REQUEST_TIMEOUT_S
         response = requests.post(
             url, json=data, headers=headers, timeout=timeout
@@ -52,6 +55,8 @@ class SimulatorHttpClient(IHttpClient):
 
     def get_stream(self, url: str, headers=None):
         """Open a streaming GET request."""
+        import requests
+        
         response = requests.get(
             url, headers=headers, timeout=_REQUEST_TIMEOUT_S, stream=True
         )
