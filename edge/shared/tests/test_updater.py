@@ -533,3 +533,148 @@ def test_apply_cleans_tmp_file_on_stream_error():
 
     # Staging should be cleaned; no leftover .ota_tmp files
     assert not fs.exists("app_staging")
+
+
+# ---------------------------------------------------------------------------
+# manifest.json special handling (hash verification bypass)
+# ---------------------------------------------------------------------------
+
+def test_apply_skips_manifest_json_hash_verification():
+    """manifest.json must be written without hash verification.
+    
+    The manifest contains hashes of all other files, so it cannot verify itself.
+    This test verifies that an incorrect hash for manifest.json doesn't cause an error.
+    """
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    fs.write_bytes("app/main.py", b"old-version")
+    fs.write_text(
+        "config.json",
+        """
+        {"device_id":"esp32-001","api_url":"http://localhost:8000","api_key":"old-secret","wifi_ssid":"ssid","wifi_password":"old-pass","heartbeat_interval_ms":1000,"max_boot_attempts":3,"current_version":"1.0.0"}
+        """.strip(),
+    )
+
+    new_file = b"print('new-version')"
+    new_config = b"{\"device_id\":\"replace-with-device-id\",\"api_url\":\"replace-with-api-url\",\"api_key\":\"replace-with-device-api-key\",\"wifi_ssid\":\"replace-with-ssid\",\"wifi_password\":\"replace-with-password\",\"heartbeat_interval_ms\":2000,\"max_boot_attempts\":4,\"current_version\":\"1.1.0\"}"
+    manifest_content = b'{"version":"1.1.0","manifest":[{"path":"main.py","hash":"abc123"}]}'
+
+    # Build stream with WRONG hash for manifest.json (0*64 instead of actual hash)
+    stream_data = _build_ota_stream([
+        ("main.py", new_file),
+        ("config.json", new_config),
+        ("manifest.json", manifest_content, "0" * 64)  # Wrong hash!
+    ])
+    http.add_stream_response(_STREAM_URL, stream_data)
+
+    # Should succeed despite manifest.json having wrong hash
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[
+                {"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": _sha256_hex(new_config), "size": len(new_config)},
+                {"path": "manifest.json", "hash": "0" * 64, "size": len(manifest_content)},
+            ],
+        )
+    )
+
+    # All files should be staged correctly
+    assert fs.read_bytes("main.py") == new_file
+    assert system.reset_calls == 1
+
+
+def test_apply_writes_manifest_json_to_staging():
+    """manifest.json should be written and end up in app/ after version swap."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    fs.write_bytes("app/main.py", b"old-version")
+    fs.write_text(
+        "config.json",
+        """
+        {"device_id":"esp32-001","api_url":"http://localhost:8000","api_key":"old-secret","wifi_ssid":"ssid","wifi_password":"old-pass","heartbeat_interval_ms":1000,"max_boot_attempts":3,"current_version":"1.0.0"}
+        """.strip(),
+    )
+
+    new_file = b"print('new-version')"
+    new_config = b"{\"device_id\":\"replace-with-device-id\",\"api_url\":\"replace-with-api-url\",\"api_key\":\"replace-with-device-api-key\",\"wifi_ssid\":\"replace-with-ssid\",\"wifi_password\":\"replace-with-password\",\"heartbeat_interval_ms\":2000,\"max_boot_attempts\":4,\"current_version\":\"1.1.0\"}"
+    manifest_content = b'{"version":"1.1.0","manifest":[{"path":"main.py","hash":"abc123"}]}'
+
+    stream_data = _build_ota_stream([
+        ("main.py", new_file),
+        ("config.json", new_config),
+        ("manifest.json", manifest_content)
+    ])
+    http.add_stream_response(_STREAM_URL, stream_data)
+
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[
+                {"path": "main.py", "hash": _sha256_hex(new_file), "size": len(new_file)},
+                {"path": "config.json", "hash": _sha256_hex(new_config), "size": len(new_config)},
+                {"path": "manifest.json", "hash": _sha256_hex(manifest_content), "size": len(manifest_content)},
+            ],
+        )
+    )
+
+    # After apply(), manifest.json should be in app/manifest.json (after version swap)
+    assert fs.read_bytes("app/manifest.json") == manifest_content
+    assert system.reset_calls == 1
+
+
+def test_apply_still_validates_other_files_when_manifest_present():
+    """Skipping manifest.json hash verification should not affect other files.
+    
+    Verifies that while manifest.json bypasses hash verification, all other files
+    (except config.json which is special-cased) still require correct hashes.
+    """
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+    fs.write_bytes("app/main.py", b"old-version")
+    fs.write_text(
+        "config.json",
+        """
+        {"device_id":"esp32-001","api_url":"http://localhost:8000","api_key":"old-secret","wifi_ssid":"ssid","wifi_password":"old-pass","heartbeat_interval_ms":1000,"max_boot_attempts":3,"current_version":"1.0.0"}
+        """.strip(),
+    )
+
+    new_file = b"print('new-version')"
+    manifest_content = b'{"version":"1.1.0"}'
+    
+    # Stream has WRONG hash for main.py but manifest.json bypasses verification
+    stream_data = _build_ota_stream([
+        ("main.py", new_file, "0" * 64),  # Wrong hash!
+        ("manifest.json", manifest_content)
+    ])
+    http.add_stream_response(_STREAM_URL, stream_data)
+
+    # Should raise because main.py has wrong hash
+    with pytest.raises(ValueError, match="Hash mismatch"):
+        updater.apply(
+            UpdateInfo(
+                available=True,
+                version="1.1.0",
+                manifest=[
+                    {"path": "main.py", "hash": "0" * 64, "size": len(new_file)},
+                    {"path": "manifest.json", "hash": _sha256_hex(manifest_content), "size": len(manifest_content)},
+                ],
+            )
+        )
+
+    # Staging should be cleaned up
+    assert not fs.exists("app_staging")

@@ -256,6 +256,21 @@ class Updater:
                     total_bytes += len(content)
                     content = None
                     config_staged = True
+                elif rel_path == "manifest.json":
+                    # Skip hash verification for manifest.json (it contains the hashes,
+                    # not the other way around). Just write it directly to staging.
+                    tmp_path = target_path + ".ota_tmp"
+                    try:
+                        self._fs.write_chunks(tmp_path, reader.read_chunks(size))
+                    except Exception:
+                        if self._fs.exists(tmp_path):
+                            try:
+                                self._fs.remove(tmp_path)
+                            except Exception:
+                                pass
+                        raise
+                    self._fs.rename(tmp_path, target_path)
+                    total_bytes += size
                 else:
                     # Stream directly to disk chunk-by-chunk — the maximum
                     # in-RAM data is one 512-byte chunk + 32-byte hash state.
