@@ -614,29 +614,6 @@ export default function ModuleDetailPage() {
                               >
                                 Edit
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => startAddVisualization(v)}
-                                className="text-green-600 hover:underline text-xs"
-                              >
-                                Visualizations
-                              </button>
-                              {v.inferred_json_schema !== null && v.inferred_json_schema !== undefined && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setInferringSchema(true);
-                                    inferSchema.mutate(v.name, {
-                                      onSettled: () => setInferringSchema(false),
-                                    });
-                                  }}
-                                  disabled={inferringSchema}
-                                  className="text-amber-600 hover:underline text-xs disabled:opacity-50"
-                                  title="Re-infer JSON structure from latest execution"
-                                >
-                                  Schema
-                                </button>
-                              )}
                               <ConfirmModal title="Delete variable?" onConfirm={async () => { await deleteVariable.mutateAsync(v.name); }}>
                                 {(open) => <button onClick={open} className="text-red-600 hover:underline text-xs">Delete</button>}
                               </ConfirmModal>
