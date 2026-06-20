@@ -47,29 +47,28 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
     });
   }, [freshValues]);
 
-  const saveVariable = useMutation({
-    mutationFn: (name: string) => {
-      const value = formValues[name];
-      return api.put(`/api/admin/modules/assignments/${assignmentId}/variables/${encodeURIComponent(name)}`, { value });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['module-assignment-variables', assignmentId] });
-      qc.invalidateQueries({ queryKey: ['module-assignment', assignmentId] });
-      toast('Variable updated');
-    },
-    onError: () => toast('Failed to update variable', 'error'),
-  });
+  const saveAllVariables = useMutation({
+    mutationFn: async () => {
+      const changedVars = controllableVars.filter((varDef) => {
+        const currentValue = freshValues.find((v) => v.variable_name === varDef.name)?.value;
+        const newValue = formValues[varDef.name];
+        return currentValue !== newValue;
+      });
 
-  const removeVariable = useMutation({
-    mutationFn: (name: string) => {
-      return api.delete(`/api/admin/modules/assignments/${assignmentId}/variables/${encodeURIComponent(name)}`);
+      await Promise.all(
+        changedVars.map((varDef) =>
+          api.put(`/api/admin/modules/assignments/${assignmentId}/variables/${encodeURIComponent(varDef.name)}`, {
+            value: formValues[varDef.name],
+          })
+        )
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['module-assignment-variables', assignmentId] });
       qc.invalidateQueries({ queryKey: ['module-assignment', assignmentId] });
-      toast('Variable override removed');
+      toast('All variables updated');
     },
-    onError: () => toast('Failed to remove variable', 'error'),
+    onError: () => toast('Failed to update variables', 'error'),
   });
 
   const controllableVars = variableDefs.filter((v) => v.control_type);
@@ -109,6 +108,8 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
           {controllableVars.map((varDef) => {
             const value = formValues[varDef.name];
             const isServerComputed = freshValues.find((v) => v.variable_name === varDef.name)?.source === 'server_computed';
+            const originalValue = freshValues.find((v) => v.variable_name === varDef.name)?.value;
+            const hasChanged = value !== originalValue;
 
             return (
               <div key={varDef.name} className="rounded-lg border border-gray-200 p-4">
@@ -122,36 +123,36 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
                 />
                 {isServerComputed && <p className="mt-2 text-xs text-amber-600">This value is computed by the server.</p>}
 
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => saveVariable.mutate(varDef.name)}
-                    disabled={saveVariable.isPending || isServerComputed}
-                    className="flex-1 rounded bg-blue-600 px-2 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {saveVariable.isPending ? 'Saving…' : 'Save'}
-                  </button>
-                  {!isServerComputed && value !== freshValues.find((v) => v.variable_name === varDef.name)?.value && (
+                {!isServerComputed && hasChanged && (
+                  <div className="mt-3">
                     <button
                       onClick={() => {
-                        removeVariable.mutate(varDef.name);
                         setFormValues((prev) => ({
                           ...prev,
-                          [varDef.name]: freshValues.find((v) => v.variable_name === varDef.name)?.value || null,
+                          [varDef.name]: originalValue || null,
                         }));
                       }}
-                      disabled={removeVariable.isPending}
-                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
+                      className="rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-50"
                     >
                       Reset
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
 
-        <div className="sticky bottom-0 border-t border-gray-200 bg-gray-50 p-6">
+        <div className="sticky bottom-0 border-t border-gray-200 bg-gray-50 p-6 space-y-3">
+          <button
+            onClick={() => saveAllVariables.mutate()}
+            disabled={saveAllVariables.isPending || !controllableVars.some(
+              (varDef) => formValues[varDef.name] !== freshValues.find((v) => v.variable_name === varDef.name)?.value
+            )}
+            className="w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saveAllVariables.isPending ? 'Saving…' : 'Save Changes'}
+          </button>
           <button
             onClick={onClose}
             className="w-full rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100"
