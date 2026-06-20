@@ -31,17 +31,40 @@ public class AdminModulesControllerTests
     [Fact]
     public async Task ListModules_ReturnsOkWithModules()
     {
-        var modules = new List<ModuleListItem>
+        var moduleListItems = new List<ModuleListItem>
         {
-            new("sensor-reader", "Reads sensors", "run", 2, 1, "2026-05-30T10:00:00Z"),
+            new("sensor-reader", "Reads sensors", "run", 1, 2, "2026-05-30T10:00:00Z"),
         };
-        _mockService.Setup(s => s.ListModulesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(modules);
+
+        var detailedModule = new ModuleDetailResponse(
+            ModuleId: "sensor-reader",
+            Description: "Reads sensors",
+            DefaultEntrypoint: "run",
+            CreatedAtUtc: "2026-05-30T10:00:00Z",
+            UpdatedAtUtc: "2026-05-30T10:00:00Z",
+            Versions: new List<ModuleVersionItem>
+            {
+                new(
+                    Id: Guid.NewGuid(),
+                    Version: "1.0.0",
+                    PackageHash: "abc123",
+                    PackageSizeBytes: 1024,
+                    CreatedAtUtc: "2026-05-30T10:00:00Z"
+                ),
+            },
+            Assignments: new List<ModuleAssignmentDetail>(),
+            VariableDefs: new List<ModuleVariableDefItem>()
+        );
+
+        _mockService.Setup(s => s.ListModulesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(moduleListItems);
+        _mockService.Setup(s => s.GetModuleAsync("sensor-reader", It.IsAny<CancellationToken>())).ReturnsAsync(detailedModule);
 
         var result = await _controller.ListModules(CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var payload = Assert.IsType<List<ModuleListItem>>(ok.Value);
+        var payload = Assert.IsType<List<ModuleDetailResponse>>(ok.Value);
         Assert.Single(payload);
+        Assert.Equal("sensor-reader", payload[0].ModuleId);
     }
 
     [Fact]

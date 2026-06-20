@@ -36,6 +36,8 @@ const mockModule = {
       type: 'number',
       default_value: '28',
       description: 'trip point',
+      control_type: 'text',
+      control_options: [],
       has_server_code: true,
       server_code: 'return 28;',
     },
@@ -205,9 +207,14 @@ describe('ModuleDetailPage', () => {
       expect(screen.getByText('TEMP_THRESHOLD')).toBeInTheDocument();
     });
 
-    // Find the Edit button in the variables table (the second one)
+    // Find the Edit button in the variables table (the last one)
     const editButtons = screen.getAllByRole('button', { name: 'Edit' });
     await user.click(editButtons[editButtons.length - 1]); // Click the last Edit button (from variables table)
+
+    // Wait for the form to appear
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('e.g. TEMP_THRESHOLD')).toBeInTheDocument();
+    });
 
     expect(screen.getByPlaceholderText('e.g. TEMP_THRESHOLD')).toHaveValue('TEMP_THRESHOLD');
     expect(screen.getByLabelText('Type')).toHaveValue('number');
@@ -231,6 +238,11 @@ describe('ModuleDetailPage', () => {
     const editButtons = screen.getAllByRole('button', { name: 'Edit' });
     await user.click(editButtons[editButtons.length - 1]); // Click the last Edit button (from variables table)
     
+    // Wait for the form to appear
+    await waitFor(() => {
+      expect(screen.getByLabelText('Description')).toBeInTheDocument();
+    });
+
     await user.clear(screen.getByLabelText('Description'));
     await user.type(screen.getByLabelText('Description'), 'new desc');
     await user.click(screen.getByRole('button', { name: 'Save' }));
