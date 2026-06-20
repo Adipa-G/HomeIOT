@@ -241,7 +241,7 @@ export default function ModuleDetailPage() {
 
   const inferSchema = useMutation({
     mutationFn: (varName: string) => api.post(`/api/admin/modules/${moduleId}/variables/${encodeURIComponent(varName)}/infer-schema`, {}),
-    onSuccess: async (response, varName) => {
+    onSuccess: async () => {
       // Refetch the module data to get the updated schema from the server
       await qc.refetchQueries({ queryKey: ['module', moduleId] });
       toast('Schema inferred! Available fields are now visible when adding visualizations.');
