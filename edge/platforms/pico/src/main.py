@@ -125,6 +125,7 @@ def run_main() -> None:
         config=config,
         network=network,
         watchdog=watchdog,
+        updater=updater,
     )
 
 

@@ -19,12 +19,14 @@ def run_control_loop(
     config,
     network=None,
     watchdog=None,
+    updater=None,
     max_iterations=None,
 ):
     mode = "production"
     heartbeat_interval_ms = config.heartbeat_interval_ms
     dev_poll_interval_ms = config.dev_poll_interval_ms
     module_poll_interval_ms = config.module_assignment_poll_interval_ms
+    ota_poll_interval_ms = config.ota_poll_interval_ms
     power_cfg = getattr(config, "power", None)
     production_sleep_min_ms = getattr(power_cfg, "production_sleep_min_ms", PRODUCTION_SLEEP_MIN_MS)
     production_sleep_max_ms = getattr(power_cfg, "production_sleep_max_ms", PRODUCTION_SLEEP_MAX_MS)
@@ -39,6 +41,7 @@ def run_control_loop(
     next_heartbeat_ms = 0
     next_dev_poll_ms = 0
     next_module_poll_ms = 0
+    next_ota_poll_ms = 0
     next_network_retry_ms = 0
 
     last_dev_revision_hash = None
@@ -144,6 +147,20 @@ def run_control_loop(
                     module_runtime.update_assignment(assignment, now_ms=now)
                     logger.info("Module assignment reconciled", reconcile)
                 next_module_poll_ms = now + module_poll_interval_ms
+
+            if updater is not None and now >= next_ota_poll_ms:
+                try:
+                    update_info = updater.check()
+                except Exception as exc:
+                    logger.warn("OTA check threw exception", {"error": str(exc)})
+                    update_info = None
+                if update_info is not None:
+                    logger.info("OTA update available", {"version": update_info.version})
+                    try:
+                        updater.apply(update_info)
+                    except Exception as exc:
+                        logger.warn("OTA apply threw exception", {"error": str(exc)})
+                next_ota_poll_ms = now + ota_poll_interval_ms
 
             if mode == "development" and now >= next_dev_poll_ms:
                 try:

@@ -63,6 +63,7 @@ class Config:
         max_boot_attempts,
         dev_poll_interval_ms=2000,
         module_assignment_poll_interval_ms=60000,
+        ota_poll_interval_ms=3600000,
         current_version="0.0.0",
         logging=None,
         power=None,
@@ -76,6 +77,7 @@ class Config:
         self.max_boot_attempts = int(max_boot_attempts)
         self.dev_poll_interval_ms = int(dev_poll_interval_ms)
         self.module_assignment_poll_interval_ms = int(module_assignment_poll_interval_ms)
+        self.ota_poll_interval_ms = int(ota_poll_interval_ms)
         self.current_version = str(current_version)
         self.logging = logging or LoggingConfig()
         self.power = power or PowerConfig()
@@ -109,6 +111,7 @@ class Config:
             max_boot_attempts=int(data["max_boot_attempts"]),
             dev_poll_interval_ms=max(500, int(data.get("dev_poll_interval_ms", 2000))),
             module_assignment_poll_interval_ms=max(1000, int(data.get("module_assignment_poll_interval_ms", 60000))),
+            ota_poll_interval_ms=max(60000, int(data.get("ota_poll_interval_ms", 3600000))),
             current_version=data.get("current_version", "0.0.0"),
             logging=cls._load_logging_config(data.get("logging")),
             power=cls._load_power_config(data.get("power")),

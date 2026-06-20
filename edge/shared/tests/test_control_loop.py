@@ -159,6 +159,26 @@ class _FakeLogger:
         self.tick_calls += 1
 
 
+class _FakeUpdater:
+    def __init__(self, update_info=None, check_error=None, apply_error=None):
+        self.update_info = update_info
+        self.check_error = check_error
+        self.apply_error = apply_error
+        self.check_calls = 0
+        self.apply_calls = 0
+
+    def check(self):
+        self.check_calls += 1
+        if self.check_error is not None:
+            raise self.check_error
+        return self.update_info
+
+    def apply(self, update_info):
+        self.apply_calls += 1
+        if self.apply_error is not None:
+            raise self.apply_error
+
+
 def _config():
     return Config(
         device_id="esp32-001",
@@ -170,6 +190,7 @@ def _config():
         max_boot_attempts=3,
         dev_poll_interval_ms=2000,
         module_assignment_poll_interval_ms=60000,
+        ota_poll_interval_ms=3600000,
         current_version="1.0.0",
     )
 
@@ -827,4 +848,167 @@ def test_prefetch_uses_heartbeat_horizon_in_development_mode():
     assert device_control.prefetch_calls == 1
     assert device_control.prefetch_payloads[0][0]["module_id"] == "temp-reader"
 
+
+# OTA polling tests
+def test_control_loop_skips_ota_check_when_updater_is_none():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=_config(),
+        updater=None,
+        max_iterations=3,
+    )
+
+    # Should run normally without errors
+    assert module_runtime.tick_calls == 3
+    assert logger.warn_calls == 0
+
+
+def test_control_loop_performs_ota_check_at_interval():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    config = _config()
+    config.ota_poll_interval_ms = 5000
+    updater = _FakeUpdater(update_info=None)
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        updater=updater,
+        max_iterations=50,
+    )
+
+    # OTA check should be called (at least once)
+    assert updater.check_calls >= 1
+
+
+def test_control_loop_applies_ota_update_when_available():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    config = _config()
+    config.ota_poll_interval_ms = 5000
+
+    class _UpdateInfo:
+        version = "2.0.0"
+
+    updater = _FakeUpdater(update_info=_UpdateInfo())
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        updater=updater,
+        max_iterations=50,
+    )
+
+    assert updater.check_calls >= 1
+    assert updater.apply_calls == 1
+    assert any("OTA update available" in msg for msg, _ in logger.info_log)
+
+
+def test_control_loop_handles_ota_check_exception_and_continues():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    config = _config()
+    config.ota_poll_interval_ms = 5000
+    updater = _FakeUpdater(check_error=RuntimeError("ota api unavailable"))
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        updater=updater,
+        max_iterations=50,
+    )
+
+    assert updater.check_calls >= 1
+    assert updater.apply_calls == 0
+    assert logger.warn_calls >= 1
+    assert module_runtime.tick_calls == 50
+
+
+def test_control_loop_handles_ota_apply_exception_and_continues():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    config = _config()
+    config.ota_poll_interval_ms = 5000
+
+    class _UpdateInfo:
+        version = "2.0.0"
+
+    updater = _FakeUpdater(update_info=_UpdateInfo(), apply_error=RuntimeError("ota apply failed"))
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        updater=updater,
+        max_iterations=50,
+    )
+
+    assert updater.check_calls >= 1
+    assert updater.apply_calls == 1
+    assert logger.warn_calls >= 1
+    assert module_runtime.tick_calls == 50
+
+
+def test_control_loop_does_not_check_ota_when_network_disconnected():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 30000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    network = _FakeNetwork(connected=False, fail_connect=True)
+    config = _config()
+    config.ota_poll_interval_ms = 5000
+    updater = _FakeUpdater(update_info=None)
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        network=network,
+        updater=updater,
+        max_iterations=20,
+    )
+
+    # When network is disconnected and stays disconnected, OTA check should not run
+    assert updater.check_calls == 0
 
