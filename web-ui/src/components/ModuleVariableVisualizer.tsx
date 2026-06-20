@@ -7,12 +7,14 @@ export interface VisualizationConfig {
   decimals?: number;
   color?: string;
   thresholds?: Array<{ value: number; color: string }>;
+  historyPoints?: number; // Number of historical points to display (for line/bar charts)
 }
 
 interface ModuleVariableVisualizerProps {
   type: string;
   config?: VisualizationConfig | unknown;
   value: string | number | null;
+  values?: (string | number | null)[]; // Optional array of historical values (oldest to newest)
   displayName: string;
 }
 
@@ -206,37 +208,55 @@ function TextDisplayVisualization({ value, config }: { value: string | number | 
 }
 
 /**
- * Bar chart - simple SVG bar chart (for single value)
+ * Bar chart - shows multiple bars for historical values or single bar for current value
  */
-function BarChartVisualization({ value, config }: { value: number; config?: VisualizationConfig }) {
+function BarChartVisualization({ value, values, config }: { value: number; values?: (string | number | null)[]; config?: VisualizationConfig }) {
   const min = config?.min ?? 0;
   const max = config?.max ?? 100;
-  const clampedValue = Math.max(min, Math.min(max, value));
-  const percentage = ((clampedValue - min) / (max - min)) * 100;
-  const color = getThresholdColor(value, config?.thresholds);
+  
+  // Use historical values if available, otherwise just show current value
+  const dataPoints = values && values.length > 0 
+    ? values.map(v => typeof v === 'string' ? parseFloat(v) : v).filter(v => v !== null) as number[]
+    : [value];
+  
+  const barWidth = Math.max(6, Math.floor(80 / dataPoints.length));
+  const spacing = Math.max(1, Math.floor((90 - barWidth * dataPoints.length) / (dataPoints.length - 1)));
+  const totalWidth = barWidth * dataPoints.length + spacing * (dataPoints.length - 1);
+  const startX = 50 - totalWidth / 2;
 
   return (
     <div className="flex items-end gap-2 h-24">
-      <svg width="80" height="100" viewBox="0 0 100 120" className="flex-1">
+      <svg width="100" height="100" viewBox="0 0 100 120" className="flex-1">
         {/* Grid lines */}
         <line x1="5" y1="100" x2="95" y2="100" stroke="#e5e7eb" strokeWidth="1" />
         <line x1="5" y1="70" x2="95" y2="70" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2" />
         <line x1="5" y1="40" x2="95" y2="40" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2" />
-        {/* Bar */}
-        <rect
-          x="20"
-          y={100 - (percentage / 100) * 60}
-          width="60"
-          height={(percentage / 100) * 60}
-          fill={color}
-          rx="2"
-        />
+        {/* Bars */}
+        {dataPoints.map((val, i) => {
+          const clampedVal = Math.max(min, Math.min(max, val));
+          const percentage = ((clampedVal - min) / (max - min)) * 100;
+          const barColor = getThresholdColor(val, config?.thresholds);
+          const barHeight = (percentage / 100) * 60;
+          const x = startX + i * (barWidth + spacing);
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={100 - barHeight}
+              width={barWidth}
+              height={barHeight}
+              fill={barColor}
+              opacity={i === dataPoints.length - 1 ? 1 : 0.6}
+              rx="1"
+            />
+          );
+        })}
         {/* Axis */}
         <line x1="5" y1="100" x2="5" y2="20" stroke="#d1d5db" strokeWidth="1" />
         <line x1="5" y1="100" x2="95" y2="100" stroke="#d1d5db" strokeWidth="1" />
       </svg>
       <div className="flex flex-col items-end gap-1">
-        <div className="text-lg font-semibold" style={{ color }}>
+        <div className="text-lg font-semibold" style={{ color: getThresholdColor(value, config?.thresholds) }}>
           {formatValue(value, config?.decimals, '')}
         </div>
         {config?.unit && <div className="text-xs text-gray-500">{config.unit}</div>}
@@ -246,62 +266,61 @@ function BarChartVisualization({ value, config }: { value: number; config?: Visu
 }
 
 /**
- * Line chart - simple SVG line chart (shows trend)
+ * Line chart - shows trend line for historical values or single point for current value
  */
-function LineChartVisualization({ value, config }: { value: number; config?: VisualizationConfig }) {
+function LineChartVisualization({ value, values, config }: { value: number; values?: (string | number | null)[]; config?: VisualizationConfig }) {
   const min = config?.min ?? 0;
   const max = config?.max ?? 100;
-  const clampedValue = Math.max(min, Math.min(max, value));
-  const percentage = ((clampedValue - min) / (max - min)) * 100;
-  const color = getThresholdColor(value, config?.thresholds);
-
-  // Simulate a trend line (single point with historical context for demo)
-  const points = [
-    { x: 10, y: 50 },
-    { x: 30, y: 40 },
-    { x: 50, y: 60 },
-    { x: 70, y: (percentage / 100) * 60 },
-    { x: 90, y: (percentage / 100) * 70 },
-  ];
+  
+  // Use historical values if available, otherwise just show current value
+  const dataPoints = values && values.length > 0 
+    ? values.map(v => typeof v === 'string' ? parseFloat(v) : v).filter(v => v !== null) as number[]
+    : [value];
+  
+  // Map data points to SVG coordinates (distributed across width)
+  const numPoints = Math.min(dataPoints.length, 10); // Limit to 10 points for readability
+  const lastPoints = dataPoints.slice(-numPoints);
+  const xStep = 80 / Math.max(numPoints - 1, 1);
+  const points = lastPoints.map((v, i) => {
+    const clampedValue = Math.max(min, Math.min(max, v));
+    const percentage = ((clampedValue - min) / (max - min)) * 100;
+    return {
+      x: 10 + i * xStep,
+      y: (percentage / 100) * 60,
+      value: v,
+    };
+  });
 
   const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${100 - p.y}`).join(' ');
+  const fillPath = pathData + ` L ${points[points.length - 1]?.x ?? 90} 100 L 10 100 Z`;
+  const fillColor = getThresholdColor(dataPoints[dataPoints.length - 1] ?? value, config?.thresholds);
 
   return (
-    <div className="flex flex-col gap-2">
-      <svg width="100%" height="100" viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full">
-        {/* Grid */}
+    <div className="flex flex-col gap-2 items-center">
+      <svg width="140" height="100" viewBox="0 0 100 120" className="drop-shadow-sm">
+        {/* Grid lines */}
         <line x1="5" y1="100" x2="95" y2="100" stroke="#e5e7eb" strokeWidth="1" />
         <line x1="5" y1="70" x2="95" y2="70" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2" />
         <line x1="5" y1="40" x2="95" y2="40" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2" />
-
-        {/* Area under curve */}
-        <path
-          d={`${pathData} L 95 100 L 5 100 Z`}
-          fill={color}
-          opacity="0.1"
-        />
-
+        {/* Fill under line */}
+        <path d={fillPath} fill={fillColor} opacity="0.15" />
         {/* Line */}
-        <path
-          d={pathData}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Current value point */}
-        <circle cx="90" cy={100 - (percentage / 100) * 60} r="2.5" fill={color} />
-
-        {/* Axes */}
+        <path d={pathData} fill="none" stroke={fillColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Dots */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={100 - p.y} r="2" fill={fillColor} />
+        ))}
+        {/* Axis */}
         <line x1="5" y1="100" x2="5" y2="20" stroke="#d1d5db" strokeWidth="1" />
         <line x1="5" y1="100" x2="95" y2="100" stroke="#d1d5db" strokeWidth="1" />
       </svg>
-      <div className="text-center text-sm">
-        <span className="font-semibold" style={{ color }}>
+      <div className="text-center">
+        <div className="text-lg font-semibold" style={{ color: fillColor }}>
           {formatValue(value, config?.decimals, config?.unit)}
-        </span>
+        </div>
+        <div className="text-xs text-gray-500">
+          {dataPoints.length > 1 ? `${dataPoints.length} points` : 'current'}
+        </div>
       </div>
     </div>
   );
@@ -314,6 +333,7 @@ export const ModuleVariableVisualizer: React.FC<ModuleVariableVisualizerProps> =
   type,
   config,
   value,
+  values,
   displayName,
 }) => {
   // Parse numeric value
@@ -336,8 +356,8 @@ export const ModuleVariableVisualizer: React.FC<ModuleVariableVisualizerProps> =
       {type === 'progress_bar' && <ProgressBarVisualization value={numValue} config={visualizationConfig} />}
       {type === 'number_display' && <NumberDisplayVisualization value={numValue} config={visualizationConfig} />}
       {type === 'text_display' && <TextDisplayVisualization value={value} config={visualizationConfig} />}
-      {type === 'bar_chart' && <BarChartVisualization value={numValue} config={visualizationConfig} />}
-      {type === 'line_chart' && <LineChartVisualization value={numValue} config={visualizationConfig} />}
+      {type === 'bar_chart' && <BarChartVisualization value={numValue} values={values} config={visualizationConfig} />}
+      {type === 'line_chart' && <LineChartVisualization value={numValue} values={values} config={visualizationConfig} />}
       {!type && (
         <div className="text-center text-sm text-gray-500">
           Unknown visualization type

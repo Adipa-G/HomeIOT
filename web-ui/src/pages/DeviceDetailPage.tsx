@@ -73,6 +73,29 @@ export default function DeviceDetailPage() {
 
   if (isLoading || !device) return <p className="text-sm text-gray-500">Loading…</p>;
 
+  // Helper to extract historical values for a json_path from recent module results
+  const getHistoricalValues = (moduleId: string, jsonPath: string, config: any): (string | number | null)[] | undefined => {
+    const historyPoints = (config as any)?.historyPoints;
+    if (!historyPoints || historyPoints < 2) return undefined;
+    
+    const results = moduleResults.data?.items?.filter((r: ModuleResultListItem) => 
+      r.module_id === moduleId && r.output && r.status === 'success'
+    ) ?? [];
+    
+    if (results.length === 0) return undefined;
+    
+    // Get last N results and extract values
+    const recentResults = results.slice(-historyPoints);
+    return recentResults.map((r: ModuleResultListItem) => {
+      try {
+        const outputData = JSON.parse(r.output || '{}');
+        return extractJsonValue(outputData, jsonPath);
+      } catch {
+        return null;
+      }
+    });
+  };
+
   const tabClass = (t: string) =>
     `px-4 py-2 text-sm font-medium ${tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`;
 
@@ -214,15 +237,17 @@ export default function DeviceDetailPage() {
                         // Show visualizations
                         return (
                           <div className="mt-3 space-y-2">
-                            {visualizations.map((viz) => {
+                            {visualizations.map((viz, idx) => {
                               const value = extractJsonValue(outputData, viz.json_path);
                               if (value === null) return null;
+                              const historicalValues = getHistoricalValues(r.module_id, viz.json_path, viz.visualization_config);
                               return (
                                 <ModuleVariableVisualizer
-                                  key={viz.json_path}
+                                  key={`${r.id}-${idx}`}
                                   type={viz.visualization_type || 'number_display'}
                                   config={viz.visualization_config}
                                   value={value}
+                                  values={historicalValues}
                                   displayName={viz.display_name}
                                 />
                               );
