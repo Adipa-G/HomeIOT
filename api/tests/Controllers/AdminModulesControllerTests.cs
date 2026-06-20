@@ -450,4 +450,219 @@ public class AdminModulesControllerTests
         var payload = Assert.IsType<StatusResponse>(ok.Value);
         Assert.Equal("ok", payload.Status);
     }
+
+    // ── Visualization endpoints ───────────────────────────────────────────
+
+    [Fact]
+    public async Task GetVisualizations_ReturnsOkWithVisualizations()
+    {
+        var vizs = new List<ModuleVariableVisualizationRecord>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ModuleVariableDefId = Guid.NewGuid(),
+                JsonPath = "temp",
+                DisplayName = "Temperature Gauge",
+                VisualizationType = "gauge",
+                VisualizationConfig = System.Text.Json.JsonSerializer.Serialize(new { min = 0, max = 100 }),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            },
+        };
+        _mockVariableService
+            .Setup(s => s.GetVisualizationsForVariableAsync("mod-1", "temp", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(vizs);
+
+        var result = await _controller.GetVisualizations("mod-1", "temp", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<List<ModuleVariableVisualizationItem>>(ok.Value);
+        Assert.Single(payload);
+        Assert.Equal("Temperature Gauge", payload[0].DisplayName);
+    }
+
+    [Fact]
+    public async Task GetVisualizations_EmptyList_ReturnsOk()
+    {
+        _mockVariableService
+            .Setup(s => s.GetVisualizationsForVariableAsync("mod-1", "temp", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ModuleVariableVisualizationRecord>());
+
+        var result = await _controller.GetVisualizations("mod-1", "temp", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<List<ModuleVariableVisualizationItem>>(ok.Value);
+        Assert.Empty(payload);
+    }
+
+    [Fact]
+    public async Task CreateVisualization_ValidRequest_Returns201()
+    {
+        var vizId = Guid.NewGuid();
+        var request = new UpsertModuleVariableVisualizationRequest(
+            "temperature",
+            "Temperature Gauge",
+            "gauge",
+            new { min = 0, max = 100 }
+        );
+
+        var created = new ModuleVariableVisualizationRecord
+        {
+            Id = vizId,
+            ModuleVariableDefId = Guid.NewGuid(),
+            JsonPath = "temperature",
+            DisplayName = "Temperature Gauge",
+            VisualizationType = "gauge",
+            VisualizationConfig = System.Text.Json.JsonSerializer.Serialize(request.VisualizationConfig),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+
+        _mockVariableService
+            .Setup(s => s.UpsertVisualizationAsync("mod-1", "temp", "new", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(created);
+
+        var result = await _controller.CreateVisualization("mod-1", "temp", request, CancellationToken.None);
+
+        var createdResult = Assert.IsType<CreatedResult>(result);
+        Assert.Equal($"/api/admin/modules/mod-1/variables/temp/visualizations/{vizId}", createdResult.Location);
+        var payload = Assert.IsType<ModuleVariableVisualizationItem>(createdResult.Value);
+        Assert.Equal("Temperature Gauge", payload.DisplayName);
+    }
+
+    [Fact]
+    public async Task CreateVisualization_NullRequest_Returns400()
+    {
+        var result = await _controller.CreateVisualization("mod-1", "temp", null, CancellationToken.None);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateVisualization_ServiceReturnsNull_Returns404()
+    {
+        var request = new UpsertModuleVariableVisualizationRequest(
+            "temp",
+            "Temp",
+            "gauge",
+            null
+        );
+
+        _mockVariableService
+            .Setup(s => s.UpsertVisualizationAsync("no-mod", "temp", "new", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ModuleVariableVisualizationRecord?)null);
+
+        var result = await _controller.CreateVisualization("no-mod", "temp", request, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateVisualization_ValidRequest_ReturnsOk()
+    {
+        var vizId = Guid.NewGuid();
+        var request = new UpsertModuleVariableVisualizationRequest(
+            "temperature.current",
+            "Current Temperature",
+            "line_chart",
+            new { historyPoints = 5 }
+        );
+
+        var updated = new ModuleVariableVisualizationRecord
+        {
+            Id = vizId,
+            ModuleVariableDefId = Guid.NewGuid(),
+            JsonPath = "temperature.current",
+            DisplayName = "Current Temperature",
+            VisualizationType = "line_chart",
+            VisualizationConfig = System.Text.Json.JsonSerializer.Serialize(request.VisualizationConfig),
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+
+        _mockVariableService
+            .Setup(s => s.UpsertVisualizationAsync("mod-1", "temp", vizId.ToString(), request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updated);
+
+        var result = await _controller.UpdateVisualization("mod-1", "temp", vizId, request, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<ModuleVariableVisualizationItem>(ok.Value);
+        Assert.Equal("Current Temperature", payload.DisplayName);
+    }
+
+    [Fact]
+    public async Task UpdateVisualization_ServiceReturnsNull_Returns404()
+    {
+        var vizId = Guid.NewGuid();
+        var request = new UpsertModuleVariableVisualizationRequest(
+            "temp",
+            "Temp",
+            "gauge",
+            null
+        );
+
+        _mockVariableService
+            .Setup(s => s.UpsertVisualizationAsync("mod-1", "temp", vizId.ToString(), request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ModuleVariableVisualizationRecord?)null);
+
+        var result = await _controller.UpdateVisualization("mod-1", "temp", vizId, request, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteVisualization_Existing_ReturnsOk()
+    {
+        var vizId = Guid.NewGuid();
+        _mockVariableService
+            .Setup(s => s.DeleteVisualizationAsync("mod-1", "temp", vizId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await _controller.DeleteVisualization("mod-1", "temp", vizId, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
+    }
+
+    [Fact]
+    public async Task DeleteVisualization_NotFound_Returns404()
+    {
+        var vizId = Guid.NewGuid();
+        _mockVariableService
+            .Setup(s => s.DeleteVisualizationAsync("mod-1", "temp", vizId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await _controller.DeleteVisualization("mod-1", "temp", vizId, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task InferSchema_WithResults_ReturnsOkWithSchema()
+    {
+        var schema = new { type = "object", properties = new { temperature = new { type = "number" } } };
+        _mockVariableService
+            .Setup(s => s.InferJsonSchemaAsync("mod-1", "sensor", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(schema);
+
+        var result = await _controller.InferJsonSchema("mod-1", "sensor", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(ok.Value);
+    }
+
+    [Fact]
+    public async Task InferSchema_NoResults_Returns404()
+    {
+        _mockVariableService
+            .Setup(s => s.InferJsonSchemaAsync("mod-1", "sensor", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((object?)null);
+
+        var result = await _controller.InferJsonSchema("mod-1", "sensor", CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+    }
 }

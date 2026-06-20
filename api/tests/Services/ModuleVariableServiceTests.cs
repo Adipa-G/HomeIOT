@@ -405,4 +405,262 @@ public class ModuleVariableServiceTests : IDisposable
         var ok = await _service.DeleteVariableValueAsync(assignment.Id, "GHOST");
         Assert.False(ok);
     }
+
+    // ── GetVisualizationsForVariable ──────────────────────────────────────
+
+    [Fact]
+    public async Task GetVisualizations_UnknownModule_ReturnsEmpty()
+    {
+        var result = await _service.GetVisualizationsForVariableAsync("no-module", "temp");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetVisualizations_UnknownVariable_ReturnsEmpty()
+    {
+        await SeedModuleAsync("mod-viz");
+        var result = await _service.GetVisualizationsForVariableAsync("mod-viz", "unknown");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetVisualizations_ReturnsOrderedByDisplayName()
+    {
+        var def = await SeedModuleAsync("mod-viz2");
+        var varDef = await SeedVarDefAsync(def.Id, "temp", "number");
+
+        // Seed visualizations in non-alphabetical order
+        _db.ModuleVariableVisualizations.Add(new ModuleVariableVisualizationRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleVariableDefId = varDef.Id,
+            JsonPath = "temp",
+            DisplayName = "Zebra",
+            VisualizationType = "gauge",
+            VisualizationConfig = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        _db.ModuleVariableVisualizations.Add(new ModuleVariableVisualizationRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleVariableDefId = varDef.Id,
+            JsonPath = "temp",
+            DisplayName = "Apple",
+            VisualizationType = "gauge",
+            VisualizationConfig = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetVisualizationsForVariableAsync("mod-viz2", "temp");
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Apple", result[0].DisplayName);
+        Assert.Equal("Zebra", result[1].DisplayName);
+    }
+
+    // ── UpsertVisualization ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpsertVisualization_UnknownModule_ReturnsNull()
+    {
+        var req = new UpsertModuleVariableVisualizationRequest(
+            "temp",
+            "Temp Gauge",
+            "gauge",
+            new { min = 0, max = 100 }
+        );
+        var result = await _service.UpsertVisualizationAsync("no-module", "temp", "new", req);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task UpsertVisualization_UnknownVariable_ReturnsNull()
+    {
+        await SeedModuleAsync("mod-viz3");
+        var req = new UpsertModuleVariableVisualizationRequest(
+            "temp",
+            "Temp",
+            "gauge",
+            null
+        );
+        var result = await _service.UpsertVisualizationAsync("mod-viz3", "unknown", "new", req);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task UpsertVisualization_CreateNew_ReturnsRecord()
+    {
+        var def = await SeedModuleAsync("mod-viz4");
+        await SeedVarDefAsync(def.Id, "temperature", "number");
+
+        var req = new UpsertModuleVariableVisualizationRequest(
+            "temperature",
+            "Temperature Gauge",
+            "gauge",
+            new { min = 0, max = 100, unit = "°C" }
+        );
+
+        var result = await _service.UpsertVisualizationAsync("mod-viz4", "temperature", "new", req);
+
+        Assert.NotNull(result);
+        Assert.Equal("temperature", result!.JsonPath);
+        Assert.Equal("Temperature Gauge", result.DisplayName);
+        Assert.Equal("gauge", result.VisualizationType);
+        Assert.NotNull(result.VisualizationConfig);
+    }
+
+    [Fact]
+    public async Task UpsertVisualization_UpdateExisting_ChangesValues()
+    {
+        var def = await SeedModuleAsync("mod-viz5");
+        var varDef = await SeedVarDefAsync(def.Id, "temp", "number");
+
+        var vizId = Guid.NewGuid();
+        _db.ModuleVariableVisualizations.Add(new ModuleVariableVisualizationRecord
+        {
+            Id = vizId,
+            ModuleVariableDefId = varDef.Id,
+            JsonPath = "temp",
+            DisplayName = "Old Name",
+            VisualizationType = "gauge",
+            VisualizationConfig = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await _db.SaveChangesAsync();
+
+        var req = new UpsertModuleVariableVisualizationRequest(
+            "temperature.current",
+            "Updated Name",
+            "line_chart",
+            new { historyPoints = 5 }
+        );
+
+        var result = await _service.UpsertVisualizationAsync("mod-viz5", "temp", vizId.ToString(), req);
+
+        Assert.NotNull(result);
+        Assert.Equal("temperature.current", result!.JsonPath);
+        Assert.Equal("Updated Name", result.DisplayName);
+        Assert.Equal("line_chart", result.VisualizationType);
+
+        // Verify only one record exists
+        var count = await _db.ModuleVariableVisualizations.CountAsync();
+        Assert.Equal(1, count);
+    }
+
+    // ── DeleteVisualization ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteVisualization_Existing_ReturnsTrue()
+    {
+        var def = await SeedModuleAsync("mod-del");
+        var varDef = await SeedVarDefAsync(def.Id, "temp");
+        var vizId = Guid.NewGuid();
+
+        _db.ModuleVariableVisualizations.Add(new ModuleVariableVisualizationRecord
+        {
+            Id = vizId,
+            ModuleVariableDefId = varDef.Id,
+            JsonPath = "temp",
+            DisplayName = "Temp",
+            VisualizationType = "gauge",
+            VisualizationConfig = null,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await _db.SaveChangesAsync();
+
+        var ok = await _service.DeleteVisualizationAsync("mod-del", "temp", vizId);
+
+        Assert.True(ok);
+        Assert.Equal(0, await _db.ModuleVariableVisualizations.CountAsync());
+    }
+
+    [Fact]
+    public async Task DeleteVisualization_UnknownModule_ReturnsFalse()
+    {
+        var ok = await _service.DeleteVisualizationAsync("no-module", "temp", Guid.NewGuid());
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public async Task DeleteVisualization_UnknownVariable_ReturnsFalse()
+    {
+        await SeedModuleAsync("mod-del2");
+        var ok = await _service.DeleteVisualizationAsync("mod-del2", "unknown", Guid.NewGuid());
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public async Task DeleteVisualization_UnknownVisualization_ReturnsFalse()
+    {
+        var def = await SeedModuleAsync("mod-del3");
+        await SeedVarDefAsync(def.Id, "temp");
+        var ok = await _service.DeleteVisualizationAsync("mod-del3", "temp", Guid.NewGuid());
+        Assert.False(ok);
+    }
+
+    // ── InferJsonSchema ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InferJsonSchema_UnknownModule_ReturnsNull()
+    {
+        var result = await _service.InferJsonSchemaAsync("no-module", "temp");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_UnknownVariable_ReturnsNull()
+    {
+        await SeedModuleAsync("mod-schema");
+        var result = await _service.InferJsonSchemaAsync("mod-schema", "unknown");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_NoModuleResults_ReturnsNull()
+    {
+        var def = await SeedModuleAsync("mod-schema2");
+        await SeedVarDefAsync(def.Id, "temp", "number");
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema2", "temp");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_WithModuleResult_InfersSchema()
+    {
+        var def = await SeedModuleAsync("mod-schema3");
+        await SeedVarDefAsync(def.Id, "sensor", "json");
+
+        // Add module result with variable values
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema3",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = null,
+            VariableValues = System.Text.Json.JsonSerializer.Serialize(new { sensor = new { temperature = 25.5, humidity = 60 } }),
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema3", "sensor");
+
+        Assert.NotNull(result);
+        // Verify the variable def was updated with the inferred schema
+        var updatedVarDef = await _db.ModuleVariableDefs.FirstAsync(v => v.Name == "sensor");
+        Assert.NotNull(updatedVarDef.InferredJsonSchema);
+    }
 }
