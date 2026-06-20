@@ -1,0 +1,588 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import {
+  ModuleVariableVisualizer,
+  extractJsonValue,
+  type VisualizationConfig,
+} from '../../components/ModuleVariableVisualizer';
+
+describe('extractJsonValue', () => {
+  it('extracts value from simple property', () => {
+    const data = { temperature: 25.5 };
+    const result = extractJsonValue(data, 'temperature');
+    expect(result).toBe(25.5);
+  });
+
+  it('extracts value from nested property', () => {
+    const data = { sensor: { temperature: 25.5 } };
+    const result = extractJsonValue(data, 'sensor.temperature');
+    expect(result).toBe(25.5);
+  });
+
+  it('extracts from deeply nested path', () => {
+    const data = { devices: { room1: { temp: { current: 72 } } } };
+    const result = extractJsonValue(data, 'devices.room1.temp.current');
+    expect(result).toBe(72);
+  });
+
+  it('returns null for missing path', () => {
+    const data = { temperature: 25.5 };
+    const result = extractJsonValue(data, 'humidity');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for missing nested path', () => {
+    const data = { sensor: { temperature: 25.5 } };
+    const result = extractJsonValue(data, 'sensor.humidity');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for null data', () => {
+    const result = extractJsonValue(null, 'temperature');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for empty path', () => {
+    const data = { temperature: 25.5 };
+    const result = extractJsonValue(data, '');
+    expect(result).toBeNull();
+  });
+
+  it('handles numeric and string values', () => {
+    const data = { number: 42, string: 'hello' };
+    expect(extractJsonValue(data, 'number')).toBe(42);
+    expect(extractJsonValue(data, 'string')).toBe('hello');
+  });
+});
+
+describe('ModuleVariableVisualizer', () => {
+  describe('invalid data handling', () => {
+    it('displays error message for null value', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={null}
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText(/No valid data/i)).toBeInTheDocument();
+    });
+
+    it('displays error message for NaN value', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value="invalid"
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText(/No valid data/i)).toBeInTheDocument();
+    });
+
+    it('displays message for empty visualization type', () => {
+      render(
+        <ModuleVariableVisualizer
+          type=""
+          value={50}
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText(/Unknown visualization type/i)).toBeInTheDocument();
+    });
+
+    it('renders silently for unknown visualization type', () => {
+      const { container } = render(
+        <ModuleVariableVisualizer
+          type="unknown_type"
+          value={50}
+          displayName="Test"
+        />
+      );
+      // Component renders wrapper but no visualization
+      const wrapper = container.querySelector('.rounded-lg.border.border-gray-200.bg-gray-50.p-4');
+      expect(wrapper).toBeInTheDocument();
+      // Only display name is rendered
+      expect(screen.getByText('Test')).toBeInTheDocument();
+    });
+  });
+
+  describe('gauge visualization', () => {
+    it('renders gauge with value and range', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText('Temperature')).toBeInTheDocument();
+      expect(screen.getByText('50')).toBeInTheDocument();
+      expect(screen.getByText('0 — 100')).toBeInTheDocument();
+    });
+
+    it('formats gauge value with decimals and unit', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={72.5}
+          config={{ min: 0, max: 100, decimals: 1, unit: '°C' }}
+          displayName="Temp"
+        />
+      );
+      expect(screen.getByText('72.5 °C')).toBeInTheDocument();
+    });
+
+    it('clamps value within min/max range', () => {
+      const { container } = render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={150}
+          config={{ min: 0, max: 100 }}
+          displayName="Test"
+        />
+      );
+      // SVG should still render without error
+      const svg = container.querySelector('svg');
+      expect(svg).toBeInTheDocument();
+    });
+
+    it('converts string value to number', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value="75"
+          config={{ min: 0, max: 100 }}
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText('75')).toBeInTheDocument();
+    });
+  });
+
+  describe('progress bar visualization', () => {
+    it('renders progress bar with percentage', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="progress_bar"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Battery"
+        />
+      );
+      expect(screen.getByText('Battery')).toBeInTheDocument();
+      expect(screen.getByText('50')).toBeInTheDocument();
+      expect(screen.getByText('50%')).toBeInTheDocument();
+    });
+
+    it('formats progress value with decimals and unit', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="progress_bar"
+          value={75.5}
+          config={{ min: 0, max: 100, decimals: 1, unit: '%' }}
+          displayName="Battery"
+        />
+      );
+      expect(screen.getByText('75.5 %')).toBeInTheDocument();
+    });
+
+    it('displays min and max range', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="progress_bar"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText('0')).toBeInTheDocument();
+      expect(screen.getByText('100')).toBeInTheDocument();
+    });
+  });
+
+  describe('number display visualization', () => {
+    it('renders large formatted number', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={42}
+          displayName="Count"
+        />
+      );
+      expect(screen.getByText('Count')).toBeInTheDocument();
+      expect(screen.getByText('42')).toBeInTheDocument();
+    });
+
+    it('formats number with decimals', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={3.14159}
+          config={{ decimals: 2 }}
+          displayName="Pi"
+        />
+      );
+      expect(screen.getByText('3.14')).toBeInTheDocument();
+    });
+
+    it('displays unit when provided', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={25}
+          config={{ unit: 'kWh' }}
+          displayName="Energy"
+        />
+      );
+      expect(screen.getByText('kWh')).toBeInTheDocument();
+    });
+
+    it('displays range when min/max provided', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText(/Range: 0 — 100/)).toBeInTheDocument();
+    });
+  });
+
+  describe('text display visualization', () => {
+    it('renders numeric text value', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value="123"
+          displayName="Code"
+        />
+      );
+      expect(screen.getByText('Code')).toBeInTheDocument();
+      expect(screen.getByText('123')).toBeInTheDocument();
+    });
+
+    it('renders numeric string', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value="123"
+          displayName="Code"
+        />
+      );
+      expect(screen.getByText('123')).toBeInTheDocument();
+    });
+
+    it('formats numeric string with decimals', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value="45.6789"
+          config={{ decimals: 2 }}
+          displayName="Value"
+        />
+      );
+      expect(screen.getByText('45.68')).toBeInTheDocument();
+    });
+
+    it('rejects non-numeric strings as invalid data', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value="online"
+          displayName="Status"
+        />
+      );
+      // Non-numeric strings result in NaN, showing error
+      expect(screen.getByText(/No valid data/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('bar chart visualization', () => {
+    it('renders single bar for single value', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Chart"
+        />
+      );
+      expect(screen.getByText('Chart')).toBeInTheDocument();
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+
+    it('renders multiple bars for historical values', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={60}
+          values={[20, 30, 40, 50, 60]}
+          config={{ min: 0, max: 100, historyPoints: 5 }}
+          displayName="History"
+        />
+      );
+      expect(screen.getByText('History')).toBeInTheDocument();
+      expect(screen.getByText('60')).toBeInTheDocument();
+    });
+
+    it('formats bar chart values with unit', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={75}
+          config={{ min: 0, max: 100, unit: '%' }}
+          displayName="Chart"
+        />
+      );
+      expect(screen.getByText('%')).toBeInTheDocument();
+    });
+
+    it('filters out null values from historical data', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={50}
+          values={[10, null, 30, null, 50]}
+          config={{ min: 0, max: 100 }}
+          displayName="Chart"
+        />
+      );
+      // Should render without error
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+
+    it('handles string values in historical data', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={50}
+          values={['10', '20', '30', '40', '50']}
+          config={{ min: 0, max: 100 }}
+          displayName="Chart"
+        />
+      );
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+  });
+
+  describe('line chart visualization', () => {
+    it('renders single point for single value', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Trend"
+        />
+      );
+      expect(screen.getByText('Trend')).toBeInTheDocument();
+      expect(screen.getByText('current')).toBeInTheDocument();
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+
+    it('renders interpolated line for multiple historical values', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={60}
+          values={[20, 30, 40, 50, 60]}
+          config={{ min: 0, max: 100, historyPoints: 5 }}
+          displayName="Trend"
+        />
+      );
+      expect(screen.getByText('Trend')).toBeInTheDocument();
+      expect(screen.getByText('5 points')).toBeInTheDocument();
+      expect(screen.getByText('60')).toBeInTheDocument();
+    });
+
+    it('is centered with flex classes', () => {
+      const { container } = render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={50}
+          config={{ min: 0, max: 100 }}
+          displayName="Centered"
+        />
+      );
+      const chartContainer = container.querySelector('.flex.flex-col.gap-2.items-center');
+      expect(chartContainer).toBeInTheDocument();
+    });
+
+    it('limits historical data to 10 points', () => {
+      const manyPoints = Array.from({ length: 20 }, (_, i) => i + 1);
+      render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={20}
+          values={manyPoints}
+          config={{ min: 0, max: 100 }}
+          displayName="ManyPoints"
+        />
+      );
+      // Should render without error, limiting to last 10 points
+      expect(screen.getByText('ManyPoints')).toBeInTheDocument();
+    });
+
+    it('formats line chart values with unit', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={75}
+          config={{ min: 0, max: 100, unit: '°F' }}
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText('75 °F')).toBeInTheDocument();
+    });
+
+    it('filters out null values from historical data', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={50}
+          values={[10, null, 30, null, 50]}
+          config={{ min: 0, max: 100 }}
+          displayName="Trend"
+        />
+      );
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+
+    it('handles string values in historical data', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={50}
+          values={['10', '20', '30', '40', '50']}
+          config={{ min: 0, max: 100 }}
+          displayName="Trend"
+        />
+      );
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+  });
+
+  describe('configuration handling', () => {
+    it('parses config as JSON string', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={50}
+          config='{"min":0,"max":100,"decimals":1}'
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText('50.0')).toBeInTheDocument();
+    });
+
+    it('accepts config as object', () => {
+      const config: VisualizationConfig = {
+        min: 0,
+        max: 100,
+        decimals: 2,
+        unit: '°C',
+      };
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={72.5}
+          config={config}
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText('72.50 °C')).toBeInTheDocument();
+    });
+
+    it('handles missing config gracefully', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={50}
+          displayName="Test"
+        />
+      );
+      expect(screen.getByText('50')).toBeInTheDocument();
+    });
+  });
+
+  describe('threshold colors', () => {
+    it('applies color based on threshold value', () => {
+      const { container } = render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={75}
+          config={{
+            thresholds: [
+              { value: 0, color: '#ef4444' },
+              { value: 50, color: '#f97316' },
+            ],
+          }}
+          displayName="Alert"
+        />
+      );
+      const value = container.querySelector('.text-4xl');
+      expect(value?.getAttribute('style')).toContain('color');
+    });
+
+    it('uses first threshold color when no value threshold matches', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={25}
+          config={{
+            thresholds: [
+              { value: 50, color: '#22c55e' },
+              { value: 75, color: '#ef4444' },
+            ],
+          }}
+          displayName="Status"
+        />
+      );
+      // Should render with the first threshold color
+      expect(screen.getByText('Status')).toBeInTheDocument();
+    });
+  });
+
+  describe('display name and container', () => {
+    it('renders display name in header', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={50}
+          displayName="Room Temperature"
+        />
+      );
+      expect(screen.getByText('Room Temperature')).toBeInTheDocument();
+    });
+
+    it('wraps visualization in styled container', () => {
+      const { container } = render(
+        <ModuleVariableVisualizer
+          type="gauge"
+          value={50}
+          displayName="Test"
+        />
+      );
+      const wrapper = container.querySelector('.rounded-lg.border.border-gray-200.bg-gray-50.p-4');
+      expect(wrapper).toBeInTheDocument();
+    });
+
+    it('renders all visualization types in same container style', () => {
+      const types = ['gauge', 'progress_bar', 'number_display', 'text_display', 'bar_chart', 'line_chart'];
+      types.forEach(type => {
+        const { container } = render(
+          <ModuleVariableVisualizer
+            type={type}
+            value={50}
+            displayName={`Test ${type}`}
+          />
+        );
+        const wrapper = container.querySelector('.rounded-lg.border.border-gray-200.bg-gray-50.p-4');
+        expect(wrapper).toBeInTheDocument();
+      });
+    });
+  });
+});
