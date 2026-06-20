@@ -157,11 +157,11 @@ describe('ModuleDetailPage', () => {
     renderWithProviders(<ModuleDetailPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Variables')).toBeInTheDocument();
+      expect(screen.getByText('Input Variables')).toBeInTheDocument();
     });
 
     expect(screen.getByText('TEMP_THRESHOLD')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '+ Add Variable' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Add Input Variable' })).toBeInTheDocument();
   });
 
   it('saves a variable definition with server code', async () => {
@@ -172,11 +172,11 @@ describe('ModuleDetailPage', () => {
     renderWithProviders(<ModuleDetailPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Variables')).toBeInTheDocument();
+      expect(screen.getByText('Input Variables')).toBeInTheDocument();
     });
 
     // Open the form
-    await user.click(screen.getByRole('button', { name: '+ Add Variable' }));
+    await user.click(screen.getByRole('button', { name: '+ Add Input Variable' }));
 
     await user.type(screen.getByPlaceholderText('e.g. TEMP_THRESHOLD'), 'WINDOW_START');
     await user.selectOptions(screen.getByLabelText('Type'), 'string');
@@ -290,6 +290,170 @@ describe('ModuleDetailPage', () => {
           version: '1.0.0',
           interval_ms: 45000,
           timeout_ms: 7000,
+        }),
+      );
+    });
+  });
+
+  it('displays Output Variables section when output variables exist', async () => {
+    const moduleWithOutput = {
+      ...mockModule,
+      variable_defs: [
+        ...mockModule.variable_defs,
+        {
+          name: 'temperature',
+          type: 'json',
+          description: 'sensor temperature',
+          control_type: null, // OUTPUT variable
+          control_options: [],
+          has_server_code: false,
+          server_code: null,
+          inferred_json_schema: null,
+        },
+      ],
+    };
+
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/devices')) {
+        return { items: [], total: 0, offset: 0, limit: 200 };
+      }
+      return moduleWithOutput;
+    });
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Output Variables')).toBeInTheDocument();
+    });
+    expect(screen.getByText('temperature')).toBeInTheDocument();
+  });
+
+  it('infers schema when Schema button is clicked', async () => {
+    const user = userEvent.setup();
+    const moduleWithOutput = {
+      ...mockModule,
+      variable_defs: [
+        {
+          name: 'sensor_data',
+          type: 'json',
+          description: 'output data',
+          control_type: null,
+          control_options: [],
+          has_server_code: false,
+          server_code: null,
+          inferred_json_schema: null,
+        },
+      ],
+    };
+
+    vi.mocked(api.get)
+      .mockResolvedValueOnce(moduleWithOutput)
+      .mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 200 });
+    
+    vi.mocked(api.post).mockResolvedValue({
+      inferred_json_schema: { temp: 'number', status: 'string' },
+    });
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('sensor_data')).toBeInTheDocument();
+    });
+
+    const schemaButtons = screen.getAllByRole('button', { name: 'Schema' });
+    await user.click(schemaButtons[0]);
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        '/api/admin/modules/sensor-reader/variables/sensor_data/infer-schema',
+        {},
+      );
+    });
+  });
+
+  it('shows Visualizations button for output variables', async () => {
+    const user = userEvent.setup();
+    const moduleWithSchema = {
+      ...mockModule,
+      variable_defs: [
+        {
+          name: 'readings',
+          type: 'json',
+          description: 'sensor readings',
+          control_type: null,
+          control_options: [],
+          has_server_code: false,
+          server_code: null,
+          inferred_json_schema: JSON.stringify({ temperature: 'number', humidity: 'number' }),
+        },
+      ],
+    };
+
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/devices')) {
+        return { items: [], total: 0, offset: 0, limit: 200 };
+      }
+      return moduleWithSchema;
+    });
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('readings')).toBeInTheDocument();
+    });
+
+    // Check that Visualizations button is present for output variable
+    const vizButtons = screen.getAllByRole('button', { name: 'Visualizations' });
+    expect(vizButtons.length).toBeGreaterThan(0);
+  });
+
+  it('adds a new output variable', async () => {
+    const user = userEvent.setup();
+    const moduleWithOutput = {
+      ...mockModule,
+      variable_defs: [
+        {
+          name: 'temperature',
+          type: 'json',
+          description: 'temperature sensor',
+          control_type: null,
+          control_options: [],
+          has_server_code: false,
+          server_code: null,
+          inferred_json_schema: null,
+        },
+      ],
+    };
+
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/devices')) {
+        return { items: [], total: 0, offset: 0, limit: 200 };
+      }
+      return moduleWithOutput;
+    });
+    
+    vi.mocked(api.put).mockResolvedValue({});
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Output Variables')).toBeInTheDocument();
+    });
+
+    const addOutputVarButtons = screen.getAllByRole('button', { name: '+ Add Output Variable' });
+    await user.click(addOutputVarButtons[0]);
+
+    // Fill in the form with correct placeholder
+    const nameInput = screen.getByPlaceholderText('e.g. SENSOR_OUTPUT');
+    await user.type(nameInput, 'humidity');
+
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith(
+        '/api/admin/modules/sensor-reader/variables/humidity',
+        expect.objectContaining({
+          type: 'json',
         }),
       );
     });

@@ -42,7 +42,7 @@ public class ModuleVariableServiceTests : IDisposable
 
     private async Task<ModuleVariableDefRecord> SeedVarDefAsync(
         Guid moduleDefId, string name, string type = "string",
-        string? defaultValue = null, string? serverCode = null)
+        string? defaultValue = null, string? serverCode = null, string? controlType = null)
     {
         var v = new ModuleVariableDefRecord
         {
@@ -52,6 +52,7 @@ public class ModuleVariableServiceTests : IDisposable
             Type = type,
             DefaultValue = defaultValue,
             ServerCode = serverCode,
+            ControlType = controlType,
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -637,7 +638,8 @@ public class ModuleVariableServiceTests : IDisposable
         var def = await SeedModuleAsync("mod-schema3");
         await SeedVarDefAsync(def.Id, "sensor", "json");
 
-        // Add module result with variable values
+        // Add module result with output data (OUTPUT variable since ControlType is null)
+        // The inferred schema should be the schema of the entire output, not just the variable's value
         var moduleResult = new ModuleResultRecord
         {
             Id = Guid.NewGuid(),
@@ -648,8 +650,8 @@ public class ModuleVariableServiceTests : IDisposable
             Status = "success",
             ElapsedMs = 100,
             ErrorMessage = null,
-            Output = null,
-            VariableValues = System.Text.Json.JsonSerializer.Serialize(new { sensor = new { temperature = 25.5, humidity = 60 } }),
+            Output = System.Text.Json.JsonSerializer.Serialize(new { sensor = new { temperature = 25.5, humidity = 60 } }),
+            VariableValues = null,
             StartedAtUtc = DateTimeOffset.UtcNow,
             FinishedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -659,8 +661,279 @@ public class ModuleVariableServiceTests : IDisposable
         var result = await _service.InferJsonSchemaAsync("mod-schema3", "sensor");
 
         Assert.NotNull(result);
+        // Verify the schema is an object with the full output structure
+        Assert.True(result is Dictionary<string, object>);
+        var schemaDict = (Dictionary<string, object>)result;
+        Assert.Contains("sensor", schemaDict.Keys);
+        
         // Verify the variable def was updated with the inferred schema
         var updatedVarDef = await _db.ModuleVariableDefs.FirstAsync(v => v.Name == "sensor");
         Assert.NotNull(updatedVarDef.InferredJsonSchema);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_OutputVariable_InferrsFullOutputStructure()
+    {
+        var def = await SeedModuleAsync("mod-schema-full");
+        await SeedVarDefAsync(def.Id, "result", "json"); // OUTPUT variable (no control_type)
+
+        // Create output with multiple fields
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-full",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                temp = 25.5,
+                status = "ok",
+                humidity = 60
+            }),
+            VariableValues = null,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-full", "result");
+
+        Assert.NotNull(result);
+        Assert.True(result is Dictionary<string, object>);
+        var schemaDict = (Dictionary<string, object>)result;
+        // Should have all fields from the output
+        Assert.Contains("temp", schemaDict.Keys);
+        Assert.Contains("status", schemaDict.Keys);
+        Assert.Contains("humidity", schemaDict.Keys);
+        // Verify types
+        Assert.Equal("number", schemaDict["temp"]);
+        Assert.Equal("string", schemaDict["status"]);
+        Assert.Equal("number", schemaDict["humidity"]);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_InputVariable_InfersFromVariableValues()
+    {
+        var def = await SeedModuleAsync("mod-schema-input");
+        await SeedVarDefAsync(def.Id, "threshold", "number", null, null, "text"); // INPUT variable (has control_type)
+
+        // Create result with variable values (configuration)
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-input",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = null,
+            VariableValues = System.Text.Json.JsonSerializer.Serialize(new { threshold = 50 }),
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-input", "threshold");
+
+        Assert.NotNull(result);
+        Assert.Equal("number", result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_NestedObject_InfersNestedStructure()
+    {
+        var def = await SeedModuleAsync("mod-schema-nested");
+        await SeedVarDefAsync(def.Id, "data", "json");
+
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-nested",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                sensors = new
+                {
+                    temperature = 22.5,
+                    location = "room1"
+                },
+                metadata = new
+                {
+                    timestamp = "2026-06-21T00:00:00Z"
+                }
+            }),
+            VariableValues = null,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-nested", "data");
+
+        Assert.NotNull(result);
+        Assert.True(result is Dictionary<string, object>);
+        var schemaDict = (Dictionary<string, object>)result;
+        Assert.Contains("sensors", schemaDict.Keys);
+        Assert.Contains("metadata", schemaDict.Keys);
+        
+        // Verify nested structures are inferred
+        Assert.True(schemaDict["sensors"] is Dictionary<string, object>);
+        var sensorsSchema = (Dictionary<string, object>)schemaDict["sensors"];
+        Assert.Contains("temperature", sensorsSchema.Keys);
+        Assert.Contains("location", sensorsSchema.Keys);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_WithArrayField_InfersArrayType()
+    {
+        var def = await SeedModuleAsync("mod-schema-array");
+        await SeedVarDefAsync(def.Id, "readings", "json");
+
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-array",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                values = new int[] { 1, 2, 3, 4, 5 },
+                status = "ok"
+            }),
+            VariableValues = null,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-array", "readings");
+
+        Assert.NotNull(result);
+        Assert.True(result is Dictionary<string, object>);
+        var schemaDict = (Dictionary<string, object>)result;
+        Assert.Equal("array", schemaDict["values"]);
+        Assert.Equal("string", schemaDict["status"]);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_NoRecentExecution_ReturnsNull()
+    {
+        var def = await SeedModuleAsync("mod-schema-no-exec");
+        await SeedVarDefAsync(def.Id, "result", "json");
+
+        // No module result created
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-no-exec", "result");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_EmptyOutput_ReturnsNull()
+    {
+        var def = await SeedModuleAsync("mod-schema-empty");
+        await SeedVarDefAsync(def.Id, "result", "json");
+
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-empty",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = System.Text.Json.JsonSerializer.Serialize(new { }),
+            VariableValues = null,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-empty", "result");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_InvalidJson_ReturnsNull()
+    {
+        var def = await SeedModuleAsync("mod-schema-invalid");
+        await SeedVarDefAsync(def.Id, "result", "json");
+
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-invalid",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = "not-valid-json",
+            VariableValues = null,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.InferJsonSchemaAsync("mod-schema-invalid", "result");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task InferJsonSchema_UpdatesDatabase()
+    {
+        var def = await SeedModuleAsync("mod-schema-db");
+        var varDef = await SeedVarDefAsync(def.Id, "result", "json");
+        Assert.Null(varDef.InferredJsonSchema);
+
+        var moduleResult = new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleId = "mod-schema-db",
+            ModuleVersion = "1.0.0",
+            DeviceId = "dev-1",
+            RunId = "run-1",
+            Status = "success",
+            ElapsedMs = 100,
+            ErrorMessage = null,
+            Output = System.Text.Json.JsonSerializer.Serialize(new { value = 42 }),
+            VariableValues = null,
+            StartedAtUtc = DateTimeOffset.UtcNow,
+            FinishedAtUtc = DateTimeOffset.UtcNow,
+        };
+        _db.ModuleResults.Add(moduleResult);
+        await _db.SaveChangesAsync();
+
+        await _service.InferJsonSchemaAsync("mod-schema-db", "result");
+
+        var updatedVarDef = await _db.ModuleVariableDefs.FirstAsync(v => v.Id == varDef.Id);
+        Assert.NotNull(updatedVarDef.InferredJsonSchema);
+        Assert.Contains("value", updatedVarDef.InferredJsonSchema);
     }
 }

@@ -48,6 +48,9 @@ export default function ModuleDetailPage() {
   const [varControlOptions, setVarControlOptions] = useState('');
   const [varError, setVarError] = useState('');
   const [showVariableForm, setShowVariableForm] = useState(false);
+  const [outputVarName, setOutputVarName] = useState('');
+  const [outputVarError, setOutputVarError] = useState('');
+  const [showQuickAddOutputVariable, setShowQuickAddOutputVariable] = useState(false);
   const [inferringSchema, setInferringSchema] = useState(false);
   const [showVisualizationForm, setShowVisualizationForm] = useState(false);
   const [selectedVarForViz, setSelectedVarForViz] = useState<ModuleVariableDefItem | null>(null);
@@ -197,13 +200,53 @@ export default function ModuleDetailPage() {
     },
   });
 
+  const createOutputVariable = useMutation({
+    mutationFn: () => {
+      const trimmedName = outputVarName.trim();
+      if (!trimmedName) {
+        throw new Error('Output variable name is required.');
+      }
+      const body: UpsertVariableDefRequest = {
+        type: 'json',
+        default_value: null,
+        description: null,
+        server_code: null,
+        control_type: null,
+        control_options: null,
+      };
+      return api.put<ModuleVariableDefItem>(
+        `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(trimmedName)}`,
+        body,
+      );
+    },
+    onSuccess: () => {
+      setOutputVarName('');
+      setOutputVarError('');
+      setShowQuickAddOutputVariable(false);
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      toast('Output variable created');
+    },
+    onError: (err) => {
+      if (err instanceof ApiError) {
+        setOutputVarError(err.error.message);
+        return;
+      }
+      if (err instanceof Error) {
+        setOutputVarError(err.message);
+        return;
+      }
+      setOutputVarError('Failed to create output variable');
+    },
+  });
+
   const inferSchema = useMutation({
     mutationFn: (varName: string) => api.post(`/api/admin/modules/${moduleId}/variables/${encodeURIComponent(varName)}/infer-schema`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['module', moduleId] });
-      toast('Schema inferred');
+    onSuccess: async (response, varName) => {
+      // Refetch the module data to get the updated schema from the server
+      await qc.refetchQueries({ queryKey: ['module', moduleId] });
+      toast('Schema inferred! Available fields are now visible when adding visualizations.');
     },
-    onError: () => toast('Failed to infer schema', 'error'),
+    onError: () => toast('Failed to infer schema (no recent execution results found)', 'error'),
   });
 
   const upsertVisualization = useMutation({
@@ -339,6 +382,12 @@ export default function ModuleDetailPage() {
     setShowVariableForm(true);
   };
 
+  const startAddOutputVariable = () => {
+    setOutputVarName('');
+    setOutputVarError('');
+    setShowQuickAddOutputVariable(true);
+  };
+
   const startEditVariable = (v: ModuleVariableDefItem) => {
     setVarName(v.name);
     setVarType((v.type as 'string' | 'number' | 'boolean' | 'json') || 'string');
@@ -353,19 +402,29 @@ export default function ModuleDetailPage() {
 
   const startAddVisualization = (varDef: ModuleVariableDefItem) => {
     clearVisualizationForm();
-    setSelectedVarForViz(varDef);
-    setShowVisualizationForm(true);
+    // Directly fetch the latest data and update the query cache
+    api.get<ModuleDetailResponse>(`/api/admin/modules/${moduleId}`).then(freshData => {
+      qc.setQueryData(['module', moduleId], freshData);
+      const freshVar = freshData?.variable_defs?.find(v => v.name === varDef.name);
+      setSelectedVarForViz(freshVar || varDef);
+      setShowVisualizationForm(true);
+    });
   };
 
   const startEditVisualization = (varDef: ModuleVariableDefItem, viz: any) => {
     clearVisualizationForm();
-    setSelectedVarForViz(varDef);
-    setSelectedVizForEdit(viz.id);
-    setVizJsonPath(viz.json_path);
-    setVizDisplayName(viz.display_name);
-    setVizType(viz.visualization_type || '');
-    setVizConfig(viz.visualization_config ? JSON.stringify(viz.visualization_config) : '{}');
-    setShowVisualizationForm(true);
+    // Directly fetch the latest data and update the query cache
+    api.get<ModuleDetailResponse>(`/api/admin/modules/${moduleId}`).then(freshData => {
+      qc.setQueryData(['module', moduleId], freshData);
+      const freshVar = freshData?.variable_defs?.find(v => v.name === varDef.name);
+      setSelectedVarForViz(freshVar || varDef);
+      setSelectedVizForEdit(viz.id);
+      setVizJsonPath(viz.json_path);
+      setVizDisplayName(viz.display_name);
+      setVizType(viz.visualization_type || '');
+      setVizConfig(viz.visualization_config ? JSON.stringify(viz.visualization_config) : '{}');
+      setShowVisualizationForm(true);
+    });
   };
 
   return (
@@ -575,18 +634,18 @@ export default function ModuleDetailPage() {
               {/* Control Variables */}
               <div className="mb-8">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900">Variables {controlVars.length > 0 && <span className="text-sm font-normal text-gray-500">({controlVars.length})</span>}</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Input Variables {controlVars.length > 0 && <span className="text-sm font-normal text-gray-500">({controlVars.length})</span>}</h3>
                   <button
                     type="button"
                     onClick={startAddVariable}
                     className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
                   >
-                    + Add Variable
+                    + Add Input Variable
                   </button>
                 </div>
 
                 {controlVars.length === 0 ? (
-                  <p className="text-sm text-gray-500">No control variables yet.</p>
+                  <p className="text-sm text-gray-500">No input variables yet.</p>
                 ) : (
                   <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200">
                     <table className="w-full text-left text-sm">
@@ -626,10 +685,153 @@ export default function ModuleDetailPage() {
                 )}
               </div>
 
+              {/* Variable Form (Collapsible) */}
+              {showVariableForm && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="font-medium text-gray-900">{varName.trim() ? `Edit: ${varName}` : 'Add Variable'}</h4>
+                    <button
+                      type="button"
+                      onClick={() => { clearVariableForm(); setShowVariableForm(false); }}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600">
+                    Server code is scoped per variable. Editing a variable loads its current server code.
+                  </div>
+                  {varError && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-700">{varError}</p>}
+
+                  <div className="grid gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="var-name" className="mb-1 block text-xs text-gray-600">Variable name</label>
+                        <input
+                          id="var-name"
+                          value={varName}
+                          onChange={(e) => setVarName(e.target.value)}
+                          placeholder="e.g. TEMP_THRESHOLD"
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="var-type" className="mb-1 block text-xs text-gray-600">Type</label>
+                        <select
+                          id="var-type"
+                          value={varType}
+                          onChange={(e) => setVarType(e.target.value as 'string' | 'number' | 'boolean' | 'json')}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                        >
+                          <option value="string">string</option>
+                          <option value="number">number</option>
+                          <option value="boolean">boolean</option>
+                          <option value="json">json</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="var-default-value" className="mb-1 block text-xs text-gray-600">Default value</label>
+                        <input
+                          id="var-default-value"
+                          value={varDefaultValue}
+                          onChange={(e) => setVarDefaultValue(e.target.value)}
+                          placeholder="optional"
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="var-description" className="mb-1 block text-xs text-gray-600">Description</label>
+                        <input
+                          id="var-description"
+                          value={varDescription}
+                          onChange={(e) => setVarDescription(e.target.value)}
+                          placeholder="optional"
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="var-server-code" className="mb-1 block text-xs text-gray-600">Server code (optional)</label>
+                      <textarea
+                        id="var-server-code"
+                        value={varServerCode}
+                        onChange={(e) => setVarServerCode(e.target.value)}
+                        rows={6}
+                        className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm"
+                        placeholder={"// Example (C# script)\nreturn 42;"}
+                      />
+                    </div>
+                    <hr className="my-2" />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="var-control-type" className="mb-1 block text-xs text-gray-600">Control type (optional)</label>
+                        <select
+                          id="var-control-type"
+                          value={varControlType}
+                          onChange={(e) => setVarControlType(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                        >
+                          <option value="">— none —</option>
+                          <option value="text">text input</option>
+                          <option value="dropdown">dropdown</option>
+                          <option value="toggle">toggle</option>
+                        </select>
+                      </div>
+                      {varControlType === 'dropdown' && (
+                        <div>
+                          <label htmlFor="var-control-options" className="mb-1 block text-xs text-gray-600">Dropdown options (JSON array)</label>
+                          <input
+                            id="var-control-options"
+                            value={varControlOptions}
+                            onChange={(e) => setVarControlOptions(e.target.value)}
+                            placeholder='["Option1", "Option2", "Option3"]'
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-mono"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => upsertVariable.mutate()}
+                        disabled={!varName.trim() || upsertVariable.isPending}
+                        className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {upsertVariable.isPending ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { clearVariableForm(); setShowVariableForm(false); }}
+                        className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Output Variables */}
-              {outputVars.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="mb-4 text-lg font-medium text-gray-900">Output Variables <span className="text-sm font-normal text-gray-500">({outputVars.length})</span></h3>
+              <div className="mb-8">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900">Output Variables {outputVars.length > 0 && <span className="text-sm font-normal text-gray-500">({outputVars.length})</span>}</h3>
+                  <button
+                    type="button"
+                    onClick={startAddOutputVariable}
+                    className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+                  >
+                    + Add Output Variable
+                  </button>
+                </div>
+
+                {outputVars.length === 0 ? (
+                  <p className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                    No output variables yet. Output variables are used for displaying module execution results with visualizations and schema inference.
+                  </p>
+                ) : (
                   <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="w-full text-left text-sm">
                       <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
@@ -654,26 +856,43 @@ export default function ModuleDetailPage() {
                               >
                                 Visualizations
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInferringSchema(true);
+                                  inferSchema.mutate(v.name, {
+                                    onSettled: () => setInferringSchema(false),
+                                  });
+                                }}
+                                disabled={inferringSchema}
+                                className="text-amber-600 hover:underline text-xs disabled:opacity-50"
+                                title="Infer JSON structure from latest execution result"
+                              >
+                                Schema
+                              </button>
+                              <ConfirmModal title="Delete output variable?" description="Visualizations will also be removed." onConfirm={async () => { await deleteVariable.mutateAsync(v.name); }}>
+                                {(open) => <button onClick={open} className="text-red-600 hover:underline text-xs">Delete</button>}
+                              </ConfirmModal>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </>
           );
         })()}
 
-        {/* Variable Form (Collapsible) */}
-        {showVariableForm && (
+        {/* Quick Add Output Variable Form */}
+        {showQuickAddOutputVariable && (
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">{varName.trim() ? `Edit: ${varName}` : 'Add Variable'}</h4>
+              <h4 className="font-medium text-gray-900">Add Output Variable</h4>
               <button
                 type="button"
-                onClick={() => { clearVariableForm(); setShowVariableForm(false); }}
+                onClick={() => { setOutputVarName(''); setOutputVarError(''); setShowQuickAddOutputVariable(false); }}
                 className="text-gray-500 hover:text-gray-700"
               >
                 ✕
@@ -681,116 +900,40 @@ export default function ModuleDetailPage() {
             </div>
 
             <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600">
-              Server code is scoped per variable. Editing a variable loads its current server code.
+              Output variables display module execution results. They are automatically configured for visualizations and schema inference.
             </div>
-            {varError && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-700">{varError}</p>}
+            {outputVarError && <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-700">{outputVarError}</p>}
 
             <div className="grid gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="var-name" className="mb-1 block text-xs text-gray-600">Variable name</label>
-                  <input
-                    id="var-name"
-                    value={varName}
-                    onChange={(e) => setVarName(e.target.value)}
-                    placeholder="e.g. TEMP_THRESHOLD"
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="var-type" className="mb-1 block text-xs text-gray-600">Type</label>
-                  <select
-                    id="var-type"
-                    value={varType}
-                    onChange={(e) => setVarType(e.target.value as 'string' | 'number' | 'boolean' | 'json')}
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  >
-                    <option value="string">string</option>
-                    <option value="number">number</option>
-                    <option value="boolean">boolean</option>
-                    <option value="json">json</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="var-default-value" className="mb-1 block text-xs text-gray-600">Default value</label>
-                  <input
-                    id="var-default-value"
-                    value={varDefaultValue}
-                    onChange={(e) => setVarDefaultValue(e.target.value)}
-                    placeholder="optional"
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="var-description" className="mb-1 block text-xs text-gray-600">Description</label>
-                  <input
-                    id="var-description"
-                    value={varDescription}
-                    onChange={(e) => setVarDescription(e.target.value)}
-                    placeholder="optional"
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  />
-                </div>
-              </div>
               <div>
-                <label htmlFor="var-server-code" className="mb-1 block text-xs text-gray-600">Server code (optional)</label>
-                <textarea
-                  id="var-server-code"
-                  value={varServerCode}
-                  onChange={(e) => setVarServerCode(e.target.value)}
-                  rows={6}
-                  className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm"
-                  placeholder={"// Example (C# script)\nreturn 42;"}
+                <label htmlFor="output-var-name" className="mb-1 block text-xs text-gray-600">Variable name</label>
+                <input
+                  id="output-var-name"
+                  value={outputVarName}
+                  onChange={(e) => setOutputVarName(e.target.value)}
+                  placeholder="e.g. SENSOR_OUTPUT"
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  autoFocus
                 />
               </div>
-              <hr className="my-2" />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="var-control-type" className="mb-1 block text-xs text-gray-600">Control type (optional)</label>
-                  <select
-                    id="var-control-type"
-                    value={varControlType}
-                    onChange={(e) => setVarControlType(e.target.value)}
-                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  >
-                    <option value="">— none —</option>
-                    <option value="text">text input</option>
-                    <option value="dropdown">dropdown</option>
-                    <option value="toggle">toggle</option>
-                  </select>
-                </div>
-                {varControlType === 'dropdown' && (
-                  <div>
-                    <label htmlFor="var-control-options" className="mb-1 block text-xs text-gray-600">Dropdown options (JSON array)</label>
-                    <input
-                      id="var-control-options"
-                      value={varControlOptions}
-                      onChange={(e) => setVarControlOptions(e.target.value)}
-                      placeholder='["Option1", "Option2", "Option3"]'
-                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-mono"
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => upsertVariable.mutate()}
-                  disabled={!varName.trim() || upsertVariable.isPending}
-                  className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {upsertVariable.isPending ? 'Saving…' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { clearVariableForm(); setShowVariableForm(false); }}
-                  className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-              </div>
+            </div>
+
+            <div className="flex gap-2 pt-3">
+              <button
+                type="button"
+                onClick={() => createOutputVariable.mutate()}
+                disabled={!outputVarName.trim() || createOutputVariable.isPending}
+                className="rounded bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {createOutputVariable.isPending ? 'Creating…' : 'Create'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOutputVarName(''); setOutputVarError(''); setShowQuickAddOutputVariable(false); }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
@@ -806,11 +949,23 @@ export default function ModuleDetailPage() {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">Variable: {selectedVarForViz.name}</p>
                 {!selectedVizForEdit && selectedVarForViz.inferred_json_schema !== null && selectedVarForViz.inferred_json_schema !== undefined && (
-                  <div className="mt-2 rounded bg-blue-50 p-2">
-                    <p className="text-xs text-blue-700 font-mono">
-                      Available: {JSON.stringify(selectedVarForViz.inferred_json_schema).substring(0, 50)}...
-                    </p>
-                  </div>
+                  (() => {
+                    const schema = selectedVarForViz.inferred_json_schema;
+                    const schemaStr = typeof schema === 'string' ? schema : JSON.stringify(schema);
+                    const hasContent = schemaStr && schemaStr.length > 2; // More than just '{}'
+                    return hasContent ? (
+                      <div className="mt-2 rounded bg-blue-50 p-3">
+                        <p className="mb-2 text-xs font-semibold text-blue-900">Inferred Schema:</p>
+                        <pre className="overflow-x-auto text-xs text-blue-700 font-mono bg-white rounded p-2 border border-blue-200 max-h-32">
+                          {schemaStr}
+                        </pre>
+                      </div>
+                    ) : (
+                      <div className="mt-2 rounded bg-amber-50 p-2">
+                        <p className="text-xs text-amber-700">No schema inferred yet. Click <strong>Schema</strong> button to analyze recent execution results.</p>
+                      </div>
+                    );
+                  })()
                 )}
               </div>
 

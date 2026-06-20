@@ -134,40 +134,6 @@ const mockModuleResults = {
   total: 2,
 };
 
-const mockModuleHistory = {
-  items: [
-    {
-      id: 'r1',
-      device_id: 'esp32-001',
-      module_id: 'sensor_read',
-      module_version: '1.0.0',
-      run_id: 'run-001',
-      status: 'success',
-      elapsed_ms: 42,
-      error_message: null,
-      output: JSON.stringify({ temperature: 23.5 }),
-      variable_values: JSON.stringify({ TEMP_THRESHOLD: 28, MODE: 'AUTO' }),
-      started_at_utc: '2026-05-30T10:00:00Z',
-      finished_at_utc: '2026-05-30T10:00:00Z',
-    },
-    {
-      id: 'r3',
-      device_id: 'esp32-001',
-      module_id: 'sensor_read',
-      module_version: '1.0.0',
-      run_id: 'run-003',
-      status: 'error',
-      elapsed_ms: 3,
-      error_message: 'OSError: sensor timeout',
-      output: null,
-      variable_values: JSON.stringify({ TEMP_THRESHOLD: 28 }),
-      started_at_utc: '2026-05-30T09:50:00Z',
-      finished_at_utc: '2026-05-30T09:50:00Z',
-    },
-  ],
-  total: 2,
-};
-
 const mockModules = [
   {
     module_id: 'sensor_read',

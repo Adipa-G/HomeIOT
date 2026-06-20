@@ -416,35 +416,71 @@ public sealed class ModuleVariableService : IModuleVariableService
             .OrderByDescending(r => r.FinishedAtUtc)
             .FirstOrDefaultAsync(ct);
 
-        if (latestResult is null || string.IsNullOrEmpty(latestResult.VariableValues))
+        if (latestResult is null)
             return null;
 
-        // Parse the variable values JSON and extract the type info
-        try
+        // For OUTPUT variables (control_type is null), infer schema from the Output field
+        // Return the schema of the entire output (not just the variable's value), since JSON Path is used to extract specific fields
+        if (string.IsNullOrEmpty(varDef.ControlType) && !string.IsNullOrEmpty(latestResult.Output))
         {
-            var variableValues = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(latestResult.VariableValues);
-            if (variableValues is null || !variableValues.ContainsKey(variableName))
-                return null;
-
-            var value = variableValues[variableName];
-            var schema = InferSchemaFromValue(value);
-            
-            // Update the inferred schema in the database
-            var varDefForUpdate = await _db.ModuleVariableDefs
-                .FirstOrDefaultAsync(v => v.Id == varDef.Id, ct);
-            if (varDefForUpdate is not null)
+            try
             {
-                varDefForUpdate.InferredJsonSchema = System.Text.Json.JsonSerializer.Serialize(schema);
-                varDefForUpdate.UpdatedAtUtc = DateTimeOffset.UtcNow;
-                await _db.SaveChangesAsync(ct);
-            }
+                var output = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(latestResult.Output);
+                if (output is null || output.Count == 0)
+                    return null;
 
-            return schema;
+                var schema = InferSchemaFromValue(output);
+               
+                // Update the inferred schema in the database
+                var varDefForUpdate = await _db.ModuleVariableDefs
+                    .FirstOrDefaultAsync(v => v.Id == varDef.Id, ct);
+                if (varDefForUpdate is not null)
+                {
+                    varDefForUpdate.InferredJsonSchema = System.Text.Json.JsonSerializer.Serialize(schema);
+                    varDefForUpdate.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+                }
+
+                return schema;
+            }
+            catch
+            {
+                return null;
+            }
         }
-        catch
+        
+        // For INPUT variables (control_type is not null), infer schema from VariableValues
+        if (!string.IsNullOrEmpty(varDef.ControlType) && !string.IsNullOrEmpty(latestResult.VariableValues))
         {
-            return null;
+            try
+            {
+                var variableValues = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(latestResult.VariableValues);
+                if (variableValues is null || !variableValues.ContainsKey(variableName))
+                    return null;
+
+                var value = variableValues[variableName];
+                
+                var schema = InferSchemaFromValue(value);
+                
+                // Update the inferred schema in the database
+                var varDefForUpdate = await _db.ModuleVariableDefs
+                    .FirstOrDefaultAsync(v => v.Id == varDef.Id, ct);
+                if (varDefForUpdate is not null)
+                {
+                    varDefForUpdate.InferredJsonSchema = System.Text.Json.JsonSerializer.Serialize(schema);
+                    varDefForUpdate.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+                }
+
+                return schema;
+            }
+            catch
+            {
+                return null;
+            }
         }
+
+        return null;
     }
 
     private static object InferSchemaFromValue(object value)
@@ -474,12 +510,26 @@ public sealed class ModuleVariableService : IModuleVariableService
         }
 
         var type = value.GetType();
+        
+        // Handle Dictionary - recursively infer schema for each property
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+        {
+            if (value is Dictionary<string, object> dict)
+            {
+                return dict.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => InferSchemaFromValue(kvp.Value) as object);
+            }
+        }
+
+        // Handle List - return "array"
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
+            return "array";
+
         return type switch
         {
             _ when type == typeof(int) || type == typeof(long) || type == typeof(double) || type == typeof(decimal) => "number",
             _ when type == typeof(bool) => "boolean",
-            _ when type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(Dictionary<,>) || 
-                   type.GetGenericTypeDefinition() == typeof(List<>)) => "object",
             _ => "unknown"
         };
     }
