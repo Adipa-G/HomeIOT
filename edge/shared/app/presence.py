@@ -12,6 +12,8 @@ class PresenceService:
         self._system = system
         self._config = config
         self._logger = logger
+        self.consecutive_heartbeat_failures = 0
+        self._reboot_triggered = False
 
     def register(self, version: str) -> bool:
         url = self._config.api_url + REGISTER_DEVICE_PATH
@@ -36,7 +38,16 @@ class PresenceService:
         response = self._post_heartbeat()
         ok = response.status_code == 200
         if not ok:
-            self._log_warn("Heartbeat failed", {"status_code": response.status_code})
+            if self.consecutive_heartbeat_failures < 10:
+                self.consecutive_heartbeat_failures += 1
+            self._log_warn("Heartbeat failed", {"status_code": response.status_code, "failure_count": self.consecutive_heartbeat_failures})
+            if self.consecutive_heartbeat_failures == 10 and not self._reboot_triggered:
+                self._log_critical("Heartbeat failed 10 times consecutively, initiating device reboot", {})
+                self._reboot_triggered = True
+                self._system.reset()
+        else:
+            self.consecutive_heartbeat_failures = 0
+            self._reboot_triggered = False
         return ok
 
     def heartbeat_with_metadata(self):
@@ -88,3 +99,7 @@ class PresenceService:
     def _log_warn(self, message: str, context=None) -> None:
         if self._logger is not None:
             self._logger.warn(message, context)
+
+    def _log_critical(self, message: str, context=None) -> None:
+        if self._logger is not None:
+            self._logger.critical(message, context)

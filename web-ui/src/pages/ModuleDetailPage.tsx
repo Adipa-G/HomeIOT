@@ -323,9 +323,9 @@ export default function ModuleDetailPage() {
       case 'text_display':
         return 'Configure: unit, prefix, suffix';
       case 'bar_chart':
-        return 'Configure: min, max, unit, decimals, barColor';
+        return 'Configure: min, max, unit, decimals, barColor, historyPoints';
       case 'line_chart':
-        return 'Configure: min, max, unit, decimals, lineColor, fillColor';
+        return 'Configure: min, max, unit, decimals, lineColor, fillColor, historyPoints';
       default:
         return 'Select a visualization type to see configuration options';
     }
@@ -342,9 +342,9 @@ export default function ModuleDetailPage() {
       case 'text_display':
         return { unit: '', prefix: '', suffix: '' };
       case 'bar_chart':
-        return { min: 0, max: 100, unit: '', decimals: 1, barColor: '#3b82f6' };
+        return { min: 0, max: 100, unit: '', decimals: 1, barColor: '#3b82f6', historyPoints: 10 };
       case 'line_chart':
-        return { min: 0, max: 100, unit: '', decimals: 1, lineColor: '#3b82f6', fillColor: '#3b82f60d' };
+        return { min: 0, max: 100, unit: '', decimals: 1, lineColor: '#3b82f6', fillColor: '#3b82f60d', historyPoints: 10 };
       default:
         return {};
     }
