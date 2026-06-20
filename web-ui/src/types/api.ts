@@ -108,6 +108,7 @@ export interface ModuleVariableDefItem {
 }
 
 export interface ModuleVariableVisualizationItem {
+  id: string;
   json_path: string;
   display_name: string;
   visualization_type?: 'line_chart' | 'gauge' | 'progress_bar' | 'number_display' | 'bar_chart' | 'text_display' | string | null;

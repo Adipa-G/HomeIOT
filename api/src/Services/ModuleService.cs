@@ -215,6 +215,7 @@ public sealed class ModuleService : IModuleService
                 var visualizations = v.Visualizations
                     .OrderBy(viz => viz.DisplayName)
                     .Select(viz => new ModuleVariableVisualizationItem(
+                        viz.Id,
                         viz.JsonPath,
                         viz.DisplayName,
                         viz.VisualizationType,

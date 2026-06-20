@@ -9,6 +9,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { toast } from '../components/Toast';
 import { formatUtc, formatMs, formatBytes } from '../lib/format';
 import { DeviceModuleSettingsPanel } from '../components/DeviceModuleSettingsPanel';
+import { ModuleVariableVisualizer, extractJsonValue } from '../components/ModuleVariableVisualizer';
 
 export default function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
@@ -190,12 +191,55 @@ export default function DeviceDetailPage() {
                     {r.error_message && (
                       <div className="text-xs text-red-500 mb-2 truncate">{r.error_message}</div>
                     )}
-                    <div 
-                      className="rounded bg-gray-900 p-2 text-xs font-mono text-gray-200 max-h-32 overflow-auto whitespace-pre-wrap cursor-pointer hover:bg-gray-800"
-                      onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
-                    >
-                      {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
-                    </div>
+
+                    {/* Visualizations */}
+                    {isSuccess && r.output && (() => {
+                      try {
+                        const outputData = JSON.parse(r.output);
+                        const module = modules.data?.find(m => m.module_id === r.module_id);
+                        const visualizations = module?.variable_defs?.flatMap(v => v.visualizations ?? []) ?? [];
+
+                        // Show raw JSON only if no visualizations exist
+                        if (visualizations.length === 0) {
+                          return (
+                            <div 
+                              className="rounded bg-gray-900 p-2 text-xs font-mono text-gray-200 max-h-32 overflow-auto whitespace-pre-wrap cursor-pointer hover:bg-gray-800"
+                              onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
+                            >
+                              {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
+                            </div>
+                          );
+                        }
+
+                        // Show visualizations
+                        return (
+                          <div className="mt-3 space-y-2">
+                            {visualizations.map((viz) => {
+                              const value = extractJsonValue(outputData, viz.json_path);
+                              if (value === null) return null;
+                              return (
+                                <ModuleVariableVisualizer
+                                  key={viz.json_path}
+                                  type={viz.visualization_type || 'number_display'}
+                                  config={viz.visualization_config}
+                                  value={value}
+                                  displayName={viz.display_name}
+                                />
+                              );
+                            })}
+                          </div>
+                        );
+                      } catch {
+                        return (
+                          <div 
+                            className="rounded bg-gray-900 p-2 text-xs font-mono text-gray-200 max-h-32 overflow-auto whitespace-pre-wrap cursor-pointer hover:bg-gray-800"
+                            onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
+                          >
+                            {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 );
               })}

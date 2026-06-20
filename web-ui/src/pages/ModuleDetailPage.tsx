@@ -51,6 +51,7 @@ export default function ModuleDetailPage() {
   const [inferringSchema, setInferringSchema] = useState(false);
   const [showVisualizationForm, setShowVisualizationForm] = useState(false);
   const [selectedVarForViz, setSelectedVarForViz] = useState<ModuleVariableDefItem | null>(null);
+  const [selectedVizForEdit, setSelectedVizForEdit] = useState<string | null>(null);
   const [vizJsonPath, setVizJsonPath] = useState('');
   const [vizDisplayName, setVizDisplayName] = useState('');
   const [vizType, setVizType] = useState('');
@@ -218,23 +219,33 @@ export default function ModuleDetailPage() {
         visualization_type: vizType || null,
         visualization_config: config || null,
       };
-      return api.post(
-        `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(selectedVarForViz.name)}/visualizations`,
-        body,
-      );
+      
+      if (selectedVizForEdit) {
+        // Update existing visualization
+        return api.put(
+          `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(selectedVarForViz.name)}/visualizations/${selectedVizForEdit}`,
+          body,
+        );
+      } else {
+        // Create new visualization
+        return api.post(
+          `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(selectedVarForViz.name)}/visualizations`,
+          body,
+        );
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['module', moduleId] });
       clearVisualizationForm();
-      toast('Visualization created');
+      toast(selectedVizForEdit ? 'Visualization updated' : 'Visualization created');
     },
     onError: (err) => {
       if (err instanceof Error) setVizError(err.message);
-      else setVizError('Failed to create visualization');
+      else setVizError(selectedVizForEdit ? 'Failed to update visualization' : 'Failed to create visualization');
     },
   });
 
-  const _deleteVisualization = useMutation({
+  const deleteVisualization = useMutation({
     mutationFn: (vizId: string) => {
       if (!selectedVarForViz) throw new Error('No variable selected');
       return api.delete(
@@ -246,7 +257,6 @@ export default function ModuleDetailPage() {
       toast('Visualization deleted');
     },
   });
-  void _deleteVisualization;
 
   if (isLoading || !mod) return <p className="text-sm text-gray-500">Loading…</p>;
 
@@ -257,6 +267,44 @@ export default function ModuleDetailPage() {
     setVersionFile(null);
     setVersionSource('');
     setUploadMode('file');
+  };
+
+  const getVisualizationHints = (type: string) => {
+    switch (type) {
+      case 'gauge':
+        return 'Configure: min, max, unit, decimals, thresholds (array of {value, color})';
+      case 'progress_bar':
+        return 'Configure: min, max, unit, decimals';
+      case 'number_display':
+        return 'Configure: min, max, unit, decimals (shows range)';
+      case 'text_display':
+        return 'Configure: unit, prefix, suffix';
+      case 'bar_chart':
+        return 'Configure: min, max, unit, decimals, barColor';
+      case 'line_chart':
+        return 'Configure: min, max, unit, decimals, lineColor, fillColor';
+      default:
+        return 'Select a visualization type to see configuration options';
+    }
+  };
+
+  const getDefaultVisualizationConfig = (type: string): object => {
+    switch (type) {
+      case 'gauge':
+        return { min: 0, max: 100, unit: '', decimals: 1, thresholds: [] };
+      case 'progress_bar':
+        return { min: 0, max: 100, unit: '', decimals: 1 };
+      case 'number_display':
+        return { min: 0, max: 100, unit: '', decimals: 1 };
+      case 'text_display':
+        return { unit: '', prefix: '', suffix: '' };
+      case 'bar_chart':
+        return { min: 0, max: 100, unit: '', decimals: 1, barColor: '#3b82f6' };
+      case 'line_chart':
+        return { min: 0, max: 100, unit: '', decimals: 1, lineColor: '#3b82f6', fillColor: '#3b82f60d' };
+      default:
+        return {};
+    }
   };
 
   const startAddVersion = () => {
@@ -276,6 +324,7 @@ export default function ModuleDetailPage() {
   };
 
   const clearVisualizationForm = () => {
+    setSelectedVizForEdit(null);
     setSelectedVarForViz(null);
     setVizJsonPath('');
     setVizDisplayName('');
@@ -303,8 +352,19 @@ export default function ModuleDetailPage() {
   };
 
   const startAddVisualization = (varDef: ModuleVariableDefItem) => {
-    setSelectedVarForViz(varDef);
     clearVisualizationForm();
+    setSelectedVarForViz(varDef);
+    setShowVisualizationForm(true);
+  };
+
+  const startEditVisualization = (varDef: ModuleVariableDefItem, viz: any) => {
+    clearVisualizationForm();
+    setSelectedVarForViz(varDef);
+    setSelectedVizForEdit(viz.id);
+    setVizJsonPath(viz.json_path);
+    setVizDisplayName(viz.display_name);
+    setVizType(viz.visualization_type || '');
+    setVizConfig(viz.visualization_config ? JSON.stringify(viz.visualization_config) : '{}');
     setShowVisualizationForm(true);
   };
 
@@ -504,80 +564,130 @@ export default function ModuleDetailPage() {
 
       {/* Variables */}
       <section className="mb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-900">Variables</h3>
-          <button
-            type="button"
-            onClick={startAddVariable}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
-          >
-            + Add Variable
-          </button>
-        </div>
+        {/* Separate variables into control and output */}
+        {(() => {
+          const allVars = mod.variable_defs ?? [];
+          const controlVars = allVars.filter(v => v.control_type);
+          const outputVars = allVars.filter(v => !v.control_type);
 
-        {/* Variable List */}
-        {(mod.variable_defs ?? []).length === 0 ? (
-          <p className="text-sm text-gray-500">No variable definitions yet.</p>
-        ) : (
-          <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Control</th>
-                  <th className="px-4 py-3">Server Code</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(mod.variable_defs ?? []).map((v) => (
-                  <tr key={v.name} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono">{v.name}</td>
-                    <td className="px-4 py-3">{v.type}</td>
-                    <td className="px-4 py-3 text-xs">{v.control_type ? `${v.control_type}` : '—'}</td>
-                    <td className="px-4 py-3">{v.has_server_code ? 'Yes' : 'No'}</td>
-                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => startEditVariable(v)}
-                        className="text-blue-600 hover:underline text-xs"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => startAddVisualization(v)}
-                        className="text-green-600 hover:underline text-xs"
-                      >
-                        Visualizations
-                      </button>
-                      {v.inferred_json_schema !== null && v.inferred_json_schema !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setInferringSchema(true);
-                            inferSchema.mutate(v.name, {
-                              onSettled: () => setInferringSchema(false),
-                            });
-                          }}
-                          disabled={inferringSchema}
-                          className="text-amber-600 hover:underline text-xs disabled:opacity-50"
-                          title="Re-infer JSON structure from latest execution"
-                        >
-                          Schema
-                        </button>
-                      )}
-                      <ConfirmModal title="Delete variable?" onConfirm={async () => { await deleteVariable.mutateAsync(v.name); }}>
-                        {(open) => <button onClick={open} className="text-red-600 hover:underline text-xs">Delete</button>}
-                      </ConfirmModal>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          return (
+            <>
+              {/* Control Variables */}
+              <div className="mb-8">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900">Variables {controlVars.length > 0 && <span className="text-sm font-normal text-gray-500">({controlVars.length})</span>}</h3>
+                  <button
+                    type="button"
+                    onClick={startAddVariable}
+                    className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+                  >
+                    + Add Variable
+                  </button>
+                </div>
+
+                {controlVars.length === 0 ? (
+                  <p className="text-sm text-gray-500">No control variables yet.</p>
+                ) : (
+                  <div className="mb-6 overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3">Name</th>
+                          <th className="px-4 py-3">Type</th>
+                          <th className="px-4 py-3">Control</th>
+                          <th className="px-4 py-3">Server Code</th>
+                          <th className="px-4 py-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {controlVars.map((v) => (
+                          <tr key={v.name} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-mono">{v.name}</td>
+                            <td className="px-4 py-3">{v.type}</td>
+                            <td className="px-4 py-3 text-xs">{v.control_type ? `${v.control_type}` : '—'}</td>
+                            <td className="px-4 py-3">{v.has_server_code ? 'Yes' : 'No'}</td>
+                            <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => startEditVariable(v)}
+                                className="text-blue-600 hover:underline text-xs"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => startAddVisualization(v)}
+                                className="text-green-600 hover:underline text-xs"
+                              >
+                                Visualizations
+                              </button>
+                              {v.inferred_json_schema !== null && v.inferred_json_schema !== undefined && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setInferringSchema(true);
+                                    inferSchema.mutate(v.name, {
+                                      onSettled: () => setInferringSchema(false),
+                                    });
+                                  }}
+                                  disabled={inferringSchema}
+                                  className="text-amber-600 hover:underline text-xs disabled:opacity-50"
+                                  title="Re-infer JSON structure from latest execution"
+                                >
+                                  Schema
+                                </button>
+                              )}
+                              <ConfirmModal title="Delete variable?" onConfirm={async () => { await deleteVariable.mutateAsync(v.name); }}>
+                                {(open) => <button onClick={open} className="text-red-600 hover:underline text-xs">Delete</button>}
+                              </ConfirmModal>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Output Variables */}
+              {outputVars.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="mb-4 text-lg font-medium text-gray-900">Output Variables <span className="text-sm font-normal text-gray-500">({outputVars.length})</span></h3>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3">Name</th>
+                          <th className="px-4 py-3">Type</th>
+                          <th className="px-4 py-3">Description</th>
+                          <th className="px-4 py-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {outputVars.map((v) => (
+                          <tr key={v.name} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-mono">{v.name}</td>
+                            <td className="px-4 py-3">{v.type}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">{v.description || '—'}</td>
+                            <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => startAddVisualization(v)}
+                                className="text-green-600 hover:underline text-xs"
+                              >
+                                Visualizations
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Variable Form (Collapsible) */}
         {showVariableForm && (
@@ -714,11 +824,11 @@ export default function ModuleDetailPage() {
             <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl">
               <div className="sticky top-0 border-b border-gray-200 bg-white p-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">Add Visualization</h3>
+                  <h3 className="font-medium text-gray-900">{selectedVizForEdit ? 'Edit' : 'Add'} Visualization</h3>
                   <button onClick={clearVisualizationForm} className="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
                 <p className="mt-1 text-xs text-gray-500">Variable: {selectedVarForViz.name}</p>
-                {selectedVarForViz.inferred_json_schema !== null && selectedVarForViz.inferred_json_schema !== undefined && (
+                {!selectedVizForEdit && selectedVarForViz.inferred_json_schema !== null && selectedVarForViz.inferred_json_schema !== undefined && (
                   <div className="mt-2 rounded bg-blue-50 p-2">
                     <p className="text-xs text-blue-700 font-mono">
                       Available: {JSON.stringify(selectedVarForViz.inferred_json_schema).substring(0, 50)}...
@@ -772,16 +882,27 @@ export default function ModuleDetailPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="viz-config" className="mb-1 block text-xs text-gray-600">Configuration (JSON)</label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label htmlFor="viz-config" className="text-xs text-gray-600">Configuration (JSON)</label>
+                    {vizType && (vizConfig === '{}' || vizConfig.trim() === '') && (
+                      <button
+                        type="button"
+                        onClick={() => setVizConfig(JSON.stringify(getDefaultVisualizationConfig(vizType), null, 2))}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        + Add default
+                      </button>
+                    )}
+                  </div>
                   <textarea
                     id="viz-config"
                     value={vizConfig}
                     onChange={(e) => setVizConfig(e.target.value)}
                     rows={4}
                     className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
-                    placeholder={'{"min": 0, "max": 100, "units": "°C"}'}
+                    placeholder={'{"min": 0, "max": 100, "unit": "°C"}'}
                   />
-                  <p className="mt-1 text-xs text-gray-500">gauge: min, max | number_display, progress_bar: units</p>
+                  <p className="mt-1 text-xs text-gray-500">{getVisualizationHints(vizType)}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -790,8 +911,23 @@ export default function ModuleDetailPage() {
                     disabled={upsertVisualization.isPending}
                     className="flex-1 rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {upsertVisualization.isPending ? 'Creating…' : 'Create'}
+                    {upsertVisualization.isPending ? 'Saving…' : selectedVizForEdit ? 'Update' : 'Create'}
                   </button>
+                  {selectedVizForEdit && (
+                    <button
+                      onClick={() => {
+                        if (selectedVizForEdit) {
+                          deleteVisualization.mutate(selectedVizForEdit, {
+                            onSuccess: () => clearVisualizationForm(),
+                          });
+                        }
+                      }}
+                      disabled={deleteVisualization.isPending}
+                      className="flex-1 rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleteVisualization.isPending ? 'Deleting…' : 'Delete'}
+                    </button>
+                  )}
                   <button
                     onClick={clearVisualizationForm}
                     className="flex-1 rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
@@ -801,25 +937,22 @@ export default function ModuleDetailPage() {
                 </div>
               </div>
 
-              {/* Existing Visualizations */}
-              {(selectedVarForViz.visualizations ?? []).length > 0 && (
+              {/* Existing Visualizations - Only show if not currently editing */}
+              {!selectedVizForEdit && (selectedVarForViz.visualizations ?? []).length > 0 && (
                 <div className="border-t border-gray-200 p-6">
                   <h4 className="mb-3 font-medium text-gray-900">Existing Visualizations</h4>
                   <div className="space-y-2">
                     {selectedVarForViz.visualizations!.map((viz) => (
-                      <div key={`${viz.json_path}-${viz.display_name}`} className="flex items-center justify-between rounded border border-gray-200 p-2">
+                      <div key={viz.id} className="flex items-center justify-between rounded border border-gray-200 p-2">
                         <div className="text-xs">
                           <p className="font-mono">{viz.json_path}</p>
                           <p className="text-gray-600">{viz.display_name}</p>
                         </div>
                         <button
-                          onClick={() => {
-                            // Would need to store viz ID to delete - for now just a placeholder
-                            toast('Delete visualization (feature coming soon)');
-                          }}
-                          className="text-red-600 hover:underline text-xs"
+                          onClick={() => startEditVisualization(selectedVarForViz, viz)}
+                          className="text-blue-600 hover:underline text-xs"
                         >
-                          Remove
+                          Edit
                         </button>
                       </div>
                     ))}

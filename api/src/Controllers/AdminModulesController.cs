@@ -371,6 +371,7 @@ public sealed class AdminModulesController : UserApiControllerBase
         var visualizations = await _variableService.GetVisualizationsForVariableAsync(moduleId, varName, ct);
         var items = visualizations.Select(v =>
             new ModuleVariableVisualizationItem(
+                v.Id,
                 v.JsonPath,
                 v.DisplayName,
                 v.VisualizationType,
@@ -400,6 +401,7 @@ public sealed class AdminModulesController : UserApiControllerBase
 
         return Created($"/api/admin/modules/{moduleId}/variables/{varName}/visualizations/{result.Id}",
             new ModuleVariableVisualizationItem(
+                result.Id,
                 result.JsonPath,
                 result.DisplayName,
                 result.VisualizationType,
@@ -426,6 +428,7 @@ public sealed class AdminModulesController : UserApiControllerBase
             return NotFound(new ErrorResponse("not_found", "Visualization not found."));
 
         return Ok(new ModuleVariableVisualizationItem(
+            result.Id,
             result.JsonPath,
             result.DisplayName,
             result.VisualizationType,
