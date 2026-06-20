@@ -9,7 +9,11 @@ public sealed class ModuleVariableDefRecord
     public string? DefaultValue { get; set; }
     public string? Description { get; set; }
     public string? ServerCode { get; set; }
+    public string? ControlType { get; set; }
+    public string? ControlOptions { get; set; }
+    public string? InferredJsonSchema { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
     public ModuleDefinitionRecord ModuleDefinition { get; set; } = null!;
+    public ICollection<ModuleVariableVisualizationRecord> Visualizations { get; set; } = new List<ModuleVariableVisualizationRecord>();
 }

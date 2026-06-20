@@ -177,6 +177,7 @@ public sealed class ModuleService : IModuleService
             .Include(m => m.Assignments)
                 .ThenInclude(a => a.Device)
             .Include(m => m.VariableDefs)
+                .ThenInclude(v => v.Visualizations)
             .FirstOrDefaultAsync(m => m.ModuleId == moduleId, ct);
 
         if (module is null)
@@ -209,13 +210,37 @@ public sealed class ModuleService : IModuleService
 
         var variableDefs = module.VariableDefs
             .OrderBy(v => v.Name)
-            .Select(v => new ModuleVariableDefItem(
-                v.Name,
-                v.Type,
-                v.DefaultValue,
-                v.Description,
-                v.ServerCode is not null,
-                v.ServerCode))
+            .Select(v =>
+            {
+                var visualizations = v.Visualizations
+                    .OrderBy(viz => viz.DisplayName)
+                    .Select(viz => new ModuleVariableVisualizationItem(
+                        viz.JsonPath,
+                        viz.DisplayName,
+                        viz.VisualizationType,
+                        viz.VisualizationConfig != null
+                            ? System.Text.Json.JsonSerializer.Deserialize<object>(viz.VisualizationConfig)
+                            : null))
+                    .ToList();
+
+                var inferredSchema = string.IsNullOrEmpty(v.InferredJsonSchema)
+                    ? null
+                    : System.Text.Json.JsonSerializer.Deserialize<object>(v.InferredJsonSchema);
+
+                return new ModuleVariableDefItem(
+                    v.Name,
+                    v.Type,
+                    v.DefaultValue,
+                    v.Description,
+                    v.ServerCode is not null,
+                    v.ServerCode,
+                    v.ControlType,
+                    v.ControlOptions != null
+                        ? System.Text.Json.JsonSerializer.Deserialize<object>(v.ControlOptions)
+                        : null,
+                    inferredSchema,
+                    visualizations);
+            })
             .ToList();
 
         return new ModuleDetailResponse(
@@ -228,6 +253,7 @@ public sealed class ModuleService : IModuleService
             assignments,
             variableDefs);
     }
+
 
     public async Task<ModuleDefinitionRecord> CreateModuleAsync(
         CreateModuleRequest request, CancellationToken ct = default)

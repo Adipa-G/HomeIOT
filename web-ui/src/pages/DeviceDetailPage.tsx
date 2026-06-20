@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, ModuleResultListItem, PaginatedResponse } from '../types/api';
+import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, ModuleResultListItem, PaginatedResponse, ModuleDetailResponse } from '../types/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Pagination } from '../components/Pagination';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { toast } from '../components/Toast';
 import { formatUtc, formatMs, formatBytes } from '../lib/format';
+import { DeviceModuleSettingsPanel } from '../components/DeviceModuleSettingsPanel';
 
 export default function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
@@ -19,6 +20,8 @@ export default function DeviceDetailPage() {
   const [modHistoryOffset, setModHistoryOffset] = useState(0);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
+  const [settingsModuleId, setSettingsModuleId] = useState<string | null>(null);
+  const [settingsAssignmentId, setSettingsAssignmentId] = useState<string | null>(null);
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', deviceId],
@@ -47,6 +50,11 @@ export default function DeviceDetailPage() {
     queryKey: ['moduleHistory', deviceId, selectedModule, modHistoryOffset],
     queryFn: () => api.get<PaginatedResponse<ModuleResultListItem>>(`/api/admin/modules/results?device_id=${deviceId}&module_id=${selectedModule}&offset=${modHistoryOffset}&limit=25`),
     enabled: tab === 'modules' && selectedModule !== null,
+  });
+
+  const modules = useQuery({
+    queryKey: ['modules-all'],
+    queryFn: () => api.get<ModuleDetailResponse[]>('/api/admin/modules'),
   });
 
   const toggleMode = useMutation({
@@ -134,7 +142,9 @@ export default function DeviceDetailPage() {
       )}
 
       {tab === 'modules' && selectedModule === null && (
-        moduleResults.isLoading ? <p className="text-sm text-gray-500">Loading…</p> : moduleResults.data && (() => {
+        <>
+          {/* Execution Results with Settings */}
+          {moduleResults.isLoading ? <p className="text-sm text-gray-500">Loading…</p> : moduleResults.data && (() => {
           const byModule = new Map<string, ModuleResultListItem>();
           for (const r of moduleResults.data.items) {
             if (!byModule.has(r.module_id)) byModule.set(r.module_id, r);
@@ -145,25 +155,45 @@ export default function DeviceDetailPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {tiles.map((r) => {
                 const isSuccess = r.status === 'success' || r.status === 'ok';
+                const assignment = modules.data?.flatMap(m =>
+                  (m.assignments || [])
+                    .filter(a => a.device_id === deviceId && a.module_id === r.module_id)
+                ).at(0);
                 return (
                   <div
                     key={r.module_id}
-                    className="cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                    onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
+                    className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-semibold text-gray-900">{r.module_id}</span>
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {r.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {r.status}
+                        </span>
+                        {assignment && (
+                          <button
+                            onClick={() => { setSettingsModuleId(assignment.module_id); setSettingsAssignmentId(assignment.id); }}
+                            className="text-gray-600 hover:text-gray-900 text-lg"
+                            title="Edit module settings"
+                          >
+                            ⚙️
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 mb-2">
+                    <div 
+                      className="text-xs text-gray-500 mb-2 cursor-pointer hover:text-gray-700"
+                      onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
+                    >
                       v{r.module_version} · {r.elapsed_ms != null ? `${r.elapsed_ms} ms` : '—'} · {formatUtc(r.finished_at_utc)}
                     </div>
                     {r.error_message && (
                       <div className="text-xs text-red-500 mb-2 truncate">{r.error_message}</div>
                     )}
-                    <div className="rounded bg-gray-900 p-2 text-xs font-mono text-gray-200 max-h-32 overflow-auto whitespace-pre-wrap">
+                    <div 
+                      className="rounded bg-gray-900 p-2 text-xs font-mono text-gray-200 max-h-32 overflow-auto whitespace-pre-wrap cursor-pointer hover:bg-gray-800"
+                      onClick={() => { setSelectedModule(r.module_id); setModHistoryOffset(0); setExpandedResultId(null); }}
+                    >
                       {r.output ? formatOutput(r.output) : <span className="text-gray-500">No output</span>}
                     </div>
                   </div>
@@ -172,6 +202,8 @@ export default function DeviceDetailPage() {
             </div>
           );
         })()
+      }
+      </>
       )}
 
       {tab === 'modules' && selectedModule !== null && (
@@ -290,6 +322,22 @@ export default function DeviceDetailPage() {
           );
         })()
       )}
+
+      {/* Module Settings Panel */}
+      {settingsModuleId && settingsAssignmentId && modules.data && (() => {
+        const module = modules.data.find(m => m.module_id === settingsModuleId);
+        const assignment = module?.assignments.find(a => a.id === settingsAssignmentId);
+        if (!module || !assignment) return null;
+        return (
+          <DeviceModuleSettingsPanel
+            moduleId={settingsModuleId}
+            assignmentId={settingsAssignmentId}
+            variableDefs={module.variable_defs}
+            variableValues={[]}
+            onClose={() => { setSettingsModuleId(null); setSettingsAssignmentId(null); }}
+          />
+        );
+      })()}
     </div>
   );
 }

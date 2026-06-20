@@ -15,4 +15,10 @@ public sealed class UpsertVariableDefRequest
 
     [JsonPropertyName("server_code")]
     public string? ServerCode { get; set; }
+
+    [JsonPropertyName("control_type")]
+    public string? ControlType { get; set; }
+
+    [JsonPropertyName("control_options")]
+    public object? ControlOptions { get; set; }
 }

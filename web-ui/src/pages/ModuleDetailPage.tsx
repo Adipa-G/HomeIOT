@@ -44,8 +44,18 @@ export default function ModuleDetailPage() {
   const [varDefaultValue, setVarDefaultValue] = useState('');
   const [varDescription, setVarDescription] = useState('');
   const [varServerCode, setVarServerCode] = useState('');
+  const [varControlType, setVarControlType] = useState<string>('');
+  const [varControlOptions, setVarControlOptions] = useState('');
   const [varError, setVarError] = useState('');
   const [showVariableForm, setShowVariableForm] = useState(false);
+  const [inferringSchema, setInferringSchema] = useState(false);
+  const [showVisualizationForm, setShowVisualizationForm] = useState(false);
+  const [selectedVarForViz, setSelectedVarForViz] = useState<ModuleVariableDefItem | null>(null);
+  const [vizJsonPath, setVizJsonPath] = useState('');
+  const [vizDisplayName, setVizDisplayName] = useState('');
+  const [vizType, setVizType] = useState('');
+  const [vizConfig, setVizConfig] = useState('{}');
+  const [vizError, setVizError] = useState('');
 
   const { data: mod, isLoading } = useQuery({
     queryKey: ['module', moduleId],
@@ -137,11 +147,22 @@ export default function ModuleDetailPage() {
         throw new Error('Variable name is required.');
       }
 
+      let controlOptions = null;
+      if (varControlOptions.trim()) {
+        try {
+          controlOptions = JSON.parse(varControlOptions);
+        } catch {
+          throw new Error('Control options must be valid JSON');
+        }
+      }
+
       const body: UpsertVariableDefRequest = {
         type: varType,
         default_value: varDefaultValue.trim() === '' ? null : varDefaultValue,
         description: varDescription.trim() === '' ? null : varDescription,
         server_code: varServerCode.trim() === '' ? null : varServerCode,
+        control_type: varControlType || null,
+        control_options: controlOptions,
       };
       return api.put<ModuleVariableDefItem>(
         `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(trimmedName)}`,
@@ -175,6 +196,58 @@ export default function ModuleDetailPage() {
     },
   });
 
+  const inferSchema = useMutation({
+    mutationFn: (varName: string) => api.post(`/api/admin/modules/${moduleId}/variables/${encodeURIComponent(varName)}/infer-schema`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      toast('Schema inferred');
+    },
+    onError: () => toast('Failed to infer schema', 'error'),
+  });
+
+  const upsertVisualization = useMutation({
+    mutationFn: () => {
+      if (!selectedVarForViz) throw new Error('No variable selected');
+      if (!vizJsonPath.trim()) throw new Error('JSON path is required');
+      if (!vizDisplayName.trim()) throw new Error('Display name is required');
+
+      const config = vizConfig.trim() ? JSON.parse(vizConfig) : {};
+      const body = {
+        json_path: vizJsonPath.trim(),
+        display_name: vizDisplayName.trim(),
+        visualization_type: vizType || null,
+        visualization_config: config || null,
+      };
+      return api.post(
+        `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(selectedVarForViz.name)}/visualizations`,
+        body,
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      clearVisualizationForm();
+      toast('Visualization created');
+    },
+    onError: (err) => {
+      if (err instanceof Error) setVizError(err.message);
+      else setVizError('Failed to create visualization');
+    },
+  });
+
+  const _deleteVisualization = useMutation({
+    mutationFn: (vizId: string) => {
+      if (!selectedVarForViz) throw new Error('No variable selected');
+      return api.delete(
+        `/api/admin/modules/${moduleId}/variables/${encodeURIComponent(selectedVarForViz.name)}/visualizations/${vizId}`,
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['module', moduleId] });
+      toast('Visualization deleted');
+    },
+  });
+  void _deleteVisualization;
+
   if (isLoading || !mod) return <p className="text-sm text-gray-500">Loading…</p>;
 
   const startEdit = () => { setEditName(mod.module_id); setEditDesc(mod.description ?? ''); setEditing(true); };
@@ -197,7 +270,19 @@ export default function ModuleDetailPage() {
     setVarDefaultValue('');
     setVarDescription('');
     setVarServerCode('');
+    setVarControlType('');
+    setVarControlOptions('');
     setVarError('');
+  };
+
+  const clearVisualizationForm = () => {
+    setSelectedVarForViz(null);
+    setVizJsonPath('');
+    setVizDisplayName('');
+    setVizType('');
+    setVizConfig('{}');
+    setVizError('');
+    setShowVisualizationForm(false);
   };
 
   const startAddVariable = () => {
@@ -211,8 +296,16 @@ export default function ModuleDetailPage() {
     setVarDefaultValue(v.default_value ?? '');
     setVarDescription(v.description ?? '');
     setVarServerCode(v.server_code ?? '');
+    setVarControlType(v.control_type ?? '');
+    setVarControlOptions(Array.isArray(v.control_options) ? JSON.stringify(v.control_options) : '');
     setVarError('');
     setShowVariableForm(true);
+  };
+
+  const startAddVisualization = (varDef: ModuleVariableDefItem) => {
+    setSelectedVarForViz(varDef);
+    clearVisualizationForm();
+    setShowVisualizationForm(true);
   };
 
   return (
@@ -432,7 +525,7 @@ export default function ModuleDetailPage() {
                 <tr>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Default</th>
+                  <th className="px-4 py-3">Control</th>
                   <th className="px-4 py-3">Server Code</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -442,18 +535,41 @@ export default function ModuleDetailPage() {
                   <tr key={v.name} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono">{v.name}</td>
                     <td className="px-4 py-3">{v.type}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{v.default_value ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs">{v.control_type ? `${v.control_type}` : '—'}</td>
                     <td className="px-4 py-3">{v.has_server_code ? 'Yes' : 'No'}</td>
-                    <td className="px-4 py-3 text-right space-x-3">
+                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => startEditVariable(v)}
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 hover:underline text-xs"
                       >
                         Edit
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => startAddVisualization(v)}
+                        className="text-green-600 hover:underline text-xs"
+                      >
+                        Visualizations
+                      </button>
+                      {v.inferred_json_schema !== null && v.inferred_json_schema !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInferringSchema(true);
+                            inferSchema.mutate(v.name, {
+                              onSettled: () => setInferringSchema(false),
+                            });
+                          }}
+                          disabled={inferringSchema}
+                          className="text-amber-600 hover:underline text-xs disabled:opacity-50"
+                          title="Re-infer JSON structure from latest execution"
+                        >
+                          Schema
+                        </button>
+                      )}
                       <ConfirmModal title="Delete variable?" onConfirm={async () => { await deleteVariable.mutateAsync(v.name); }}>
-                        {(open) => <button onClick={open} className="text-red-600 hover:underline">Delete</button>}
+                        {(open) => <button onClick={open} className="text-red-600 hover:underline text-xs">Delete</button>}
                       </ConfirmModal>
                     </td>
                   </tr>
@@ -542,6 +658,35 @@ export default function ModuleDetailPage() {
                   placeholder={"// Example (C# script)\nreturn 42;"}
                 />
               </div>
+              <hr className="my-2" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="var-control-type" className="mb-1 block text-xs text-gray-600">Control type (optional)</label>
+                  <select
+                    id="var-control-type"
+                    value={varControlType}
+                    onChange={(e) => setVarControlType(e.target.value)}
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  >
+                    <option value="">— none —</option>
+                    <option value="text">text input</option>
+                    <option value="dropdown">dropdown</option>
+                    <option value="toggle">toggle</option>
+                  </select>
+                </div>
+                {varControlType === 'dropdown' && (
+                  <div>
+                    <label htmlFor="var-control-options" className="mb-1 block text-xs text-gray-600">Dropdown options (JSON array)</label>
+                    <input
+                      id="var-control-options"
+                      value={varControlOptions}
+                      onChange={(e) => setVarControlOptions(e.target.value)}
+                      placeholder='["Option1", "Option2", "Option3"]'
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-mono"
+                    />
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -559,6 +704,128 @@ export default function ModuleDetailPage() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Visualization Management Modal */}
+        {showVisualizationForm && selectedVarForViz && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+            <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl">
+              <div className="sticky top-0 border-b border-gray-200 bg-white p-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium text-gray-900">Add Visualization</h3>
+                  <button onClick={clearVisualizationForm} className="text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Variable: {selectedVarForViz.name}</p>
+                {selectedVarForViz.inferred_json_schema !== null && selectedVarForViz.inferred_json_schema !== undefined && (
+                  <div className="mt-2 rounded bg-blue-50 p-2">
+                    <p className="text-xs text-blue-700 font-mono">
+                      Available: {JSON.stringify(selectedVarForViz.inferred_json_schema).substring(0, 50)}...
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4 p-6">
+                {vizError && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{vizError}</p>}
+
+                <div>
+                  <label htmlFor="viz-json-path" className="mb-1 block text-xs text-gray-600">JSON Path</label>
+                  <input
+                    id="viz-json-path"
+                    value={vizJsonPath}
+                    onChange={(e) => setVizJsonPath(e.target.value)}
+                    placeholder="e.g. temp, sensor_data.temperature"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Specify the field to extract from variable output.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="viz-display-name" className="mb-1 block text-xs text-gray-600">Display Name</label>
+                  <input
+                    id="viz-display-name"
+                    value={vizDisplayName}
+                    onChange={(e) => setVizDisplayName(e.target.value)}
+                    placeholder="e.g. Temperature"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="viz-type" className="mb-1 block text-xs text-gray-600">Visualization Type</label>
+                  <select
+                    id="viz-type"
+                    value={vizType}
+                    onChange={(e) => setVizType(e.target.value)}
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  >
+                    <option value="">— select —</option>
+                    <option value="gauge">Gauge</option>
+                    <option value="progress_bar">Progress Bar</option>
+                    <option value="number_display">Number Display</option>
+                    <option value="text_display">Text Display</option>
+                    <option value="line_chart">Line Chart</option>
+                    <option value="bar_chart">Bar Chart</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="viz-config" className="mb-1 block text-xs text-gray-600">Configuration (JSON)</label>
+                  <textarea
+                    id="viz-config"
+                    value={vizConfig}
+                    onChange={(e) => setVizConfig(e.target.value)}
+                    rows={4}
+                    className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+                    placeholder={'{"min": 0, "max": 100, "units": "°C"}'}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">gauge: min, max | number_display, progress_bar: units</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => upsertVisualization.mutate()}
+                    disabled={upsertVisualization.isPending}
+                    className="flex-1 rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {upsertVisualization.isPending ? 'Creating…' : 'Create'}
+                  </button>
+                  <button
+                    onClick={clearVisualizationForm}
+                    className="flex-1 rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              {/* Existing Visualizations */}
+              {(selectedVarForViz.visualizations ?? []).length > 0 && (
+                <div className="border-t border-gray-200 p-6">
+                  <h4 className="mb-3 font-medium text-gray-900">Existing Visualizations</h4>
+                  <div className="space-y-2">
+                    {selectedVarForViz.visualizations!.map((viz) => (
+                      <div key={`${viz.json_path}-${viz.display_name}`} className="flex items-center justify-between rounded border border-gray-200 p-2">
+                        <div className="text-xs">
+                          <p className="font-mono">{viz.json_path}</p>
+                          <p className="text-gray-600">{viz.display_name}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Would need to store viz ID to delete - for now just a placeholder
+                            toast('Delete visualization (feature coming soon)');
+                          }}
+                          className="text-red-600 hover:underline text-xs"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

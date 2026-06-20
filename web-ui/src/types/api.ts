@@ -101,6 +101,17 @@ export interface ModuleVariableDefItem {
   description: string | null;
   has_server_code: boolean;
   server_code?: string | null;
+  control_type?: 'text' | 'dropdown' | 'toggle' | string | null;
+  control_options?: unknown | null;
+  inferred_json_schema?: unknown | null;
+  visualizations?: ModuleVariableVisualizationItem[] | null;
+}
+
+export interface ModuleVariableVisualizationItem {
+  json_path: string;
+  display_name: string;
+  visualization_type?: 'line_chart' | 'gauge' | 'progress_bar' | 'number_display' | 'bar_chart' | 'text_display' | string | null;
+  visualization_config?: unknown | null;
 }
 
 export interface UpsertVariableDefRequest {
@@ -108,7 +119,17 @@ export interface UpsertVariableDefRequest {
   default_value?: string | null;
   description?: string | null;
   server_code?: string | null;
+  control_type?: string | null;
+  control_options?: unknown | null;
 }
+
+export interface UpsertModuleVariableVisualizationRequest {
+  json_path: string;
+  display_name: string;
+  visualization_type?: string | null;
+  visualization_config?: unknown | null;
+}
+
 
 export interface ModuleVersionItem {
   id: string;

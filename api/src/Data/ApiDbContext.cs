@@ -16,6 +16,7 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
     public DbSet<ModuleStatusRecord> ModuleStatuses => Set<ModuleStatusRecord>();
     public DbSet<ModuleVariableDefRecord> ModuleVariableDefs => Set<ModuleVariableDefRecord>();
     public DbSet<ModuleVariableValueRecord> ModuleVariableValues => Set<ModuleVariableValueRecord>();
+    public DbSet<ModuleVariableVisualizationRecord> ModuleVariableVisualizations => Set<ModuleVariableVisualizationRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -182,6 +183,20 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
                 .HasForeignKey(x => x.ModuleAssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.ModuleAssignmentId, x.VariableName }).IsUnique();
+        });
+
+        modelBuilder.Entity<ModuleVariableVisualizationRecord>(entity =>
+        {
+            entity.ToTable("module_variable_visualizations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.JsonPath).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.DisplayName).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.VisualizationType).HasMaxLength(32);
+            entity.HasOne(x => x.ModuleVariableDef)
+                .WithMany(x => x.Visualizations)
+                .HasForeignKey(x => x.ModuleVariableDefId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => x.ModuleVariableDefId);
         });
     }
 }

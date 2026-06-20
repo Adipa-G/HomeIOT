@@ -68,3 +68,6 @@ TestResults/
 /api/Data/**/*
 /api/modules/**/*
 /edge/tools/generated/**/*
+/web-ui/test-results/**/*
+/web-ui/playwright-report/**/*
+/modules_cache/**/*

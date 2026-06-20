@@ -63,6 +63,10 @@ public sealed class ModuleVariableService : IModuleVariableService
             existing.DefaultValue = request.DefaultValue;
             existing.Description = request.Description;
             existing.ServerCode = request.ServerCode;
+            existing.ControlType = request.ControlType;
+            existing.ControlOptions = request.ControlOptions != null 
+                ? System.Text.Json.JsonSerializer.Serialize(request.ControlOptions)
+                : null;
             existing.UpdatedAtUtc = now;
         }
         else
@@ -76,6 +80,10 @@ public sealed class ModuleVariableService : IModuleVariableService
                 DefaultValue = request.DefaultValue,
                 Description = request.Description,
                 ServerCode = request.ServerCode,
+                ControlType = request.ControlType,
+                ControlOptions = request.ControlOptions != null 
+                    ? System.Text.Json.JsonSerializer.Serialize(request.ControlOptions)
+                    : null,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
             };
@@ -275,4 +283,252 @@ public sealed class ModuleVariableService : IModuleVariableService
 
         await _db.SaveChangesAsync(ct);
     }
+
+    // ──────────────────────────────────────────────
+    //  Visualizations & Schema Inference
+    // ──────────────────────────────────────────────
+
+    public async Task<List<ModuleVariableVisualizationRecord>> GetVisualizationsForVariableAsync(
+        string moduleId, string variableName, CancellationToken ct = default)
+    {
+        var def = await _db.ModuleDefinitions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.ModuleId == moduleId, ct);
+
+        if (def is null)
+            return [];
+
+        var varDef = await _db.ModuleVariableDefs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.ModuleDefinitionId == def.Id && v.Name == variableName, ct);
+
+        if (varDef is null)
+            return [];
+
+        return await _db.ModuleVariableVisualizations
+            .AsNoTracking()
+            .Where(v => v.ModuleVariableDefId == varDef.Id)
+            .OrderBy(v => v.DisplayName)
+            .ToListAsync(ct);
+    }
+
+    public async Task<ModuleVariableVisualizationRecord?> UpsertVisualizationAsync(
+        string moduleId, string variableName, string vizId, UpsertModuleVariableVisualizationRequest request, CancellationToken ct = default)
+    {
+        var def = await _db.ModuleDefinitions
+            .FirstOrDefaultAsync(d => d.ModuleId == moduleId, ct);
+
+        if (def is null)
+            return null;
+
+        var varDef = await _db.ModuleVariableDefs
+            .FirstOrDefaultAsync(v => v.ModuleDefinitionId == def.Id && v.Name == variableName, ct);
+
+        if (varDef is null)
+            return null;
+
+        var existing = vizId != "new"
+            ? await _db.ModuleVariableVisualizations
+                .FirstOrDefaultAsync(v => v.Id == Guid.Parse(vizId), ct)
+            : null;
+
+        var now = DateTimeOffset.UtcNow;
+
+        if (existing is not null)
+        {
+            existing.JsonPath = request.JsonPath;
+            existing.DisplayName = request.DisplayName;
+            existing.VisualizationType = request.VisualizationType;
+            existing.VisualizationConfig = request.VisualizationConfig != null
+                ? System.Text.Json.JsonSerializer.Serialize(request.VisualizationConfig)
+                : null;
+            existing.UpdatedAtUtc = now;
+        }
+        else
+        {
+            existing = new ModuleVariableVisualizationRecord
+            {
+                Id = Guid.NewGuid(),
+                ModuleVariableDefId = varDef.Id,
+                JsonPath = request.JsonPath,
+                DisplayName = request.DisplayName,
+                VisualizationType = request.VisualizationType,
+                VisualizationConfig = request.VisualizationConfig != null
+                    ? System.Text.Json.JsonSerializer.Serialize(request.VisualizationConfig)
+                    : null,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            };
+            _db.ModuleVariableVisualizations.Add(existing);
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return existing;
+    }
+
+    public async Task<bool> DeleteVisualizationAsync(
+        string moduleId, string variableName, Guid vizId, CancellationToken ct = default)
+    {
+        var def = await _db.ModuleDefinitions
+            .FirstOrDefaultAsync(d => d.ModuleId == moduleId, ct);
+
+        if (def is null)
+            return false;
+
+        var varDef = await _db.ModuleVariableDefs
+            .FirstOrDefaultAsync(v => v.ModuleDefinitionId == def.Id && v.Name == variableName, ct);
+
+        if (varDef is null)
+            return false;
+
+        var viz = await _db.ModuleVariableVisualizations
+            .FirstOrDefaultAsync(v => v.Id == vizId && v.ModuleVariableDefId == varDef.Id, ct);
+
+        if (viz is null)
+            return false;
+
+        _db.ModuleVariableVisualizations.Remove(viz);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<object?> InferJsonSchemaAsync(
+        string moduleId, string variableName, CancellationToken ct = default)
+    {
+        var def = await _db.ModuleDefinitions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.ModuleId == moduleId, ct);
+
+        if (def is null)
+            return null;
+
+        var varDef = await _db.ModuleVariableDefs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.ModuleDefinitionId == def.Id && v.Name == variableName, ct);
+
+        if (varDef is null)
+            return null;
+
+        // Get latest execution result for this module
+        var latestResult = await _db.ModuleResults
+            .AsNoTracking()
+            .Where(r => r.ModuleId == moduleId)
+            .OrderByDescending(r => r.FinishedAtUtc)
+            .FirstOrDefaultAsync(ct);
+
+        if (latestResult is null || string.IsNullOrEmpty(latestResult.VariableValues))
+            return null;
+
+        // Parse the variable values JSON and extract the type info
+        try
+        {
+            var variableValues = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(latestResult.VariableValues);
+            if (variableValues is null || !variableValues.ContainsKey(variableName))
+                return null;
+
+            var value = variableValues[variableName];
+            var schema = InferSchemaFromValue(value);
+            
+            // Update the inferred schema in the database
+            var varDefForUpdate = await _db.ModuleVariableDefs
+                .FirstOrDefaultAsync(v => v.Id == varDef.Id, ct);
+            if (varDefForUpdate is not null)
+            {
+                varDefForUpdate.InferredJsonSchema = System.Text.Json.JsonSerializer.Serialize(schema);
+                varDefForUpdate.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+            }
+
+            return schema;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static object InferSchemaFromValue(object value)
+    {
+        if (value is null)
+            return new { };
+
+        if (value is string)
+            return "string";
+
+        if (value is System.Text.Json.JsonElement jsonElement)
+        {
+            return jsonElement.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.Object => 
+                    jsonElement.EnumerateObject()
+                        .ToDictionary(
+                            p => p.Name,
+                            p => InferSchemaFromValue(p.Value) as object),
+                System.Text.Json.JsonValueKind.Array => "array",
+                System.Text.Json.JsonValueKind.String => "string",
+                System.Text.Json.JsonValueKind.Number => "number",
+                System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => "boolean",
+                System.Text.Json.JsonValueKind.Null => "null",
+                _ => "unknown"
+            };
+        }
+
+        var type = value.GetType();
+        return type switch
+        {
+            _ when type == typeof(int) || type == typeof(long) || type == typeof(double) || type == typeof(decimal) => "number",
+            _ when type == typeof(bool) => "boolean",
+            _ when type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(Dictionary<,>) || 
+                   type.GetGenericTypeDefinition() == typeof(List<>)) => "object",
+            _ => "unknown"
+        };
+    }
+
+    public static string? ExtractValueAtJsonPath(string? jsonValue, string jsonPath)
+    {
+        if (string.IsNullOrEmpty(jsonValue) || string.IsNullOrEmpty(jsonPath))
+            return null;
+
+        try
+        {
+            // If jsonPath is just a simple key, it's a flat variable
+            // Otherwise it's in the form "parent.child.field"
+            var parts = jsonPath.Split('.');
+            object? current = System.Text.Json.JsonSerializer.Deserialize<object>(jsonValue);
+
+            foreach (var part in parts)
+            {
+                if (current is System.Text.Json.JsonElement jsonElement)
+                {
+                    if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                        jsonElement.TryGetProperty(part, out var property))
+                    {
+                        current = property;
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+                else if (current is Dictionary<string, object> dict && dict.ContainsKey(part))
+                {
+                    current = dict[part];
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
+            if (current is System.Text.Json.JsonElement finalElement)
+                return finalElement.GetRawText();
+
+            return current?.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
+

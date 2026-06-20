@@ -22,10 +22,19 @@ public sealed class AdminModulesController : UserApiControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<ModuleListItem>>> ListModules(CancellationToken ct)
+    public async Task<ActionResult<List<ModuleDetailResponse>>> ListModules(CancellationToken ct)
     {
         var modules = await _moduleService.ListModulesAsync(ct);
-        return Ok(modules);
+        var detailedModules = new List<ModuleDetailResponse>();
+        
+        foreach (var module in modules)
+        {
+            var detailed = await _moduleService.GetModuleAsync(module.ModuleId, ct);
+            if (detailed is not null)
+                detailedModules.Add(detailed);
+        }
+        
+        return Ok(detailedModules);
     }
 
     [HttpPost]
@@ -350,4 +359,97 @@ public sealed class AdminModulesController : UserApiControllerBase
 
         return Ok(new StatusResponse("ok"));
     }
+
+    // ──────────────────────────────────────────────
+    //  Variable visualizations
+    // ──────────────────────────────────────────────
+
+    [HttpGet("{moduleId}/variables/{varName}/visualizations")]
+    public async Task<ActionResult<List<ModuleVariableVisualizationItem>>> GetVisualizations(
+        string moduleId, string varName, CancellationToken ct)
+    {
+        var visualizations = await _variableService.GetVisualizationsForVariableAsync(moduleId, varName, ct);
+        var items = visualizations.Select(v =>
+            new ModuleVariableVisualizationItem(
+                v.JsonPath,
+                v.DisplayName,
+                v.VisualizationType,
+                v.VisualizationConfig != null ? System.Text.Json.JsonSerializer.Deserialize<object>(v.VisualizationConfig) : null))
+            .ToList();
+        return Ok(items);
+    }
+
+    [HttpPost("{moduleId}/variables/{varName}/visualizations")]
+    public async Task<IActionResult> CreateVisualization(
+        string moduleId, string varName,
+        [FromBody] UpsertModuleVariableVisualizationRequest? request,
+        CancellationToken ct)
+    {
+        if (request is null)
+            return BadRequest(new ErrorResponse("invalid_request", "Request body is required."));
+
+        if (string.IsNullOrWhiteSpace(request.JsonPath))
+            return BadRequest(new ErrorResponse("invalid_request", "json_path is required."));
+
+        if (string.IsNullOrWhiteSpace(request.DisplayName))
+            return BadRequest(new ErrorResponse("invalid_request", "display_name is required."));
+
+        var result = await _variableService.UpsertVisualizationAsync(moduleId, varName, "new", request, ct);
+        if (result is null)
+            return NotFound(new ErrorResponse("not_found", "Variable definition not found."));
+
+        return Created($"/api/admin/modules/{moduleId}/variables/{varName}/visualizations/{result.Id}",
+            new ModuleVariableVisualizationItem(
+                result.JsonPath,
+                result.DisplayName,
+                result.VisualizationType,
+                result.VisualizationConfig != null ? System.Text.Json.JsonSerializer.Deserialize<object>(result.VisualizationConfig) : null));
+    }
+
+    [HttpPut("{moduleId}/variables/{varName}/visualizations/{vizId}")]
+    public async Task<IActionResult> UpdateVisualization(
+        string moduleId, string varName, Guid vizId,
+        [FromBody] UpsertModuleVariableVisualizationRequest? request,
+        CancellationToken ct)
+    {
+        if (request is null)
+            return BadRequest(new ErrorResponse("invalid_request", "Request body is required."));
+
+        if (string.IsNullOrWhiteSpace(request.JsonPath))
+            return BadRequest(new ErrorResponse("invalid_request", "json_path is required."));
+
+        if (string.IsNullOrWhiteSpace(request.DisplayName))
+            return BadRequest(new ErrorResponse("invalid_request", "display_name is required."));
+
+        var result = await _variableService.UpsertVisualizationAsync(moduleId, varName, vizId.ToString(), request, ct);
+        if (result is null)
+            return NotFound(new ErrorResponse("not_found", "Visualization not found."));
+
+        return Ok(new ModuleVariableVisualizationItem(
+            result.JsonPath,
+            result.DisplayName,
+            result.VisualizationType,
+            result.VisualizationConfig != null ? System.Text.Json.JsonSerializer.Deserialize<object>(result.VisualizationConfig) : null));
+    }
+
+    [HttpDelete("{moduleId}/variables/{varName}/visualizations/{vizId}")]
+    public async Task<IActionResult> DeleteVisualization(string moduleId, string varName, Guid vizId, CancellationToken ct)
+    {
+        var deleted = await _variableService.DeleteVisualizationAsync(moduleId, varName, vizId, ct);
+        if (!deleted)
+            return NotFound(new ErrorResponse("not_found", "Visualization not found."));
+
+        return Ok(new StatusResponse("ok"));
+    }
+
+    [HttpPost("{moduleId}/variables/{varName}/infer-schema")]
+    public async Task<IActionResult> InferJsonSchema(string moduleId, string varName, CancellationToken ct)
+    {
+        var schema = await _variableService.InferJsonSchemaAsync(moduleId, varName, ct);
+        if (schema is null)
+            return NotFound(new ErrorResponse("not_found", "Variable not found or no execution result available."));
+
+        return Ok(new { inferred_json_schema = schema });
+    }
 }
+

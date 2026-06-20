@@ -14,4 +14,9 @@ public interface IModuleVariableService
     Task<bool> SetVariableValueAsync(Guid assignmentId, string variableName, string? value, CancellationToken ct = default);
     Task<bool> DeleteVariableValueAsync(Guid assignmentId, string variableName, CancellationToken ct = default);
     Task UpsertComputedValueAsync(Guid assignmentId, string variableName, string? value, CancellationToken ct = default);
+
+    Task<List<ModuleVariableVisualizationRecord>> GetVisualizationsForVariableAsync(string moduleId, string variableName, CancellationToken ct = default);
+    Task<ModuleVariableVisualizationRecord?> UpsertVisualizationAsync(string moduleId, string variableName, string vizId, UpsertModuleVariableVisualizationRequest request, CancellationToken ct = default);
+    Task<bool> DeleteVisualizationAsync(string moduleId, string variableName, Guid vizId, CancellationToken ct = default);
+    Task<object?> InferJsonSchemaAsync(string moduleId, string variableName, CancellationToken ct = default);
 }
