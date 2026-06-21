@@ -30,5 +30,5 @@ public interface IModuleService
 
     Task<bool> UpdateModuleAsync(string moduleId, UpdateModuleRequest request, CancellationToken ct = default);
     Task<bool> DeleteModuleAsync(string moduleId, CancellationToken ct = default);
-    Task<bool> DeleteVersionAsync(string moduleId, Guid versionId, CancellationToken ct = default);
+    Task<bool> DeleteVersionAsync(string moduleId, string version, CancellationToken ct = default);
 }

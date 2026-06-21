@@ -349,6 +349,57 @@ public class ModuleServiceTests : IDisposable
         Assert.Null(result);
     }
 
+    [Fact]
+    public async Task DeleteVersionAsync_WithValidVersion_DeletesVersionAndFile()
+    {
+        var (module, version) = await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        
+        // Create package file
+        var packageDir = Path.Combine(_tempDir, "test-mod");
+        Directory.CreateDirectory(packageDir);
+        var packagePath = Path.Combine(packageDir, "1.0.0.py");
+        File.WriteAllText(packagePath, "print('test')");
+        
+        Assert.True(File.Exists(packagePath));
+        
+        var result = await _service.DeleteVersionAsync("test-mod", "1.0.0");
+        
+        Assert.True(result);
+        Assert.Empty(await _db.ModuleVersions.ToListAsync());
+        Assert.False(File.Exists(packagePath));
+    }
+
+    [Fact]
+    public async Task DeleteVersionAsync_NonexistentModule_ReturnsFalse()
+    {
+        var result = await _service.DeleteVersionAsync("nonexistent-mod", "1.0.0");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task DeleteVersionAsync_NonexistentVersion_ReturnsFalse()
+    {
+        await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        
+        var result = await _service.DeleteVersionAsync("test-mod", "2.0.0");
+        
+        Assert.False(result);
+        // Original version should still exist
+        Assert.Single(await _db.ModuleVersions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task DeleteVersionAsync_PackageFileNotExists_StillDeletesVersion()
+    {
+        var (module, version) = await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        // Don't create the actual package file
+        
+        var result = await _service.DeleteVersionAsync("test-mod", "1.0.0");
+        
+        Assert.True(result);
+        Assert.Empty(await _db.ModuleVersions.ToListAsync());
+    }
+
     // ─── Helpers ─────────────────────────────────
 
     private async Task<DeviceRecord> SeedDeviceAsync(string deviceId)

@@ -559,7 +559,7 @@ public sealed class ModuleService : IModuleService
         return true;
     }
 
-    public async Task<bool> DeleteVersionAsync(string moduleId, Guid versionId, CancellationToken ct = default)
+    public async Task<bool> DeleteVersionAsync(string moduleId, string version, CancellationToken ct = default)
     {
         var module = await _db.ModuleDefinitions.AsNoTracking()
             .FirstOrDefaultAsync(m => m.ModuleId == moduleId, ct);
@@ -567,17 +567,17 @@ public sealed class ModuleService : IModuleService
         if (module is null)
             return false;
 
-        var version = await _db.ModuleVersions
-            .FirstOrDefaultAsync(v => v.Id == versionId && v.ModuleDefinitionId == module.Id, ct);
+        var versionRecord = await _db.ModuleVersions
+            .FirstOrDefaultAsync(v => v.Version == version && v.ModuleDefinitionId == module.Id, ct);
 
-        if (version is null)
+        if (versionRecord is null)
             return false;
 
-        _db.ModuleVersions.Remove(version);
+        _db.ModuleVersions.Remove(versionRecord);
         await _db.SaveChangesAsync(ct);
 
         // Remove package file
-        var packagePath = Path.Combine(_packageRoot, moduleId, $"{version.Version}.py");
+        var packagePath = Path.Combine(_packageRoot, moduleId, $"{version}.py");
         if (File.Exists(packagePath))
             File.Delete(packagePath);
 

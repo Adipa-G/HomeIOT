@@ -239,10 +239,10 @@ public sealed class AdminModulesController : UserApiControllerBase
         return Ok(new StatusResponse("ok"));
     }
 
-    [HttpDelete("{moduleId}/versions/{versionId:guid}")]
-    public async Task<IActionResult> DeleteVersion(string moduleId, Guid versionId, CancellationToken ct)
+    [HttpDelete("{moduleId}/versions/{version}")]
+    public async Task<IActionResult> DeleteVersion(string moduleId, string version, CancellationToken ct)
     {
-        var deleted = await _moduleService.DeleteVersionAsync(moduleId, versionId, ct);
+        var deleted = await _moduleService.DeleteVersionAsync(moduleId, version, ct);
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "Version not found."));
 

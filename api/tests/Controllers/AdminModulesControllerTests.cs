@@ -664,6 +664,32 @@ public class AdminModulesControllerTests
     }
 
     [Fact]
+    public async Task DeleteVersion_ValidVersion_ReturnsOk()
+    {
+        _mockService.Setup(s => s.DeleteVersionAsync("test-mod", "1.0.0", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await _controller.DeleteVersion("test-mod", "1.0.0", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var payload = Assert.IsType<StatusResponse>(ok.Value);
+        Assert.Equal("ok", payload.Status);
+    }
+
+    [Fact]
+    public async Task DeleteVersion_NonexistentVersion_Returns404()
+    {
+        _mockService.Setup(s => s.DeleteVersionAsync("test-mod", "1.0.0", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await _controller.DeleteVersion("test-mod", "1.0.0", CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        var payload = Assert.IsType<ErrorResponse>(notFound.Value);
+        Assert.Equal("not_found", payload.Error);
+    }
+
+    [Fact]
     public async Task InferSchema_WithResults_ReturnsOkWithSchema()
     {
         var schema = new { type = "object", properties = new { temperature = new { type = "number" } } };
