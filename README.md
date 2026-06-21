@@ -122,6 +122,7 @@ graph TB
 | [📖 Dashboard](docs/features-dashboard.md) | Understand real-time metrics and system status |
 | [📖 Device Management](docs/features-devices.md) | Monitor, filter, and control devices |
 | [📖 Module System](docs/features-modules.md) | Create, upload, assign, and execute modules |
+| [📖 Data Visualizations](docs/features-visualizations.md) | Configure and use gauges, charts, and threshold colors |
 | [📖 User Management](docs/features-users.md) | Manage admin users and authentication |
 | [📖 Dev Commands](docs/features-dev-commands.md) | Execute remote code for debugging |
 
