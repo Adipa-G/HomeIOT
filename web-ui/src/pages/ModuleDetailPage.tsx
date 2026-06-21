@@ -334,7 +334,7 @@ export default function ModuleDetailPage() {
   const getDefaultVisualizationConfig = (type: string): object => {
     switch (type) {
       case 'gauge':
-        return { min: 0, max: 100, unit: '', decimals: 1, thresholds: [] };
+        return { min: 0, max: 100, unit: '', decimals: 1, thresholds: [{ value: 0, color: '#6b926d'}, {value: 50, color: '#f59e0b'}, {value: 80, color: '#ef4444'}] };
       case 'progress_bar':
         return { min: 0, max: 100, unit: '', decimals: 1 };
       case 'number_display':

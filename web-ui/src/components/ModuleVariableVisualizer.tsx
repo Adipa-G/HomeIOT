@@ -47,16 +47,17 @@ function formatValue(value: number | null, decimals?: number, unit?: string): st
 /**
  * Get color based on thresholds
  */
-function getThresholdColor(value: number, thresholds?: Array<{ value: number; color: string }>): string {
+export function getThresholdColor(value: number, thresholds?: Array<{ value: number; color: string }>): string {
   if (!thresholds || thresholds.length === 0) return '#3b82f6';
-  // Find the appropriate threshold
+  // Find the highest threshold that value meets or exceeds
   const sorted = [...thresholds].sort((a, b) => a.value - b.value);
+  let matchedColor = '#3b82f6'; // default if value is below all thresholds
   for (const threshold of sorted) {
     if (value >= threshold.value) {
-      return threshold.color;
+      matchedColor = threshold.color;
     }
   }
-  return sorted[0]?.color ?? '#3b82f6';
+  return matchedColor;
 }
 
 /**
@@ -108,7 +109,7 @@ function GaugeVisualization({ value, config }: { value: number; config?: Visuali
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <svg width="120" height="120" viewBox="0 0 100 100" className="drop-shadow-sm">
+      <svg width="100%" height="100%" viewBox="0 0 100 100" className="drop-shadow-sm">
         {/* Background arc (full 270 degrees from upper-left through bottom to upper-right) */}
         <path
           d={`M ${startX} ${startY} A ${radius} ${radius} 0 ${largArcFlag} 1 ${fullEndX} ${fullEndY}`}
