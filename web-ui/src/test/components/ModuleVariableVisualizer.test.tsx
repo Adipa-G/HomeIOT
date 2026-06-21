@@ -339,6 +339,56 @@ describe('ModuleVariableVisualizer', () => {
       expect(screen.getByText('0')).toBeInTheDocument();
       expect(screen.getByText('100')).toBeInTheDocument();
     });
+
+    it('renders progress bar with all configuration properties (min, max, unit, decimals, thresholds)', () => {
+      const config: VisualizationConfig = {
+        min: 0,
+        max: 100,
+        unit: '%',
+        decimals: 1,
+        thresholds: [
+          { value: 0, color: '#3b82f6' },
+          { value: 25, color: '#f59e0b' },
+          { value: 75, color: '#ef4444' },
+        ],
+      };
+
+      const { rerender } = render(
+        <ModuleVariableVisualizer
+          type="progress_bar"
+          value={10}
+          config={config}
+          displayName="Battery"
+        />
+      );
+      expect(screen.getByText('Battery')).toBeInTheDocument();
+      expect(screen.getByText('10.0 %')).toBeInTheDocument();
+      expect(screen.getByText('10%')).toBeInTheDocument();
+      expect(screen.getByText('0')).toBeInTheDocument();
+      expect(screen.getByText('100')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="progress_bar"
+          value={50}
+          config={config}
+          displayName="Battery"
+        />
+      );
+      expect(screen.getByText('50.0 %')).toBeInTheDocument();
+      expect(screen.getByText('50%')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="progress_bar"
+          value={90}
+          config={config}
+          displayName="Battery"
+        />
+      );
+      expect(screen.getByText('90.0 %')).toBeInTheDocument();
+      expect(screen.getByText('90%')).toBeInTheDocument();
+    });
   });
 
   describe('number display visualization', () => {
@@ -389,6 +439,53 @@ describe('ModuleVariableVisualizer', () => {
       );
       expect(screen.getByText(/Range: 0 — 100/)).toBeInTheDocument();
     });
+
+    it('renders number display with all configuration properties (min, max, unit, decimals, thresholds)', () => {
+      const config: VisualizationConfig = {
+        min: 0,
+        max: 100,
+        unit: 'W',
+        decimals: 2,
+        thresholds: [
+          { value: 0, color: '#3b82f6' },
+          { value: 500, color: '#f59e0b' },
+          { value: 800, color: '#ef4444' },
+        ],
+      };
+
+      const { rerender } = render(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={250}
+          config={config}
+          displayName="Power"
+        />
+      );
+      expect(screen.getByText('Power')).toBeInTheDocument();
+      expect(screen.getByText('250.00')).toBeInTheDocument();
+      expect(screen.getByText('W')).toBeInTheDocument();
+      expect(screen.getByText(/Range: 0 — 100/)).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={600}
+          config={config}
+          displayName="Power"
+        />
+      );
+      expect(screen.getByText('600.00')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="number_display"
+          value={850}
+          config={config}
+          displayName="Power"
+        />
+      );
+      expect(screen.getByText('850.00')).toBeInTheDocument();
+    });
   });
 
   describe('text display visualization', () => {
@@ -435,8 +532,35 @@ describe('ModuleVariableVisualizer', () => {
           displayName="Status"
         />
       );
-      // Non-numeric strings result in NaN, showing error
       expect(screen.getByText(/No valid data/i)).toBeInTheDocument();
+    });
+
+    it('renders text display with configuration properties (decimals, unit)', () => {
+      const config: VisualizationConfig = {
+        decimals: 2,
+        unit: 'kB/s',
+      };
+
+      const { rerender } = render(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value="123.456"
+          config={config}
+          displayName="Speed"
+        />
+      );
+      expect(screen.getByText('Speed')).toBeInTheDocument();
+      expect(screen.getByText('123.46 kB/s')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value="78.901"
+          config={config}
+          displayName="Speed"
+        />
+      );
+      expect(screen.getByText('78.90 kB/s')).toBeInTheDocument();
     });
   });
 
@@ -506,6 +630,45 @@ describe('ModuleVariableVisualizer', () => {
       );
       expect(screen.getByText('50')).toBeInTheDocument();
     });
+
+    it('renders bar chart with all configuration properties (min, max, unit, decimals, thresholds, historyPoints)', () => {
+      const config: VisualizationConfig = {
+        min: 0,
+        max: 100,
+        unit: 'bpm',
+        decimals: 1,
+        historyPoints: 5,
+        thresholds: [
+          { value: 0, color: '#3b82f6' },
+          { value: 60, color: '#f59e0b' },
+          { value: 100, color: '#ef4444' },
+        ],
+      };
+
+      const { rerender } = render(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={75.5}
+          values={[60, 68, 72, 74, 75.5]}
+          config={config}
+          displayName="Heart Rate"
+        />
+      );
+      expect(screen.getByText('Heart Rate')).toBeInTheDocument();
+      expect(screen.getByText('75.5')).toBeInTheDocument();
+      expect(screen.getByText('bpm')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="bar_chart"
+          value={110}
+          values={[80, 90, 100, 105, 110]}
+          config={config}
+          displayName="Heart Rate"
+        />
+      );
+      expect(screen.getByText('110.0')).toBeInTheDocument();
+    });
   });
 
   describe('line chart visualization', () => {
@@ -547,7 +710,7 @@ describe('ModuleVariableVisualizer', () => {
           displayName="Centered"
         />
       );
-      const chartContainer = container.querySelector('.flex.flex-col.gap-2.items-center');
+      const chartContainer = container.querySelector('.flex.flex-col.gap-2.w-full');
       expect(chartContainer).toBeInTheDocument();
     });
 
@@ -602,6 +765,56 @@ describe('ModuleVariableVisualizer', () => {
         />
       );
       expect(screen.getByText('50')).toBeInTheDocument();
+    });
+
+    it('renders line chart with all configuration properties (min, max, unit, decimals, thresholds, historyPoints)', () => {
+      const config: VisualizationConfig = {
+        min: 0,
+        max: 100,
+        unit: '°C',
+        decimals: 1,
+        historyPoints: 10,
+        thresholds: [
+          { value: 0, color: '#3b82f6' },
+          { value: 20, color: '#f59e0b' },
+          { value: 30, color: '#ef4444' },
+        ],
+      };
+
+      const { rerender } = render(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={18.5}
+          values={[15, 16, 17, 18, 18.5]}
+          config={config}
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText('Temperature')).toBeInTheDocument();
+      expect(screen.getByText('18.5 °C')).toBeInTheDocument();
+      expect(screen.getByText('5 points')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={25}
+          values={[18, 20, 22, 24, 25]}
+          config={config}
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText('25.0 °C')).toBeInTheDocument();
+
+      rerender(
+        <ModuleVariableVisualizer
+          type="line_chart"
+          value={32}
+          values={[28, 29, 30, 31, 32]}
+          config={config}
+          displayName="Temperature"
+        />
+      );
+      expect(screen.getByText('32.0 °C')).toBeInTheDocument();
     });
   });
 

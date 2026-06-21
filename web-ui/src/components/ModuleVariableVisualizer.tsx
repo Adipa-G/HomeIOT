@@ -220,14 +220,16 @@ function BarChartVisualization({ value, values, config }: { value: number; value
     ? values.map(v => typeof v === 'string' ? parseFloat(v) : v).filter(v => v !== null) as number[]
     : [value];
   
-  const barWidth = Math.max(6, Math.floor(80 / dataPoints.length));
-  const spacing = Math.max(1, Math.floor((90 - barWidth * dataPoints.length) / (dataPoints.length - 1)));
+  // Calculate bar width and spacing to fit all bars dynamically with consistent gaps
+  const minSpacing = 1; // Minimum gap between bars
+  const barWidth = Math.max(1, Math.floor((90 - (dataPoints.length - 1) * minSpacing) / dataPoints.length));
+  const spacing = minSpacing;
   const totalWidth = barWidth * dataPoints.length + spacing * (dataPoints.length - 1);
   const startX = 50 - totalWidth / 2;
 
   return (
-    <div className="flex items-end gap-2 h-24">
-      <svg width="100" height="100" viewBox="0 0 100 120" className="flex-1">
+    <div className="flex items-end gap-2 h-80 w-full">
+      <svg width="100%" height="100%" viewBox="0 0 100 120" className="flex-1 drop-shadow-sm" preserveAspectRatio="none">
         {/* Grid lines */}
         <line x1="5" y1="100" x2="95" y2="100" stroke="#e5e7eb" strokeWidth="1" />
         <line x1="5" y1="70" x2="95" y2="70" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2" />
@@ -279,7 +281,7 @@ function LineChartVisualization({ value, values, config }: { value: number; valu
     : [value];
   
   // Map data points to SVG coordinates (distributed across width)
-  const numPoints = Math.min(dataPoints.length, 10); // Limit to 10 points for readability
+  const numPoints = Math.min(dataPoints.length, config?.historyPoints ?? 10); // Limit to historyPoints or 10 by default
   const lastPoints = dataPoints.slice(-numPoints);
   const xStep = 80 / Math.max(numPoints - 1, 1);
   const points = lastPoints.map((v, i) => {
@@ -297,8 +299,8 @@ function LineChartVisualization({ value, values, config }: { value: number; valu
   const fillColor = getThresholdColor(dataPoints[dataPoints.length - 1] ?? value, config?.thresholds);
 
   return (
-    <div className="flex flex-col gap-2 items-center">
-      <svg width="140" height="100" viewBox="0 0 100 120" className="drop-shadow-sm">
+    <div className="flex flex-col gap-2 w-full h-64">
+      <svg width="100%" height="100%" viewBox="0 0 100 120" className="drop-shadow-sm" preserveAspectRatio="none">
         {/* Grid lines */}
         <line x1="5" y1="100" x2="95" y2="100" stroke="#e5e7eb" strokeWidth="1" />
         <line x1="5" y1="70" x2="95" y2="70" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2" />

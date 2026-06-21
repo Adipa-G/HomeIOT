@@ -336,15 +336,15 @@ export default function ModuleDetailPage() {
       case 'gauge':
         return { min: 0, max: 100, unit: '', decimals: 1, thresholds: [{ value: 0, color: '#6b926d'}, {value: 50, color: '#f59e0b'}, {value: 80, color: '#ef4444'}] };
       case 'progress_bar':
-        return { min: 0, max: 100, unit: '', decimals: 1 };
+        return { min: 0, max: 100, unit: '', decimals: 1, thresholds: [{ value: 0, color: '#6b926d'}, {value: 50, color: '#f59e0b'}, {value: 80, color: '#ef4444'}] };
       case 'number_display':
-        return { min: 0, max: 100, unit: '', decimals: 1 };
+        return { min: 0, max: 100, unit: '', decimals: 1, thresholds: [{ value: 0, color: '#6b926d'}, {value: 50, color: '#f59e0b'}, {value: 80, color: '#ef4444'}] };
       case 'text_display':
         return { unit: '', prefix: '', suffix: '' };
       case 'bar_chart':
-        return { min: 0, max: 100, unit: '', decimals: 1, barColor: '#3b82f6', historyPoints: 10 };
+        return { min: 0, max: 100, unit: '', decimals: 1, barColor: '#3b82f6', historyPoints: 10, thresholds: [{ value: 0, color: '#6b926d'}, {value: 50, color: '#f59e0b'}, {value: 80, color: '#ef4444'}] };
       case 'line_chart':
-        return { min: 0, max: 100, unit: '', decimals: 1, lineColor: '#3b82f6', fillColor: '#3b82f60d', historyPoints: 10 };
+        return { min: 0, max: 100, unit: '', decimals: 1, lineColor: '#3b82f6', fillColor: '#3b82f60d', historyPoints: 10, thresholds: [{ value: 0, color: '#6b926d'}, {value: 50, color: '#f59e0b'}, {value: 80, color: '#ef4444'}] };
       default:
         return {};
     }
