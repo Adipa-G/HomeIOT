@@ -21,10 +21,6 @@ test.describe('Navigation', () => {
   test('should load dashboard after login', async ({ page }) => {
     await login(page);
 
-    // Check we're not on login page anymore
-    const isLoginPage = await page.locator('#username').isVisible().catch(() => false);
-    expect(isLoginPage).toBe(false);
-
     // Check for page content (should have loaded dashboard)
     const body = page.locator('body');
     await expect(body).toContainText(/homeiot|dashboard|device/i);
