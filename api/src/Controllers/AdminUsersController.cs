@@ -44,9 +44,9 @@ public sealed class AdminUsersController : UserApiControllerBase
         return Created($"/api/admin/users/{user.Id}", user);
     }
 
-    [HttpPut("{userId:int}/password")]
+    [HttpPut("{username}/password")]
     public async Task<IActionResult> ChangePassword(
-        int userId, [FromBody] ChangePasswordRequest? request, CancellationToken ct)
+        string username, [FromBody] ChangePasswordRequest? request, CancellationToken ct)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.NewPassword))
             return BadRequest(new ErrorResponse("invalid_request", "new_password is required."));
@@ -54,17 +54,17 @@ public sealed class AdminUsersController : UserApiControllerBase
         if (request.NewPassword.Length < 8)
             return BadRequest(new ErrorResponse("invalid_request", "new_password must be at least 8 characters."));
 
-        var changed = await _userService.ChangePasswordAsync(userId, request.NewPassword, ct);
+        var changed = await _userService.ChangePasswordAsync(username, request.NewPassword, ct);
         if (!changed)
             return NotFound(new ErrorResponse("not_found", "User not found."));
 
         return Ok(new StatusResponse("ok"));
     }
 
-    [HttpDelete("{userId:int}")]
-    public async Task<IActionResult> DeleteUser(int userId, CancellationToken ct)
+    [HttpDelete("{username}")]
+    public async Task<IActionResult> DeleteUser(string username, CancellationToken ct)
     {
-        var deleted = await _userService.DeleteUserAsync(userId, ct);
+        var deleted = await _userService.DeleteUserAsync(username, ct);
         if (!deleted)
             return NotFound(new ErrorResponse("not_found", "User not found."));
 

@@ -71,3 +71,4 @@ TestResults/
 /web-ui/test-results/**/*
 /web-ui/playwright-report/**/*
 /modules_cache/**/*
+/api/src/wwwroot/**/*

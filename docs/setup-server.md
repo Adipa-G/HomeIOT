@@ -78,7 +78,12 @@ docker-compose --version
 
 Both should output version information. If not installed, [download Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
-### Step 2: Start the Container
+### Step 2: Create a copy of `docker-compose.yml`
+
+Create a copy of `docker-compose.yml` file on the server and customise it. For example if you want to manage the paths of the data, 
+you can use file locations instead of docker managed locations.
+
+### Step 3: Start the Container
 
 ```bash
 # Start services in background
@@ -94,7 +99,7 @@ api  | info: Microsoft.Hosting.Lifetime[14]
 api  |      Now listening on: http://0.0.0.0:5228
 ```
 
-### Step 3: Access the Server
+### Step 4: Access the Server
 
 Open your browser and navigate to:
 ```
@@ -105,7 +110,7 @@ Login with:
 - **Username**: `Admin`
 - **Password**: `123`
 
-### Step 7: Manage Container
+### Step 5: Manage Container
 
 ```bash
 # Stop services
@@ -120,7 +125,6 @@ docker-compose logs -f
 # Restart services
 docker-compose restart
 ```
-
 ---
 
 ## Hostname Assignment
@@ -205,7 +209,7 @@ When running in Docker, these environment variables override `appsettings.json`:
 ```bash
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://0.0.0.0:5228
-ADMIN_PASSWORD=your_secure_password
+ADMIN__MASTERPASSWORD=your_secure_password
 ```
 
 ### Production Considerations

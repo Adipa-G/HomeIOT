@@ -48,7 +48,8 @@ async function request<T>(
       } catch {
         // ignore
       }
-      if (typeof window !== 'undefined' && window.location) {
+      // Only redirect to login if not already on login page
+      if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
         window.location.replace('/login');
       }
     }

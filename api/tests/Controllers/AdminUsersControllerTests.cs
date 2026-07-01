@@ -86,11 +86,11 @@ public class AdminUsersControllerTests
     [Fact]
     public async Task ChangePassword_ReturnsOk_WhenValid()
     {
-        _mockService.Setup(s => s.ChangePasswordAsync(1, "newpass123", It.IsAny<CancellationToken>()))
+        _mockService.Setup(s => s.ChangePasswordAsync("user", "newpass123", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var result = await _controller.ChangePassword(
-            1, new ChangePasswordRequest { NewPassword = "newpass123" }, CancellationToken.None);
+            "user", new ChangePasswordRequest { NewPassword = "newpass123" }, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var payload = Assert.IsType<StatusResponse>(ok.Value);
@@ -101,7 +101,7 @@ public class AdminUsersControllerTests
     public async Task ChangePassword_ReturnsBadRequest_WhenMissing()
     {
         var result = await _controller.ChangePassword(
-            1, new ChangePasswordRequest { NewPassword = null }, CancellationToken.None);
+            "user", new ChangePasswordRequest { NewPassword = null }, CancellationToken.None);
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -110,7 +110,7 @@ public class AdminUsersControllerTests
     public async Task ChangePassword_ReturnsBadRequest_WhenTooShort()
     {
         var result = await _controller.ChangePassword(
-            1, new ChangePasswordRequest { NewPassword = "short" }, CancellationToken.None);
+            "user", new ChangePasswordRequest { NewPassword = "short" }, CancellationToken.None);
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -118,11 +118,11 @@ public class AdminUsersControllerTests
     [Fact]
     public async Task ChangePassword_ReturnsNotFound_WhenMissing()
     {
-        _mockService.Setup(s => s.ChangePasswordAsync(999, "newpass123", It.IsAny<CancellationToken>()))
+        _mockService.Setup(s => s.ChangePasswordAsync("nonexistent", "newpass123", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var result = await _controller.ChangePassword(
-            999, new ChangePasswordRequest { NewPassword = "newpass123" }, CancellationToken.None);
+            "nonexistent", new ChangePasswordRequest { NewPassword = "newpass123" }, CancellationToken.None);
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -130,10 +130,10 @@ public class AdminUsersControllerTests
     [Fact]
     public async Task DeleteUser_ReturnsOk_WhenDeleted()
     {
-        _mockService.Setup(s => s.DeleteUserAsync(1, It.IsAny<CancellationToken>()))
+        _mockService.Setup(s => s.DeleteUserAsync("user", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await _controller.DeleteUser(1, CancellationToken.None);
+        var result = await _controller.DeleteUser("user", CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var payload = Assert.IsType<StatusResponse>(ok.Value);
@@ -143,10 +143,10 @@ public class AdminUsersControllerTests
     [Fact]
     public async Task DeleteUser_ReturnsNotFound_WhenMissing()
     {
-        _mockService.Setup(s => s.DeleteUserAsync(999, It.IsAny<CancellationToken>()))
+        _mockService.Setup(s => s.DeleteUserAsync("nonexistent", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var result = await _controller.DeleteUser(999, CancellationToken.None);
+        var result = await _controller.DeleteUser("nonexistent", CancellationToken.None);
 
         Assert.IsType<NotFoundObjectResult>(result);
     }

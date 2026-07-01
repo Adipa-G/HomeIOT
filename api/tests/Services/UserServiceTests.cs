@@ -81,7 +81,7 @@ public class UserServiceTests : IDisposable
         await _db.SaveChangesAsync();
         var user = await _db.Users.FirstAsync();
 
-        var result = await _service.ChangePasswordAsync(user.Id, "newpass123");
+        var result = await _service.ChangePasswordAsync(user.Username, "newpass123");
 
         Assert.True(result);
         var updated = await _db.Users.FirstAsync();
@@ -91,7 +91,7 @@ public class UserServiceTests : IDisposable
     [Fact]
     public async Task ChangePassword_NotFound_ReturnsFalse()
     {
-        var result = await _service.ChangePasswordAsync(999, "newpass");
+        var result = await _service.ChangePasswordAsync("nonexistent", "newpass");
         Assert.False(result);
     }
 
@@ -107,7 +107,7 @@ public class UserServiceTests : IDisposable
         await _db.SaveChangesAsync();
         var user = await _db.Users.FirstAsync();
 
-        var result = await _service.DeleteUserAsync(user.Id);
+        var result = await _service.DeleteUserAsync(user.Username);
 
         Assert.True(result);
         Assert.False(await _db.Users.AnyAsync());
@@ -116,7 +116,7 @@ public class UserServiceTests : IDisposable
     [Fact]
     public async Task DeleteUser_NotFound_ReturnsFalse()
     {
-        var result = await _service.DeleteUserAsync(999);
+        var result = await _service.DeleteUserAsync("nonexistent");
         Assert.False(result);
     }
 }

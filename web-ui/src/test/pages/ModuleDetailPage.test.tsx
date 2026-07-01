@@ -372,7 +372,6 @@ describe('ModuleDetailPage', () => {
   });
 
   it('shows Visualizations button for output variables', async () => {
-    const user = userEvent.setup();
     const moduleWithSchema = {
       ...mockModule,
       variable_defs: [

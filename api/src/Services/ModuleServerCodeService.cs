@@ -16,7 +16,8 @@ public sealed class ModuleServerCodeService : IModuleServerCodeService
             "System.Linq",
             "System.Net.Http",
             "System.Threading.Tasks",
-            "System.Text.Json"
+            "System.Text.Json",
+            "System.Data.SqlClient"
            )
         .WithReferences(typeof(object).Assembly, typeof(Enumerable).Assembly, typeof(HttpClient).Assembly, typeof(Task).Assembly, typeof(JsonSerializer).Assembly);
 

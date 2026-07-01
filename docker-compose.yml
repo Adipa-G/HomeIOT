@@ -2,18 +2,16 @@ version: '3.8'
 
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: adipa/homeiot
     container_name: homeiot
     ports:
       - "5228:5228"
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Release
       ASPNETCORE_URLS: http://0.0.0.0:5228
       # Change these for production
-      ADMIN_USERNAME: Admin
-      ADMIN_PASSWORD: "123"
+      ADMIN__MASTERUSERNAME: Admin
+      ADMIN__MASTERPASSWORD: "123"
     volumes:
       # Persist SQLite database between container restarts (named volume for portability)
       - homeiot-data:/app/data

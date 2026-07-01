@@ -63,16 +63,41 @@ def run(ctx):
         dict: Result object to be serialized and reported
     """
     # Your module logic here
-    import esp32
-    
-    raw_temp = esp32.raw_temperature()
-    temp_celsius = (raw_temp - 32) * 5 / 9
-    
-    return {
-        "raw_value": raw_temp,
-        "temp_celsius": round(temp_celsius, 1),
-        "status": "ok"
-    }
+    def run(ctx):
+    import sys
+
+    try:
+        if sys.platform == "rp2":
+            from machine import ADC
+
+            sensor = ADC(4)
+            reading = sensor.read_u16()
+            voltage = reading * (3.3 / 65535)
+            temp = 27 - (voltage - 0.706) / 0.001721
+
+        elif sys.platform == "esp32":
+            import esp32
+            temp = esp32.mcu_temperature()
+
+        else:
+            return {
+                "success": False,
+                "error": "Unsupported platform: {}".format(sys.platform)
+            }
+
+        return {
+            "success": True,
+            "platform": sys.platform,
+            "temperature": round(temp, 2),
+            "unit": "C"
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "platform": sys.platform,
+            "error": str(e)
+        }
 ```
 
 **Requirements:**
@@ -94,14 +119,16 @@ def run(ctx):
 ## Module Variables
 
 Module Variables allow you to parameterize module behavior without redeploying code. Variables can be:
-- **Static values** — Hard-coded strings, numbers, booleans
-- **Dynamically computed** — Calculated using C# code (HTTP requests, database queries, etc.)
+- **Input variables** 
+    - **Static values** — Hard-coded strings, numbers, booleans
+    - **Dynamically computed** — Calculated using C# code (HTTP requests, database queries, etc.)
+- **Output variables** - Repreents the output of a module
 
 Variables are injected into the module's execution context and accessible by name.
 
-### Using Variables in Modules
+### Input Variables
 
-Variables appear as global names in your module code:
+Input variables appear as global names in your module code:
 
 ```python
 def run(ctx):
@@ -136,11 +163,11 @@ def run(ctx):
 - Provide sensible fallback defaults
 - If variable fails to parse, module continues with fallback value
 
-### Defining Module Variables
+#### Defining Input Module Variables
 
 Navigate to **Admin → Modules → [Module Name] → Variables** to define variables for a module.
 
-#### Variable Properties
+##### Input Variable Properties
 
 | Property | Description | Example |
 |----------|-------------|---------|
@@ -150,7 +177,7 @@ Navigate to **Admin → Modules → [Module Name] → Variables** to define vari
 | **Value** | Static value or C# expression | `28.0` or `await GetThresholdAsync()` |
 | **Description** | Human-readable purpose | `"Temperature threshold for alarm trigger"` |
 
-#### Static Variables
+##### Static Input Variables
 
 **Example: Hard-coded threshold**
 
@@ -171,7 +198,7 @@ def run(ctx):
     return {"threshold": threshold, "location": location}
 ```
 
-#### Dynamic Variables (C# Expressions)
+##### Dynamic Input Variables (C# Expressions)
 
 **Example: Fetch threshold from web service**
 
@@ -206,9 +233,9 @@ finally
 
 The expression is evaluated on the **server** when the module is assigned or every time it runs (depending on evaluation schedule).
 
-### Common Variable Patterns
+#### Common Input Variable Patterns
 
-#### Configuration from Web Service
+##### Configuration from Web Service
 
 ```csharp
 // Fetch device config from remote API
@@ -233,7 +260,7 @@ finally
 }
 ```
 
-#### Database Lookup
+##### Database Lookup
 
 ```csharp
 // Fetch setting from database
@@ -254,7 +281,7 @@ using (var conn = new SqlConnection("connection_string"))
 return 25.0; // fallback
 ```
 
-#### Calculated Value
+##### Calculated Value
 
 ```csharp
 // Calculate threshold based on time of day
@@ -269,7 +296,7 @@ else
 }
 ```
 
-#### Fetch from Public API
+##### Fetch from Public API
 
 ```csharp
 // Get data from public API (e.g., weather, currency)
@@ -298,7 +325,9 @@ finally
 }
 ```
 
-### Variable Evaluation & Caching
+
+
+#### Variable Evaluation & Caching
 
 **How variables are evaluated:**
 
@@ -312,6 +341,10 @@ finally
 - **Dynamic variables**: Re-evaluated frequently (can add server load)
 - **Timeouts**: Expressions have max 10-second timeout (set as limit)
 - **Failures**: If expression fails, module uses last known value or `null`
+
+### Output Variables
+
+These are much more simpler compared to input variables. You can add output variable per visialisation, and each output variable represents the output from the module and if there are a large number of parameters are output from the module, the output variables can be used to display them seperately. Read [Visualisations](features-visualizations.md) for more information.
 
 ### Best Practices for Module Variables
 
@@ -361,43 +394,6 @@ def run(ctx):
         threshold = 25.0
     
     return {"threshold": threshold}
-```
-
----
-
-## Pre-Built Module Examples
-
-The system includes example modules:
-
-**`temp-reader` (versions 1.0.0 - 1.0.4)**
-```python
-# Reads temperature sensor, returns JSON
-import json
-import dht
-import machine
-
-pin = machine.Pin(4)
-sensor = dht.DHT22(pin)
-sensor.measure()
-
-result = {
-    "temperature": sensor.temperature(),
-    "humidity": sensor.humidity()
-}
-
-print(json.dumps(result))
-```
-
-**`server-web-request` (versions 1.0.0 - 1.0.1)**
-```python
-# Makes HTTP request to remote server
-import socket
-import json
-
-url = "http://api.example.com/data"
-response = request_handler.get(url)
-
-print(json.dumps({"response": response}))
 ```
 
 ---

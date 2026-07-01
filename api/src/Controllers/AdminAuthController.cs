@@ -34,7 +34,7 @@ public sealed class AdminAuthController : ControllerBase
             return BadRequest(new ErrorResponse("invalid_request", "username and password are required."));
 
         var user = await _db.Users.FirstOrDefaultAsync(
-            u => u.Username == request.Username, HttpContext.RequestAborted);
+            u => u.Username.ToLower() == request.Username.ToLower(), HttpContext.RequestAborted);
 
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new ErrorResponse("unauthorized", "Invalid username or password."));

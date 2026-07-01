@@ -1,18 +1,20 @@
 # HomeIOT 🏠
 
-A comprehensive IoT platform for managing embedded devices (ESP32/Pico), executing server-side Python modules, and monitoring device health through a centralized dashboard.
+A comprehensive IoT platform for managing embedded devices (ESP32/Pico). This platform supports creating modules in the serverside, assigning to devices so that these can be executed on the edge devices so that result is visible on the server.
+
 
 ## Key Features
 
 - **Device Management**: Register, monitor, and control multiple IoT devices across platforms (ESP32, Raspberry Pi Pico)
 - **Module System**: Deploy and manage versioned Python modules on devices with remote execution and result tracking
 - **Interactive Dev Commands**: Execute arbitrary Python code on devices for debugging and testing
-- **Dashboard Analytics**: Real-time metrics on device health, module activity, and system status
+- **Dashboard Analytics**: Real-time metrics on device health, module activity, and system status. The dashboard supports visual elements such as graphs and guages.
 - **OTA Updates**: Over-the-air firmware updates with rollback support
-- **User Management**: Multi-user admin dashboard with role-based authentication
 - **Comprehensive Logging**: Device logs, module results, and execution tracking for troubleshooting
 
 ## Quick Start
+
+### 
 
 ### Running the Server (30 seconds)
 

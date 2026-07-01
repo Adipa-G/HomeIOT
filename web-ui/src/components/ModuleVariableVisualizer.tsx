@@ -135,7 +135,7 @@ function GaugeVisualization({ value, config }: { value: number; config?: Visuali
           {formatValue(value, config?.decimals, config?.unit)}
         </div>
         <div className="text-xs text-gray-500">
-          {min} — {max}
+          Range: {min} — {max}
         </div>
       </div>
     </div>
@@ -221,6 +221,7 @@ function BarChartVisualization({ value, values, config }: { value: number; value
     : [value];
   
   // Calculate bar width and spacing to fit all bars dynamically with consistent gaps
+  const currentValueColor = getThresholdColor(dataPoints[dataPoints.length - 1] ?? value, config?.thresholds);
   const minSpacing = 1; // Minimum gap between bars
   const barWidth = Math.max(1, Math.floor((90 - (dataPoints.length - 1) * minSpacing) / dataPoints.length));
   const spacing = minSpacing;
@@ -228,7 +229,7 @@ function BarChartVisualization({ value, values, config }: { value: number; value
   const startX = 50 - totalWidth / 2;
 
   return (
-    <div className="flex items-end gap-2 h-80 w-full">
+    <div className="flex flex-col gap-2 w-full h-64">
       <svg width="100%" height="100%" viewBox="0 0 100 120" className="flex-1 drop-shadow-sm" preserveAspectRatio="none">
         {/* Grid lines */}
         <line x1="5" y1="100" x2="95" y2="100" stroke="#e5e7eb" strokeWidth="1" />
@@ -258,11 +259,13 @@ function BarChartVisualization({ value, values, config }: { value: number; value
         <line x1="5" y1="100" x2="5" y2="20" stroke="#d1d5db" strokeWidth="1" />
         <line x1="5" y1="100" x2="95" y2="100" stroke="#d1d5db" strokeWidth="1" />
       </svg>
-      <div className="flex flex-col items-end gap-1">
-        <div className="text-lg font-semibold" style={{ color: getThresholdColor(value, config?.thresholds) }}>
-          {formatValue(value, config?.decimals, '')}
+      <div className="text-center">
+        <div className="text-lg font-semibold" style={{ color: currentValueColor }}>
+          {formatValue(value, config?.decimals, config?.unit)}
         </div>
-        {config?.unit && <div className="text-xs text-gray-500">{config.unit}</div>}
+        <div className="text-xs text-gray-500">
+          {dataPoints.length > 1 ? `${dataPoints.length} points` : 'current'}
+        </div>
       </div>
     </div>
   );

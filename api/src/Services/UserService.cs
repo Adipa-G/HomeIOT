@@ -29,13 +29,13 @@ public sealed class UserService : IUserService
 
     public async Task<UserListItem?> CreateUserAsync(string username, string password, CancellationToken ct = default)
     {
-        var exists = await _db.Users.AnyAsync(u => u.Username == username, ct);
+        var exists = await _db.Users.AnyAsync(u => u.Username == username.ToLower(), ct);
         if (exists)
             return null;
 
         var user = new UserRecord
         {
-            Username = username,
+            Username = username.ToLower(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             CreatedAtUtc = DateTimeOffset.UtcNow
         };
@@ -46,9 +46,9 @@ public sealed class UserService : IUserService
         return new UserListItem(user.Id, user.Username, EndpointValidation.ToUtcZ(user.CreatedAtUtc));
     }
 
-    public async Task<bool> ChangePasswordAsync(int userId, string newPassword, CancellationToken ct = default)
+    public async Task<bool> ChangePasswordAsync(string username, string newPassword, CancellationToken ct = default)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username.ToLower(), ct);
         if (user is null)
             return false;
 
@@ -57,9 +57,9 @@ public sealed class UserService : IUserService
         return true;
     }
 
-    public async Task<bool> DeleteUserAsync(int userId, CancellationToken ct = default)
+    public async Task<bool> DeleteUserAsync(string username, CancellationToken ct = default)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username.ToLower(), ct);
         if (user is null)
             return false;
 
