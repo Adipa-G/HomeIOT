@@ -151,6 +151,17 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Create module platform folders if they don't exist
+var moduleOptions = builder.Configuration.GetSection(ModuleStorageOptions.SectionName).Get<ModuleStorageOptions>() ?? new ModuleStorageOptions();
+var configuredModulesRoot = string.IsNullOrWhiteSpace(moduleOptions.PackageRoot)
+    ? "../modules"
+    : moduleOptions.PackageRoot;
+var modulesPath = Path.IsPathRooted(configuredModulesRoot)
+    ? Path.GetFullPath(configuredModulesRoot)
+    : Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, configuredModulesRoot));
+Directory.CreateDirectory(Path.Combine(modulesPath, "esp32"));
+Directory.CreateDirectory(Path.Combine(modulesPath, "pico"));
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
