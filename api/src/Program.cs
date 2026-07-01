@@ -152,10 +152,10 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Create module platform folders if they don't exist
-var moduleOptions = builder.Configuration.GetSection(ModuleStorageOptions.SectionName).Get<ModuleStorageOptions>() ?? new ModuleStorageOptions();
-var configuredModulesRoot = string.IsNullOrWhiteSpace(moduleOptions.PackageRoot)
+var moduleOptions = builder.Configuration.GetSection(OtaArtifactOptions.SectionName).Get<OtaArtifactOptions>() ?? new OtaArtifactOptions();
+var configuredModulesRoot = string.IsNullOrWhiteSpace(moduleOptions.ArtifactRoot)
     ? "../modules"
-    : moduleOptions.PackageRoot;
+    : moduleOptions.ArtifactRoot;
 var modulesPath = Path.IsPathRooted(configuredModulesRoot)
     ? Path.GetFullPath(configuredModulesRoot)
     : Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, configuredModulesRoot));
