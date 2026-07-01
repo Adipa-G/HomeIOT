@@ -177,7 +177,7 @@ describe('ModuleVariableVisualizer', () => {
       );
       expect(screen.getByText('Temperature')).toBeInTheDocument();
       expect(screen.getByText('50')).toBeInTheDocument();
-      expect(screen.getByText('0 — 100')).toBeInTheDocument();
+      expect(screen.getByText('Range: 0 — 100')).toBeInTheDocument();
     });
 
     it('formats gauge value with decimals and unit', () => {
@@ -242,7 +242,7 @@ describe('ModuleVariableVisualizer', () => {
       );
       expect(screen.getByText('Temperature')).toBeInTheDocument();
       expect(screen.getByText('5.0 C')).toBeInTheDocument();
-      expect(screen.getByText('0 — 100')).toBeInTheDocument();
+      expect(screen.getByText('Range: 0 — 100')).toBeInTheDocument();
 
       // Test mid value (matches middle threshold)
       rerender(
@@ -601,7 +601,7 @@ describe('ModuleVariableVisualizer', () => {
           displayName="Chart"
         />
       );
-      expect(screen.getByText('%')).toBeInTheDocument();
+      expect(screen.getByText('75 %')).toBeInTheDocument();
     });
 
     it('filters out null values from historical data', () => {
@@ -655,8 +655,7 @@ describe('ModuleVariableVisualizer', () => {
         />
       );
       expect(screen.getByText('Heart Rate')).toBeInTheDocument();
-      expect(screen.getByText('75.5')).toBeInTheDocument();
-      expect(screen.getByText('bpm')).toBeInTheDocument();
+      expect(screen.getByText('75.5 bpm')).toBeInTheDocument();
 
       rerender(
         <ModuleVariableVisualizer
@@ -667,7 +666,7 @@ describe('ModuleVariableVisualizer', () => {
           displayName="Heart Rate"
         />
       );
-      expect(screen.getByText('110.0')).toBeInTheDocument();
+      expect(screen.getByText('110.0 bpm')).toBeInTheDocument();
     });
   });
 
