@@ -61,6 +61,7 @@ def run_control_loop(
             network=network,
             config=config,
             logger=logger,
+            system=system,
             now_ms=now,
             next_retry_ms=next_network_retry_ms,
             retry_interval_ms=network_retry_interval_ms,
@@ -87,7 +88,7 @@ def run_control_loop(
                     logger.warn("Pending module-status flush failed", {"error": str(exc)})
 
 
-            if now >= next_heartbeat_ms:
+            if system.ticks_diff(now, next_heartbeat_ms) >= 0:
                 try:
                     metadata = presence.heartbeat_with_metadata()
                 except Exception as exc:
@@ -114,7 +115,7 @@ def run_control_loop(
                     },
                 )
 
-                next_heartbeat_ms = now + heartbeat_interval_ms
+                next_heartbeat_ms = system.ticks_add(now, heartbeat_interval_ms)
  
                 if network is None or network_ready["connected"]:
                     upcoming = module_runtime.get_upcoming_modules(next_wake_ms=next_heartbeat_ms)
@@ -135,7 +136,7 @@ def run_control_loop(
                         except Exception as exc:
                             logger.warn("Module prefetch failed", {"error": str(exc)})
 
-            if now >= next_module_poll_ms:
+            if system.ticks_diff(now, next_module_poll_ms) >= 0:
                 try:
                     assignment = device_control.get_module_assignment(last_assignment_hash)
                 except Exception as exc:
@@ -146,9 +147,9 @@ def run_control_loop(
                     reconcile = device_control.ensure_assigned_modules_present(assignment)
                     module_runtime.update_assignment(assignment, now_ms=now)
                     logger.info("Module assignment reconciled", reconcile)
-                next_module_poll_ms = now + module_poll_interval_ms
+                next_module_poll_ms = system.ticks_add(now, module_poll_interval_ms)
 
-            if updater is not None and now >= next_ota_poll_ms:
+            if updater is not None and system.ticks_diff(now, next_ota_poll_ms) >= 0:
                 try:
                     update_info = updater.check()
                 except Exception as exc:
@@ -160,9 +161,9 @@ def run_control_loop(
                         updater.apply(update_info)
                     except Exception as exc:
                         logger.warn("OTA apply threw exception", {"error": str(exc)})
-                next_ota_poll_ms = now + ota_poll_interval_ms
+                next_ota_poll_ms = system.ticks_add(now, ota_poll_interval_ms)
 
-            if mode == "development" and now >= next_dev_poll_ms:
+            if mode == "development" and system.ticks_diff(now, next_dev_poll_ms) >= 0:
                 try:
                     command = device_control.get_next_dev_command(last_dev_revision_hash)
                 except Exception as exc:
@@ -185,7 +186,7 @@ def run_control_loop(
                             "reported": result.get("reported"),
                         },
                     )
-                next_dev_poll_ms = now + dev_poll_interval_ms
+                next_dev_poll_ms = system.ticks_add(now, dev_poll_interval_ms)
 
         if network is not None and network_ready["connected"]:
             requested_power_mode = _requested_network_power_mode(config, mode)
@@ -205,12 +206,13 @@ def run_control_loop(
         if mode == "development":
             sleep_candidates.append(next_dev_poll_ms)
 
-        sleep_until = min(sleep_candidates)
+        sleep_until = min(sleep_candidates, key=lambda candidate: system.ticks_diff(candidate, now))
+        sleep_remaining_ms = system.ticks_diff(sleep_until, now)
 
         if mode == "development":
-            sleep_ms = max(development_sleep_min_ms, min(development_sleep_max_ms, sleep_until - now))
+            sleep_ms = max(development_sleep_min_ms, min(development_sleep_max_ms, sleep_remaining_ms))
         else:
-            sleep_ms = max(production_sleep_min_ms, min(production_sleep_max_ms, sleep_until - now))
+            sleep_ms = max(production_sleep_min_ms, min(production_sleep_max_ms, sleep_remaining_ms))
 
         system.sleep_ms(sleep_ms)
         iterations += 1
@@ -241,6 +243,7 @@ def _ensure_network_connected(
     network,
     config,
     logger,
+    system,
     now_ms,
     next_retry_ms,
     retry_interval_ms,
@@ -267,7 +270,7 @@ def _ensure_network_connected(
             "retry_interval_ms": retry_base_ms,
         }
 
-    if now_ms < next_retry_ms:
+    if system.ticks_diff(now_ms, next_retry_ms) < 0:
         return {
             "connected": False,
             "next_retry_ms": next_retry_ms,
@@ -287,7 +290,7 @@ def _ensure_network_connected(
         next_interval = min(retry_max_ms, max(retry_base_ms, retry_interval_ms * 2))
         return {
             "connected": False,
-            "next_retry_ms": now_ms + retry_interval_ms,
+            "next_retry_ms": system.ticks_add(now_ms, retry_interval_ms),
             "retry_interval_ms": next_interval,
         }
 

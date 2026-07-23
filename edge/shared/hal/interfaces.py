@@ -92,6 +92,19 @@ class ISystem:
     def time_ms(self) -> int:
         raise NotImplementedError()
 
+    def ticks_diff(self, a: int, b: int) -> int:
+        """Return a - b, correctly handling wraparound of time_ms() values.
+
+        MicroPython's underlying tick counter wraps periodically, so any
+        code that compares or subtracts two time_ms() values must go
+        through this method instead of using naive arithmetic.
+        """
+        raise NotImplementedError()
+
+    def ticks_add(self, ticks: int, delta: int) -> int:
+        """Return ticks + delta, safe to use with ticks_diff() later."""
+        raise NotImplementedError()
+
     def uptime_ms(self) -> int:
         raise NotImplementedError()
 

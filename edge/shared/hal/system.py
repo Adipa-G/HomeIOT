@@ -31,6 +31,16 @@ class MicroPythonSystem(ISystem):
             return self._time.ticks_ms()
         return int(self._time.time() * 1000)
 
+    def ticks_diff(self, a: int, b: int) -> int:
+        if hasattr(self._time, "ticks_diff"):
+            return self._time.ticks_diff(a, b)
+        return a - b
+
+    def ticks_add(self, ticks: int, delta: int) -> int:
+        if hasattr(self._time, "ticks_add"):
+            return self._time.ticks_add(ticks, delta)
+        return ticks + delta
+
     def uptime_ms(self) -> int:
         now = self.time_ms()
         if hasattr(self._time, "ticks_diff"):

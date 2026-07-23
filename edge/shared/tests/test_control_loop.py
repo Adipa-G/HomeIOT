@@ -15,6 +15,12 @@ class _FakeSystem:
         self._time_ms += 100
         return self._time_ms
 
+    def ticks_diff(self, a, b):
+        return a - b
+
+    def ticks_add(self, ticks, delta):
+        return ticks + delta
+
     def uptime_ms(self):
         return self._time_ms
 
@@ -479,6 +485,7 @@ def test_ensure_network_connected_backoff_sequence_and_cap():
         network=network,
         config=_StaticConfig(),
         logger=logger,
+        system=_FakeSystem(),
         now_ms=0,
         next_retry_ms=0,
         retry_interval_ms=5000,
@@ -493,6 +500,7 @@ def test_ensure_network_connected_backoff_sequence_and_cap():
         network=network,
         config=_StaticConfig(),
         logger=logger,
+        system=_FakeSystem(),
         now_ms=5000,
         next_retry_ms=5000,
         retry_interval_ms=10000,
@@ -506,6 +514,7 @@ def test_ensure_network_connected_backoff_sequence_and_cap():
         network=network,
         config=_StaticConfig(),
         logger=logger,
+        system=_FakeSystem(),
         now_ms=15000,
         next_retry_ms=15000,
         retry_interval_ms=20000,
@@ -519,6 +528,7 @@ def test_ensure_network_connected_backoff_sequence_and_cap():
         network=network,
         config=_StaticConfig(),
         logger=logger,
+        system=_FakeSystem(),
         now_ms=35000,
         next_retry_ms=35000,
         retry_interval_ms=40000,
@@ -532,6 +542,7 @@ def test_ensure_network_connected_backoff_sequence_and_cap():
         network=network,
         config=_StaticConfig(),
         logger=logger,
+        system=_FakeSystem(),
         now_ms=36000,
         next_retry_ms=75000,
         retry_interval_ms=60000,
@@ -554,6 +565,7 @@ def test_ensure_network_connected_resets_retry_interval_after_success():
         network=network,
         config=_StaticConfig(),
         logger=logger,
+        system=_FakeSystem(),
         now_ms=10000,
         next_retry_ms=10000,
         retry_interval_ms=60000,

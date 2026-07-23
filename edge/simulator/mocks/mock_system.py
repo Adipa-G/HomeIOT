@@ -26,6 +26,14 @@ class SimulatorSystem(ISystem):
         """Return current time in milliseconds."""
         return int(time.time() * 1000)
 
+    def ticks_diff(self, a: int, b: int) -> int:
+        """Return a - b (wall-clock ms never wraps in the simulator)."""
+        return a - b
+
+    def ticks_add(self, ticks: int, delta: int) -> int:
+        """Return ticks + delta."""
+        return ticks + delta
+
     def uptime_ms(self) -> int:
         """Return uptime since boot in milliseconds."""
         elapsed_s = time.time() - self._boot_time_s

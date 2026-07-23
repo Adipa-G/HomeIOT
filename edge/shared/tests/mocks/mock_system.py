@@ -15,6 +15,12 @@ class MockSystem:
         self._time_ms += 100
         return self._time_ms
 
+    def ticks_diff(self, a: int, b: int) -> int:
+        return a - b
+
+    def ticks_add(self, ticks: int, delta: int) -> int:
+        return ticks + delta
+
     def uptime_ms(self) -> int:
         return self._time_ms - self._boot_ms
 

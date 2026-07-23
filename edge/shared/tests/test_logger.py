@@ -18,6 +18,9 @@ class ControlledSystem:
         self.now += 100
         return self.now
 
+    def ticks_diff(self, a, b):
+        return a - b
+
     def sleep_ms(self, milliseconds):
         self.now += milliseconds
 

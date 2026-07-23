@@ -50,7 +50,7 @@ class EdgeLogger:
 
     def tick(self):
         now = self._system.time_ms()
-        if now - self._last_flush_ms >= self._cfg.flush_interval_ms:
+        if self._system.ticks_diff(now, self._last_flush_ms) >= self._cfg.flush_interval_ms:
             self.flush("interval")
 
     def flush(self, reason="manual") -> bool:

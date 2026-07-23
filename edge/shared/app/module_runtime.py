@@ -138,7 +138,7 @@ class ModuleRuntime:
         failed = 0
 
         for schedule in list(self._modules.values()):
-            if now < schedule.next_due_ms:
+            if self._system.ticks_diff(now, schedule.next_due_ms) < 0:
                 continue
 
             q = self._load_quarantine(schedule.module_id)
@@ -151,7 +151,7 @@ class ModuleRuntime:
                         {"module_id": schedule.module_id, "old_version": q.get("last_version"), "new_version": schedule.version},
                     )
                 else:
-                    schedule.next_due_ms = now + schedule.interval_ms
+                    schedule.next_due_ms = self._system.ticks_add(now, schedule.interval_ms)
                     continue
 
             executed += 1
@@ -161,7 +161,7 @@ class ModuleRuntime:
             else:
                 failed += 1
 
-            schedule.next_due_ms = now + schedule.interval_ms
+            schedule.next_due_ms = self._system.ticks_add(now, schedule.interval_ms)
 
             if outcome["status"] == "timeout":
                 return {
@@ -218,7 +218,7 @@ class ModuleRuntime:
 
         finish_ms = self._system.time_ms()
         finish_utc = self._utc_now_iso()
-        elapsed_ms = max(0, finish_ms - start_ms)
+        elapsed_ms = max(0, self._system.ticks_diff(finish_ms, start_ms))
 
         if status == "success" and elapsed_ms > schedule.timeout_ms:
             status = "timeout"
@@ -353,7 +353,7 @@ class ModuleRuntime:
     def get_upcoming_modules(self, next_wake_ms):
         result = []
         for schedule in self._modules.values():
-            if schedule.next_due_ms <= next_wake_ms:
+            if self._system.ticks_diff(schedule.next_due_ms, next_wake_ms) <= 0:
                 result.append({"module_id": schedule.module_id, "version": schedule.version})
         return result
 
