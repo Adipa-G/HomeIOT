@@ -1,3 +1,4 @@
+using System.Text.Json;
 using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Data;
 using HomeIOT.Api.Infrastructure;
@@ -7,12 +8,40 @@ namespace HomeIOT.Api.Services;
 
 public sealed class DeviceAdminService : IDeviceAdminService
 {
+    private static readonly Dictionary<string, TimeSpan> BucketSpans = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["day"] = TimeSpan.FromDays(1),
+        ["hour"] = TimeSpan.FromHours(1),
+        ["five_minute"] = TimeSpan.FromMinutes(5),
+    };
+
     private readonly ApiDbContext _db;
 
     public DeviceAdminService(ApiDbContext db)
     {
         _db = db;
     }
+
+    private static DateTimeOffset AlignToBucket(DateTimeOffset value, TimeSpan span)
+    {
+        var utc = value.UtcDateTime;
+        var ticks = utc.Ticks - (utc.Ticks % span.Ticks);
+        return new DateTimeOffset(new DateTime(ticks, DateTimeKind.Utc));
+    }
+
+    private static List<DateTimeOffset> BuildBucketStarts(DateTimeOffset from, DateTimeOffset to, TimeSpan span)
+    {
+        var starts = new List<DateTimeOffset>();
+        var cursor = AlignToBucket(from, span);
+        while (cursor < to)
+        {
+            starts.Add(cursor);
+            cursor = cursor.Add(span);
+        }
+        return starts;
+    }
+
+    private readonly record struct LogCounts(int Info, int Warn, int Error, int Debug, int Other);
 
     public async Task<PaginatedResponse<DeviceListItem>> ListDevicesAsync(
         int offset, int limit, string? platform, string? mode, string? search, CancellationToken ct = default)
@@ -165,5 +194,108 @@ public sealed class DeviceAdminService : IDeviceAdminService
             .ToListAsync(ct);
 
         return new PaginatedResponse<LogBatchListItem>(items, total, offset, limit);
+    }
+
+    public async Task<List<HeartbeatActivityBucket>> GetHeartbeatActivityAsync(
+        string deviceId, string bucket, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+    {
+        var span = BucketSpans[bucket];
+        var bucketStarts = BuildBucketStarts(from, to, span);
+
+        var device = await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.DeviceId == deviceId, ct);
+        if (device is null)
+        {
+            return bucketStarts
+                .Select(b => new HeartbeatActivityBucket(EndpointValidation.ToUtcZ(b), EndpointValidation.ToUtcZ(b.Add(span)), 0))
+                .ToList();
+        }
+
+        var timestamps = await _db.Heartbeats
+            .AsNoTracking()
+            .Where(h => h.DeviceRecordId == device.Id && h.ReceivedAtUtc >= from && h.ReceivedAtUtc < to)
+            .Select(h => h.ReceivedAtUtc)
+            .ToListAsync(ct);
+
+        var counts = timestamps
+            .GroupBy(t => AlignToBucket(t, span))
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return bucketStarts
+            .Select(b => new HeartbeatActivityBucket(
+                EndpointValidation.ToUtcZ(b),
+                EndpointValidation.ToUtcZ(b.Add(span)),
+                counts.GetValueOrDefault(b, 0)))
+            .ToList();
+    }
+
+    public async Task<List<LogActivityBucket>> GetLogActivityAsync(
+        string deviceId, string bucket, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+    {
+        var span = BucketSpans[bucket];
+        var bucketStarts = BuildBucketStarts(from, to, span);
+
+        var device = await _db.Devices.AsNoTracking().FirstOrDefaultAsync(d => d.DeviceId == deviceId, ct);
+        if (device is null)
+        {
+            return bucketStarts
+                .Select(b => new LogActivityBucket(EndpointValidation.ToUtcZ(b), EndpointValidation.ToUtcZ(b.Add(span)), 0, 0, 0, 0, 0))
+                .ToList();
+        }
+
+        var batches = await _db.LogBatches
+            .AsNoTracking()
+            .Where(l => l.DeviceRecordId == device.Id && l.ReceivedAtUtc >= from && l.ReceivedAtUtc < to)
+            .Select(l => new { l.ReceivedAtUtc, l.LogsJson })
+            .ToListAsync(ct);
+
+        var counters = new Dictionary<DateTimeOffset, LogCounts>();
+        foreach (var batch in batches)
+        {
+            List<LogEntryRequest>? entries;
+            try
+            {
+                entries = JsonSerializer.Deserialize<List<LogEntryRequest>>(batch.LogsJson);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (entries is null || entries.Count == 0)
+                continue;
+
+            var bucketStart = AlignToBucket(batch.ReceivedAtUtc, span);
+            var current = counters.GetValueOrDefault(bucketStart);
+
+            foreach (var entry in entries)
+            {
+                var level = (entry.Level ?? "info").Trim().ToLowerInvariant();
+                current = level switch
+                {
+                    "info" => current with { Info = current.Info + 1 },
+                    "warn" or "warning" => current with { Warn = current.Warn + 1 },
+                    "error" => current with { Error = current.Error + 1 },
+                    "debug" => current with { Debug = current.Debug + 1 },
+                    _ => current with { Other = current.Other + 1 },
+                };
+            }
+
+            counters[bucketStart] = current;
+        }
+
+        return bucketStarts
+            .Select(b =>
+            {
+                var c = counters.GetValueOrDefault(b);
+                return new LogActivityBucket(
+                    EndpointValidation.ToUtcZ(b),
+                    EndpointValidation.ToUtcZ(b.Add(span)),
+                    c.Info,
+                    c.Warn,
+                    c.Error,
+                    c.Debug,
+                    c.Other);
+            })
+            .ToList();
     }
 }

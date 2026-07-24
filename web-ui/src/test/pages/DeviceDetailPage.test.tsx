@@ -158,6 +158,15 @@ const mockModules = [
   },
 ];
 
+function defaultApiGetMock(url: string) {
+  if (url.includes('/activity')) return Promise.resolve([]);
+  if (url.includes('/modules') && !url.includes('/results')) return Promise.resolve(mockModules);
+  if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
+  if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
+  if (url.includes('/logs')) return Promise.resolve(mockLogs);
+  return Promise.resolve(mockDevice);
+}
+
 describe('DeviceDetailPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -165,13 +174,7 @@ describe('DeviceDetailPage', () => {
   });
 
   it('renders device info', async () => {
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/modules') && !url.includes('/results')) return Promise.resolve(mockModules);
-      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
-      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
-      return Promise.resolve(mockDevice);
-    });
+    vi.mocked(api.get).mockImplementation(defaultApiGetMock);
     renderWithProviders(<DeviceDetailPage />);
 
     await waitFor(() => {
@@ -182,13 +185,7 @@ describe('DeviceDetailPage', () => {
 
   it('switches to logs tab and shows entries sorted descending', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/modules') && !url.includes('/results')) return Promise.resolve(mockModules);
-      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
-      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
-      return Promise.resolve(mockDevice);
-    });
+    vi.mocked(api.get).mockImplementation(defaultApiGetMock);
     renderWithProviders(<DeviceDetailPage />);
 
     await waitFor(() => {
@@ -210,13 +207,7 @@ describe('DeviceDetailPage', () => {
 
   it('shows log entries in descending order (newest batch first)', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/modules') && !url.includes('/results')) return Promise.resolve(mockModules);
-      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
-      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
-      return Promise.resolve(mockDevice);
-    });
+    vi.mocked(api.get).mockImplementation(defaultApiGetMock);
     renderWithProviders(<DeviceDetailPage />);
 
     await waitFor(() => {
@@ -239,13 +230,7 @@ describe('DeviceDetailPage', () => {
 
   it('switches to modules tab and shows tiles', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/modules') && !url.includes('/results')) return Promise.resolve(mockModules);
-      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
-      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
-      return Promise.resolve(mockDevice);
-    });
+    vi.mocked(api.get).mockImplementation(defaultApiGetMock);
     renderWithProviders(<DeviceDetailPage />);
 
     await waitFor(() => {
@@ -267,14 +252,7 @@ describe('DeviceDetailPage', () => {
 
   it('renders module results with visualization tiles on modules tab', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.get).mockImplementation((url: string) => {
-      if (url.includes('/modules') && !url.includes('/results')) return Promise.resolve(mockModules);
-      if (url.includes('/modules/results')) return Promise.resolve(mockModuleResults);
-      if (url.includes('/heartbeats')) return Promise.resolve(mockHeartbeats);
-      if (url.includes('/logs')) return Promise.resolve(mockLogs);
-      if (url.includes('/devices')) return Promise.resolve(mockDevice);
-      return Promise.resolve(mockDevice);
-    });
+    vi.mocked(api.get).mockImplementation(defaultApiGetMock);
     renderWithProviders(<DeviceDetailPage />);
 
     await waitFor(() => {
@@ -293,6 +271,48 @@ describe('DeviceDetailPage', () => {
     // Status badges
     expect(screen.getByText('success')).toBeInTheDocument();
     expect(screen.getByText('error')).toBeInTheDocument();
+  });
+
+  it('clicking a heartbeat activity bar filters the table and clear-filter resets it', async () => {
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/heartbeats/activity') && url.includes('bucket=day')) {
+        return Promise.resolve([
+          { bucket_start_utc: '2026-06-15T00:00:00Z', bucket_end_utc: '2026-06-16T00:00:00Z', count: 3 },
+        ]);
+      }
+      return defaultApiGetMock(url);
+    });
+
+    renderWithProviders(<DeviceDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('esp32-001')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Heartbeats'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Jun 15: 3')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText('Jun 15: 3'));
+
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith(
+        expect.stringContaining('/heartbeats?offset=0&limit=25&from=2026-06-15T00:00:00Z&to=2026-06-16T00:00:00Z'),
+      );
+    });
+    expect(screen.getByText('Clear filter')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Clear filter'));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Clear filter')).not.toBeInTheDocument();
+    });
+
+    vi.setSystemTime(new Date());
   });
 
   describe('Historical Values Helper', () => {

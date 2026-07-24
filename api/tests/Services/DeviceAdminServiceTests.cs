@@ -214,4 +214,113 @@ public class DeviceAdminServiceTests : IDisposable
         Assert.Single(result.Items);
         Assert.Equal("periodic", result.Items[0].Reason);
     }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_BucketsByDay_CountsCorrectly()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var day1 = new DateTimeOffset(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
+        var day2 = new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero);
+
+        _db.Heartbeats.Add(new HeartbeatRecord { Id = Guid.NewGuid(), DeviceRecordId = device.Id, ReceivedAtUtc = day1 });
+        _db.Heartbeats.Add(new HeartbeatRecord { Id = Guid.NewGuid(), DeviceRecordId = device.Id, ReceivedAtUtc = day1.AddHours(1) });
+        _db.Heartbeats.Add(new HeartbeatRecord { Id = Guid.NewGuid(), DeviceRecordId = device.Id, ReceivedAtUtc = day2 });
+        await _db.SaveChangesAsync();
+
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 3, 0, 0, 0, TimeSpan.Zero);
+        var result = await _service.GetHeartbeatActivityAsync("dev-001", "day", from, to);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(2, result[0].Count);
+        Assert.Equal(1, result[1].Count);
+    }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_ZeroFillsEmptyBuckets()
+    {
+        await SeedDeviceAsync("dev-001");
+
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 4, 0, 0, 0, TimeSpan.Zero);
+        var result = await _service.GetHeartbeatActivityAsync("dev-001", "day", from, to);
+
+        Assert.Equal(3, result.Count);
+        Assert.All(result, b => Assert.Equal(0, b.Count));
+    }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_UnknownDevice_ReturnsZeroFilled()
+    {
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+        var result = await _service.GetHeartbeatActivityAsync("nonexistent", "hour", from, to);
+
+        Assert.Equal(24, result.Count);
+        Assert.All(result, b => Assert.Equal(0, b.Count));
+    }
+
+    [Fact]
+    public async Task GetLogActivity_ClassifiesLevelsCorrectly()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var batchTime = new DateTimeOffset(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
+        var logsJson = "[{\"level\":\"info\"},{\"level\":\"ERROR\"},{\"level\":\"warn\"},{\"level\":\"warning\"},{\"level\":\"debug\"},{\"level\":\"trace\"}]";
+
+        _db.LogBatches.Add(new LogBatchRecord
+        {
+            Id = Guid.NewGuid(),
+            DeviceRecordId = device.Id,
+            Reason = "periodic",
+            LogsJson = logsJson,
+            ReceivedAtUtc = batchTime,
+        });
+        await _db.SaveChangesAsync();
+
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+        var result = await _service.GetLogActivityAsync("dev-001", "day", from, to);
+
+        Assert.Single(result);
+        Assert.Equal(1, result[0].InfoCount);
+        Assert.Equal(1, result[0].ErrorCount);
+        Assert.Equal(2, result[0].WarnCount);
+        Assert.Equal(1, result[0].DebugCount);
+        Assert.Equal(1, result[0].OtherCount);
+    }
+
+    [Fact]
+    public async Task GetLogActivity_MalformedJson_SkippedWithoutThrowing()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var batchTime = new DateTimeOffset(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
+
+        _db.LogBatches.Add(new LogBatchRecord
+        {
+            Id = Guid.NewGuid(),
+            DeviceRecordId = device.Id,
+            Reason = "periodic",
+            LogsJson = "not-valid-json",
+            ReceivedAtUtc = batchTime,
+        });
+        await _db.SaveChangesAsync();
+
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+        var result = await _service.GetLogActivityAsync("dev-001", "day", from, to);
+
+        Assert.Single(result);
+        Assert.Equal(0, result[0].InfoCount + result[0].WarnCount + result[0].ErrorCount + result[0].DebugCount + result[0].OtherCount);
+    }
+
+    [Fact]
+    public async Task GetLogActivity_UnknownDevice_ReturnsZeroFilled()
+    {
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 1, 1, 0, 0, TimeSpan.Zero);
+        var result = await _service.GetLogActivityAsync("nonexistent", "five_minute", from, to);
+
+        Assert.Equal(12, result.Count);
+        Assert.All(result, b => Assert.Equal(0, b.InfoCount + b.WarnCount + b.ErrorCount + b.DebugCount + b.OtherCount));
+    }
 }

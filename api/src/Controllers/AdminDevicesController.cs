@@ -104,4 +104,72 @@ public sealed class AdminDevicesController : UserApiControllerBase
         var result = await _deviceService.GetLogsAsync(deviceId, offset, limit, from, to, ct);
         return Ok(result);
     }
+
+    [HttpGet("{deviceId}/heartbeats/activity")]
+    public async Task<IActionResult> GetHeartbeatActivity(
+        string deviceId,
+        [FromQuery] string? bucket,
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        CancellationToken ct = default)
+    {
+        var validation = ValidateActivityQuery(bucket, from, to, out var normalizedBucket);
+        if (validation is not null)
+            return validation;
+
+        var result = await _deviceService.GetHeartbeatActivityAsync(deviceId, normalizedBucket!, from!.Value, to!.Value, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("{deviceId}/logs/activity")]
+    public async Task<IActionResult> GetLogActivity(
+        string deviceId,
+        [FromQuery] string? bucket,
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        CancellationToken ct = default)
+    {
+        var validation = ValidateActivityQuery(bucket, from, to, out var normalizedBucket);
+        if (validation is not null)
+            return validation;
+
+        var result = await _deviceService.GetLogActivityAsync(deviceId, normalizedBucket!, from!.Value, to!.Value, ct);
+        return Ok(result);
+    }
+
+    private static readonly HashSet<string> ValidActivityBuckets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "day", "hour", "five_minute",
+    };
+
+    private const int MaxActivityBuckets = 500;
+
+    private IActionResult? ValidateActivityQuery(
+        string? bucket, DateTimeOffset? from, DateTimeOffset? to, out string? normalizedBucket)
+    {
+        normalizedBucket = null;
+
+        if (string.IsNullOrWhiteSpace(bucket) || !ValidActivityBuckets.Contains(bucket))
+            return BadRequest(new ErrorResponse("invalid_request", "bucket must be 'day', 'hour', or 'five_minute'."));
+
+        if (from is null || to is null)
+            return BadRequest(new ErrorResponse("invalid_request", "from and to are required."));
+
+        if (from >= to)
+            return BadRequest(new ErrorResponse("invalid_request", "from must be before to."));
+
+        normalizedBucket = bucket.ToLowerInvariant();
+        var span = normalizedBucket switch
+        {
+            "day" => TimeSpan.FromDays(1),
+            "hour" => TimeSpan.FromHours(1),
+            _ => TimeSpan.FromMinutes(5),
+        };
+
+        var bucketCount = (to.Value - from.Value).Ticks / span.Ticks;
+        if (bucketCount > MaxActivityBuckets)
+            return BadRequest(new ErrorResponse("invalid_request", $"Requested range exceeds max of {MaxActivityBuckets} buckets."));
+
+        return null;
+    }
 }

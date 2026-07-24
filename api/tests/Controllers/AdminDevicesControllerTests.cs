@@ -157,4 +157,92 @@ public class AdminDevicesControllerTests
 
         Assert.IsType<OkObjectResult>(result);
     }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_ReturnsOk_WhenValid()
+    {
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+        var response = new List<HeartbeatActivityBucket>
+        {
+            new("2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z", 5),
+        };
+        _mockService.Setup(s => s.GetHeartbeatActivityAsync("dev-001", "day", from, to, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response);
+
+        var result = await _controller.GetHeartbeatActivity("dev-001", "day", from, to);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(response, ok.Value);
+    }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_ReturnsBadRequest_WhenBucketInvalid()
+    {
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+
+        var result = await _controller.GetHeartbeatActivity("dev-001", "weekly", from, to);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_ReturnsBadRequest_WhenFromOrToMissing()
+    {
+        var result = await _controller.GetHeartbeatActivity("dev-001", "day", null, null);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_ReturnsBadRequest_WhenFromNotBeforeTo()
+    {
+        var from = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var result = await _controller.GetHeartbeatActivity("dev-001", "day", from, to);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetHeartbeatActivity_ReturnsBadRequest_WhenBucketCountExceedsMax()
+    {
+        var from = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var result = await _controller.GetHeartbeatActivity("dev-001", "five_minute", from, to);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetLogActivity_ReturnsOk_WhenValid()
+    {
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+        var response = new List<LogActivityBucket>
+        {
+            new("2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z", 1, 2, 3, 4, 5),
+        };
+        _mockService.Setup(s => s.GetLogActivityAsync("dev-001", "day", from, to, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response);
+
+        var result = await _controller.GetLogActivity("dev-001", "day", from, to);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(response, ok.Value);
+    }
+
+    [Fact]
+    public async Task GetLogActivity_ReturnsBadRequest_WhenBucketInvalid()
+    {
+        var from = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 6, 2, 0, 0, 0, TimeSpan.Zero);
+
+        var result = await _controller.GetLogActivity("dev-001", "invalid", from, to);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
 }

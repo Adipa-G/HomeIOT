@@ -73,6 +73,25 @@ export interface UpdateDeviceModeRequest {
   mode: string;
 }
 
+// ── Activity ──
+export type ActivityBucketGranularity = 'day' | 'hour' | 'five_minute';
+
+export interface HeartbeatActivityBucket {
+  bucket_start_utc: string;
+  bucket_end_utc: string;
+  count: number;
+}
+
+export interface LogActivityBucket {
+  bucket_start_utc: string;
+  bucket_end_utc: string;
+  info_count: number;
+  warn_count: number;
+  error_count: number;
+  debug_count: number;
+  other_count: number;
+}
+
 // ── Modules ──
 export interface ModuleListItem {
   module_id: string;

@@ -18,7 +18,14 @@ If you don't have a physical device, you can run a simulator on your PC to test 
 
 ### Quick Start
 
-1. **Generate simulator config**
+1. **Install dependencies**
+   ```bash
+   pip install -r edge/shared/tests/requirements.txt
+   ```
+   The simulator's HTTP client uses the `requests` package (declared in this
+   requirements file) since it runs as CPython rather than MicroPython.
+
+2. **Generate simulator config**
    ```bash
    cp edge/simulator/config.template.json simulator-config.json
    
@@ -28,12 +35,12 @@ If you don't have a physical device, you can run a simulator on your PC to test 
    # - Optionally customize "device_id" (e.g., "my-simulator-01")
    ```
 
-2. **Run the simulator**
+3. **Run the simulator**
    ```bash
    python edge/simulator/worker.py --config simulator-config.json
    ```
 
-3. **View in dashboard**
+4. **View in dashboard**
    - Open web UI at `http://localhost:5173`
    - Go to **Admin → Devices**
    - Find your simulator device (device ID from config)
@@ -59,6 +66,10 @@ python edge/simulator/worker.py \
 ```
 
 ### Troubleshooting the Simulator
+
+**`ModuleNotFoundError: No module named 'requests'`:**
+- Install dependencies: `pip install -r edge/shared/tests/requirements.txt`
+- Make sure you're running with the same Python/venv you installed into
 
 **Simulator won't connect to API:**
 - Verify server is running: `http://localhost:5228`

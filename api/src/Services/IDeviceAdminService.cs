@@ -18,4 +18,10 @@ public interface IDeviceAdminService
 
     Task<PaginatedResponse<LogBatchListItem>> GetLogsAsync(
         string deviceId, int offset, int limit, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default);
+
+    Task<List<HeartbeatActivityBucket>> GetHeartbeatActivityAsync(
+        string deviceId, string bucket, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default);
+
+    Task<List<LogActivityBucket>> GetLogActivityAsync(
+        string deviceId, string bucket, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default);
 }
