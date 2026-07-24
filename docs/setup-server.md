@@ -197,6 +197,8 @@ Key configuration options in `api/src/appsettings.json`:
 | `RuntimeControl.NextHeartbeatMs` | `60000` | Device heartbeat interval (milliseconds) |
 | `RuntimeControl.DevPollIntervalMs` | `2000` | Dev command polling interval |
 | `RuntimeControl.ModuleAssignmentPollIntervalMs` | `60000` | Module assignment polling interval |
+| `DataRetention.RetentionDays` | `30` | Days to keep heartbeat and log records before automatic cleanup (0 or less disables cleanup) |
+| `DataRetention.CleanupIntervalMinutes` | `60` | How often the cleanup pass runs |
 | `Admin.MasterUsername` | `Admin` | Default admin username |
 | `Admin.MasterPassword` | `123` | Default admin password |
 | `Jwt.SecretKey` | (configured) | JWT signing key (change in production!) |

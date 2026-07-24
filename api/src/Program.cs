@@ -22,6 +22,7 @@ builder.Services.Configure<OtaArtifactOptions>(builder.Configuration.GetSection(
 builder.Services.Configure<ModuleStorageOptions>(builder.Configuration.GetSection(ModuleStorageOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
+builder.Services.Configure<DataRetentionOptions>(builder.Configuration.GetSection(DataRetentionOptions.SectionName));
 builder.Services.AddDbContext<ApiDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddSingleton<IOtaReleaseService, FileSystemOtaReleaseService>();
@@ -31,6 +32,7 @@ builder.Services.AddScoped<IModuleVariableService, ModuleVariableService>();
 builder.Services.AddScoped<IModuleServerCodeService, ModuleServerCodeService>();
 builder.Services.AddScoped<IDeviceAdminService, DeviceAdminService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddHostedService<DataRetentionCleanupService>();
 
 builder.Services.AddCors(options =>
 {
