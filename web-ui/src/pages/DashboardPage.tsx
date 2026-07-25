@@ -112,6 +112,10 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from(modulesByDevice.entries()).map(([deviceId, items]) => {
               const tiles = buildTiles(items);
+              // Only use a 3-column tile grid at lg+ once there are enough tiles to
+              // fill it; otherwise stick to 2 columns so a lone/pair of tiles get
+              // a sensible half-width size instead of shrinking to a third.
+              const tileGridClass = tiles.length >= 3 ? 'grid grid-cols-2 gap-2 lg:grid-cols-3' : 'grid grid-cols-2 gap-2';
               return (
                 <div key={deviceId} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
                   <h4
@@ -120,7 +124,7 @@ export default function DashboardPage() {
                   >
                     {deviceId}
                   </h4>
-                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                  <div className={tileGridClass}>
                     {tiles.map((tile) => (
                       <div
                         key={tile.key}

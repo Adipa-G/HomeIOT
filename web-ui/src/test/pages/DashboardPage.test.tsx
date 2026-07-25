@@ -250,4 +250,84 @@ describe('DashboardPage', () => {
     const metricsContainer = container.querySelector('.grid.grid-cols-2.gap-4.lg\\:grid-cols-3.xl\\:grid-cols-4');
     expect(metricsContainer).not.toBeNull();
   });
+
+  it('keeps a lone tile at half width instead of shrinking to a third column', async () => {
+    const mockModules = [
+      {
+        assignment_id: 'a1',
+        device_id: 'esp32-001',
+        module_id: 'sensor-reader',
+        status: 'ok',
+        output: '{"temp":21.5}',
+        error_message: null,
+        finished_at_utc: '2026-05-10T00:00:00Z',
+        variable_defs: [
+          {
+            name: 'temp',
+            type: 'number',
+            default_value: null,
+            description: null,
+            has_server_code: false,
+            visualizations: [
+              { id: 'v1', json_path: 'temp', display_name: 'Temperature', visualization_type: 'number_display' },
+            ],
+          },
+        ],
+      },
+    ];
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.includes('/dashboard/modules')) return mockModules;
+      return mockDashboard;
+    });
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('esp32-001')).toBeInTheDocument();
+    });
+
+    const tileGrid = screen.getByText('Temperature').closest('.grid');
+    expect(tileGrid?.className).toContain('grid-cols-2');
+    expect(tileGrid?.className).not.toContain('lg:grid-cols-3');
+  });
+
+  it('expands the tile grid to 3 columns at lg once there are 3 or more tiles', async () => {
+    const mockModules = [
+      {
+        assignment_id: 'a2',
+        device_id: 'esp32-002',
+        module_id: 'multi-sensor',
+        status: 'ok',
+        output: '{"temp":21.5,"humidity":40,"pressure":1013}',
+        error_message: null,
+        finished_at_utc: '2026-05-10T00:00:00Z',
+        variable_defs: [
+          {
+            name: 'readings',
+            type: 'json',
+            default_value: null,
+            description: null,
+            has_server_code: false,
+            visualizations: [
+              { id: 'v1', json_path: 'temp', display_name: 'Temperature', visualization_type: 'number_display' },
+              { id: 'v2', json_path: 'humidity', display_name: 'Humidity', visualization_type: 'number_display' },
+              { id: 'v3', json_path: 'pressure', display_name: 'Pressure', visualization_type: 'number_display' },
+            ],
+          },
+        ],
+      },
+    ];
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.includes('/dashboard/modules')) return mockModules;
+      return mockDashboard;
+    });
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('esp32-002')).toBeInTheDocument();
+    });
+
+    const tileGrid = screen.getByText('Temperature').closest('.grid');
+    expect(tileGrid?.className).toContain('grid-cols-2');
+    expect(tileGrid?.className).toContain('lg:grid-cols-3');
+  });
 });
