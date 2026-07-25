@@ -142,7 +142,7 @@ describe('ModuleDetailPage', () => {
       if (path.startsWith('/api/admin/devices')) {
         return { items: [], total: 0, offset: 0, limit: 200 };
       }
-      if (path === '/api/admin/modules/templates') {
+      if (path === '/api/admin/modules/device-code-templates') {
         return templates;
       }
       return mockModule;
@@ -170,6 +170,52 @@ describe('ModuleDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Use this template' }));
 
     expect(screen.getByDisplayValue(/from machine import Pin/)).toBeInTheDocument();
+  });
+
+  it('opens the server code template picker and inserts selected template code', async () => {
+    const user = userEvent.setup();
+    const serverCodeTemplates = [
+      {
+        id: 'static-value',
+        name: 'Static value',
+        description: 'Return a fixed value.',
+        setup_guide: 'Paste into Server Code.',
+        code: 'return 28;',
+      },
+    ];
+
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/devices')) {
+        return { items: [], total: 0, offset: 0, limit: 200 };
+      }
+      if (path === '/api/admin/modules/server-code-templates') {
+        return serverCodeTemplates;
+      }
+      return mockModule;
+    });
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Versions')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '+ Add Input Variable' }));
+    await user.click(screen.getByRole('button', { name: 'Use a template' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Static value')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Static value'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Use this template' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Use this template' }));
+
+    expect(screen.getByDisplayValue('return 28;')).toBeInTheDocument();
   });
 
   it('shows View button for versions to see code', async () => {

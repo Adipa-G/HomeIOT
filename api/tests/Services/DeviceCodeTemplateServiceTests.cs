@@ -8,25 +8,25 @@ using Xunit;
 
 namespace HomeIOT.Api.Tests.Services;
 
-public class ModuleTemplateServiceTests : IDisposable
+public class DeviceCodeTemplateServiceTests : IDisposable
 {
     private readonly string _tempDir;
-    private readonly ModuleTemplateService _service;
+    private readonly DeviceCodeTemplateService _service;
 
-    public ModuleTemplateServiceTests()
+    public DeviceCodeTemplateServiceTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"module_template_test_{Guid.NewGuid():N}");
+        _tempDir = Path.Combine(Path.GetTempPath(), $"device_code_template_test_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
 
-        var templateOptions = new Mock<IOptions<ModuleTemplateOptions>>();
-        templateOptions.Setup(x => x.Value).Returns(new ModuleTemplateOptions { TemplatesRoot = _tempDir });
+        var templateOptions = new Mock<IOptions<DeviceCodeTemplateOptions>>();
+        templateOptions.Setup(x => x.Value).Returns(new DeviceCodeTemplateOptions { TemplatesRoot = _tempDir });
 
         var env = new Mock<IWebHostEnvironment>();
         env.Setup(x => x.ContentRootPath).Returns(_tempDir);
 
-        var logger = new Mock<ILogger<ModuleTemplateService>>();
+        var logger = new Mock<ILogger<DeviceCodeTemplateService>>();
 
-        _service = new ModuleTemplateService(templateOptions.Object, env.Object, logger.Object);
+        _service = new DeviceCodeTemplateService(templateOptions.Object, env.Object, logger.Object);
     }
 
     public void Dispose()

@@ -20,7 +20,8 @@ builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnCh
 builder.Services.Configure<RuntimeControlOptions>(builder.Configuration.GetSection(RuntimeControlOptions.SectionName));
 builder.Services.Configure<OtaArtifactOptions>(builder.Configuration.GetSection(OtaArtifactOptions.SectionName));
 builder.Services.Configure<ModuleStorageOptions>(builder.Configuration.GetSection(ModuleStorageOptions.SectionName));
-builder.Services.Configure<ModuleTemplateOptions>(builder.Configuration.GetSection(ModuleTemplateOptions.SectionName));
+builder.Services.Configure<DeviceCodeTemplateOptions>(builder.Configuration.GetSection(DeviceCodeTemplateOptions.SectionName));
+builder.Services.Configure<ServerCodeTemplateOptions>(builder.Configuration.GetSection(ServerCodeTemplateOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.Configure<DataRetentionOptions>(builder.Configuration.GetSection(DataRetentionOptions.SectionName));
@@ -30,7 +31,8 @@ builder.Services.AddSingleton<IOtaReleaseService, FileSystemOtaReleaseService>()
 builder.Services.AddSingleton<IDevCommandQueue, DevCommandQueue>();
 builder.Services.AddScoped<IModuleService, ModuleService>();
 builder.Services.AddScoped<IModuleVariableService, ModuleVariableService>();
-builder.Services.AddScoped<IModuleTemplateService, ModuleTemplateService>();
+builder.Services.AddScoped<IDeviceCodeTemplateService, DeviceCodeTemplateService>();
+builder.Services.AddScoped<IServerCodeTemplateService, ServerCodeTemplateService>();
 builder.Services.AddScoped<IModuleServerCodeService, ModuleServerCodeService>();
 builder.Services.AddScoped<IDeviceAdminService, DeviceAdminService>();
 builder.Services.AddScoped<IUserService, UserService>();

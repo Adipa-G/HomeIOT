@@ -11,7 +11,8 @@ import type {
   UpsertVariableDefRequest,
 } from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { ModuleTemplatePicker } from '../components/ModuleTemplatePicker';
+import { DeviceCodeTemplatePicker } from '../components/DeviceCodeTemplatePicker';
+import { ServerCodeTemplatePicker } from '../components/ServerCodeTemplatePicker';
 import AssignmentVariablesPanel from '../components/AssignmentVariablesPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { toast } from '../components/Toast';
@@ -578,7 +579,7 @@ export default function ModuleDetailPage() {
                   Code
                 </button>
               </div>
-              <ModuleTemplatePicker
+              <DeviceCodeTemplatePicker
                 onSelect={(code) => {
                   setVersionSource(code);
                   setUploadMode('code');
@@ -593,7 +594,7 @@ export default function ModuleDetailPage() {
                     Use a template
                   </button>
                 )}
-              </ModuleTemplatePicker>
+              </DeviceCodeTemplatePicker>
             </div>
 
             {uploadMode === 'file' ? (
@@ -771,7 +772,20 @@ export default function ModuleDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <label htmlFor="var-server-code" className="mb-1 block text-xs text-gray-600">Server code (optional)</label>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label htmlFor="var-server-code" className="block text-xs text-gray-600">Server code (optional)</label>
+                        <ServerCodeTemplatePicker onSelect={(code) => setVarServerCode(code)}>
+                          {(openPicker) => (
+                            <button
+                              type="button"
+                              onClick={openPicker}
+                              className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                            >
+                              Use a template
+                            </button>
+                          )}
+                        </ServerCodeTemplatePicker>
+                      </div>
                       <textarea
                         id="var-server-code"
                         value={varServerCode}

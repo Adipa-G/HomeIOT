@@ -1,0 +1,7 @@
+{
+  "id": "average-of-recent-results",
+  "name": "Average of recent readings",
+  "description": "Average a numeric field across this module's recent results (e.g. the last hour).",
+  "setup_guide": "Paste this into the variable's Server Code field, then change FIELD_NAME to match a field in this module's output, and adjust the time window if needed. `Data`, `ModuleId`, and `DeviceId` are provided automatically.",
+  "file": "code.csx"
+}

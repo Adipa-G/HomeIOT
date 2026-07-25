@@ -12,22 +12,32 @@ public sealed class AdminModulesController : UserApiControllerBase
 {
     private readonly IModuleService _moduleService;
     private readonly IModuleVariableService _variableService;
-    private readonly IModuleTemplateService _templateService;
+    private readonly IDeviceCodeTemplateService _deviceCodeTemplateService;
+    private readonly IServerCodeTemplateService _serverCodeTemplateService;
 
     public AdminModulesController(
         IModuleService moduleService,
         IModuleVariableService variableService,
-        IModuleTemplateService templateService)
+        IDeviceCodeTemplateService deviceCodeTemplateService,
+        IServerCodeTemplateService serverCodeTemplateService)
     {
         _moduleService = moduleService;
         _variableService = variableService;
-        _templateService = templateService;
+        _deviceCodeTemplateService = deviceCodeTemplateService;
+        _serverCodeTemplateService = serverCodeTemplateService;
     }
 
-    [HttpGet("templates")]
-    public async Task<ActionResult<List<ModuleTemplateItem>>> GetTemplates(CancellationToken ct)
+    [HttpGet("device-code-templates")]
+    public async Task<ActionResult<List<DeviceCodeTemplateItem>>> GetDeviceCodeTemplates(CancellationToken ct)
     {
-        var templates = await _templateService.GetTemplatesAsync(ct);
+        var templates = await _deviceCodeTemplateService.GetTemplatesAsync(ct);
+        return Ok(templates);
+    }
+
+    [HttpGet("server-code-templates")]
+    public async Task<ActionResult<List<ServerCodeTemplateItem>>> GetServerCodeTemplates(CancellationToken ct)
+    {
+        var templates = await _serverCodeTemplateService.GetTemplatesAsync(ct);
         return Ok(templates);
     }
 

@@ -1,0 +1,7 @@
+{
+  "id": "fetch-external-api",
+  "name": "Fetch from a web API",
+  "description": "Call an external HTTP API and return a value parsed from the response.",
+  "setup_guide": "Paste this into the variable's Server Code field, then change the URL and the JSON property path to match the API you're calling. Always keep a fallback value in case the request fails.",
+  "file": "code.csx"
+}

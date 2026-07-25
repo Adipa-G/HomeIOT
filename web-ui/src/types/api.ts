@@ -225,17 +225,25 @@ export interface DashboardModuleItem {
   variable_defs: ModuleVariableDefItem[];
 }
 
-export interface ModuleTemplateVariant {
+export interface DeviceCodeTemplateVariant {
   platform: string;
   code: string;
 }
 
-export interface ModuleTemplateItem {
+export interface DeviceCodeTemplateItem {
   id: string;
   name: string;
   description: string;
   setup_guide: string;
-  variants: ModuleTemplateVariant[];
+  variants: DeviceCodeTemplateVariant[];
+}
+
+export interface ServerCodeTemplateItem {
+  id: string;
+  name: string;
+  description: string;
+  setup_guide: string;
+  code: string;
 }
 
 export interface UploadVersionRequest {

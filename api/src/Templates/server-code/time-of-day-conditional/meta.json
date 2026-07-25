@@ -1,0 +1,7 @@
+{
+  "id": "time-of-day-conditional",
+  "name": "Time-of-day conditional",
+  "description": "Return different values depending on the current server time (e.g. day/night threshold).",
+  "setup_guide": "Paste this into the variable's Server Code field, then adjust the hour range and returned values to match your schedule.",
+  "file": "code.csx"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "latest-module-output",
+  "name": "Use latest reading from another module",
+  "description": "Read a field from the most recent result of any module on this device (including other modules).",
+  "setup_guide": "Paste this into the variable's Server Code field, then change SOURCE_MODULE_ID and FIELD_NAME to match the module/field you want to read from. `Data` and `DeviceId` are provided automatically \u2014 no setup needed beyond the constants at the top.",
+  "file": "code.csx"
+}

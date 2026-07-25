@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import type { CreateModuleRequest, ModuleDetailResponse } from '../types/api';
 import { toast } from '../components/Toast';
 import { ApiError } from '../api/client';
-import { ModuleTemplatePicker } from '../components/ModuleTemplatePicker';
+import { DeviceCodeTemplatePicker } from '../components/DeviceCodeTemplatePicker';
 
 export default function ModuleCreatePage() {
   const navigate = useNavigate();
@@ -58,7 +58,7 @@ export default function ModuleCreatePage() {
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="block text-sm font-medium text-gray-700">Code <span className="text-gray-400 font-normal">(optional)</span></label>
-            <ModuleTemplatePicker
+            <DeviceCodeTemplatePicker
               onSelect={(code) => setForm((f) => ({ ...f, code, version: f.version || '1.0.0' }))}
             >
               {(openPicker) => (
@@ -70,7 +70,7 @@ export default function ModuleCreatePage() {
                   Use a template
                 </button>
               )}
-            </ModuleTemplatePicker>
+            </DeviceCodeTemplatePicker>
           </div>
           <textarea
             value={form.code ?? ''}

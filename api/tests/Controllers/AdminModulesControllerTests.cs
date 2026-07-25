@@ -13,15 +13,17 @@ public class AdminModulesControllerTests
 {
     private readonly Mock<IModuleService> _mockService;
     private readonly Mock<IModuleVariableService> _mockVariableService;
-    private readonly Mock<IModuleTemplateService> _mockTemplateService;
+    private readonly Mock<IDeviceCodeTemplateService> _mockDeviceCodeTemplateService;
+    private readonly Mock<IServerCodeTemplateService> _mockServerCodeTemplateService;
     private readonly AdminModulesController _controller;
 
     public AdminModulesControllerTests()
     {
         _mockService = new Mock<IModuleService>();
         _mockVariableService = new Mock<IModuleVariableService>();
-        _mockTemplateService = new Mock<IModuleTemplateService>();
-        _controller = new AdminModulesController(_mockService.Object, _mockVariableService.Object, _mockTemplateService.Object)
+        _mockDeviceCodeTemplateService = new Mock<IDeviceCodeTemplateService>();
+        _mockServerCodeTemplateService = new Mock<IServerCodeTemplateService>();
+        _controller = new AdminModulesController(_mockService.Object, _mockVariableService.Object, _mockDeviceCodeTemplateService.Object, _mockServerCodeTemplateService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -31,29 +33,52 @@ public class AdminModulesControllerTests
     }
 
     [Fact]
-    public async Task GetTemplates_ReturnsOkWithTemplates_FromTemplateService()
+    public async Task GetDeviceCodeTemplates_ReturnsOkWithTemplates_FromDeviceCodeTemplateService()
     {
-        var templates = new List<ModuleTemplateItem>
+        var templates = new List<DeviceCodeTemplateItem>
         {
             new(
                 Id: "read-digital-pin",
                 Name: "Read a digital pin",
                 Description: "Read a button or switch.",
                 SetupGuide: "Add a variable named value.",
-                Variants: new List<ModuleTemplateVariantItem>
+                Variants: new List<DeviceCodeTemplateVariantItem>
                 {
                     new("esp32", "from machine import Pin"),
                 }),
         };
 
-        _mockTemplateService.Setup(s => s.GetTemplatesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(templates);
+        _mockDeviceCodeTemplateService.Setup(s => s.GetTemplatesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(templates);
 
-        var result = await _controller.GetTemplates(CancellationToken.None);
+        var result = await _controller.GetDeviceCodeTemplates(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returned = Assert.IsType<List<ModuleTemplateItem>>(okResult.Value);
+        var returned = Assert.IsType<List<DeviceCodeTemplateItem>>(okResult.Value);
         Assert.Single(returned);
         Assert.Equal("read-digital-pin", returned[0].Id);
+    }
+
+    [Fact]
+    public async Task GetServerCodeTemplates_ReturnsOkWithTemplates_FromServerCodeTemplateService()
+    {
+        var templates = new List<ServerCodeTemplateItem>
+        {
+            new(
+                Id: "static-value",
+                Name: "Static value",
+                Description: "Return a fixed value.",
+                SetupGuide: "Paste into Server Code.",
+                Code: "return 28;"),
+        };
+
+        _mockServerCodeTemplateService.Setup(s => s.GetTemplatesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(templates);
+
+        var result = await _controller.GetServerCodeTemplates(CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returned = Assert.IsType<List<ServerCodeTemplateItem>>(okResult.Value);
+        Assert.Single(returned);
+        Assert.Equal("static-value", returned[0].Id);
     }
 
     [Fact]
