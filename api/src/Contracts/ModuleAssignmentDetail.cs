@@ -12,4 +12,5 @@ public sealed record ModuleAssignmentDetail(
     [property: JsonPropertyName("entrypoint")] string Entrypoint,
     [property: JsonPropertyName("enabled")] bool Enabled,
     [property: JsonPropertyName("created_at_utc")] string CreatedAtUtc,
-    [property: JsonPropertyName("updated_at_utc")] string UpdatedAtUtc);
+    [property: JsonPropertyName("updated_at_utc")] string UpdatedAtUtc,
+    [property: JsonPropertyName("show_in_dashboard")] bool ShowInDashboard = false);

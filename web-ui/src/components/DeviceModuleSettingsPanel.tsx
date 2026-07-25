@@ -10,6 +10,7 @@ interface DeviceModuleSettingsPanelProps {
   assignmentId: string;
   variableDefs: ModuleVariableDefItem[];
   variableValues: ModuleVariableValueItem[];
+  showInDashboard: boolean;
   onClose: () => void;
 }
 
@@ -18,10 +19,22 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
   assignmentId,
   variableDefs,
   variableValues,
+  showInDashboard,
   onClose,
 }) => {
   const qc = useQueryClient();
-  
+
+  const toggleShowInDashboard = useMutation({
+    mutationFn: (value: boolean) =>
+      api.put(`/api/admin/modules/assignments/${assignmentId}`, { show_in_dashboard: value }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modules-all'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-modules'] });
+      toast('Dashboard visibility updated');
+    },
+    onError: () => toast('Failed to update dashboard visibility', 'error'),
+  });
+
   // Fetch fresh variable values from the API
   const { data: freshValues = variableValues } = useQuery({
     queryKey: ['module-assignment-variables', assignmentId],
@@ -81,6 +94,16 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
             <h2 className="text-lg font-medium text-gray-900">Module Settings</h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
           </div>
+          <label className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 p-4">
+            <span className="text-sm font-medium text-gray-700">Show in dashboard</span>
+            <input
+              type="checkbox"
+              checked={showInDashboard}
+              onChange={(e) => toggleShowInDashboard.mutate(e.target.checked)}
+              disabled={toggleShowInDashboard.isPending}
+              className="h-4 w-4"
+            />
+          </label>
           <p className="text-sm text-gray-500">No controls configured for this module.</p>
           <button
             onClick={onClose}
@@ -105,6 +128,16 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
         </div>
 
         <div className="space-y-4 p-6">
+          <label className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
+            <span className="text-sm font-medium text-gray-700">Show in dashboard</span>
+            <input
+              type="checkbox"
+              checked={showInDashboard}
+              onChange={(e) => toggleShowInDashboard.mutate(e.target.checked)}
+              disabled={toggleShowInDashboard.isPending}
+              className="h-4 w-4"
+            />
+          </label>
           {controllableVars.map((varDef) => {
             const value = formValues[varDef.name];
             const isServerComputed = freshValues.find((v) => v.variable_name === varDef.name)?.source === 'server_computed';

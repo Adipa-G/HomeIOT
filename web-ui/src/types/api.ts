@@ -170,6 +170,7 @@ export interface ModuleAssignmentDetail {
   enabled: boolean;
   created_at_utc: string;
   updated_at_utc: string;
+  show_in_dashboard: boolean;
 }
 
 export interface ModuleVariableValueItem {
@@ -210,6 +211,18 @@ export interface UpdateAssignmentRequest {
   timeout_ms?: number;
   entrypoint?: string;
   enabled?: boolean;
+  show_in_dashboard?: boolean;
+}
+
+export interface DashboardModuleItem {
+  assignment_id: string;
+  device_id: string;
+  module_id: string;
+  status: string | null;
+  output: string | null;
+  error_message: string | null;
+  finished_at_utc: string | null;
+  variable_defs: ModuleVariableDefItem[];
 }
 
 export interface UploadVersionRequest {

@@ -35,7 +35,10 @@ describe('DashboardPage', () => {
   });
 
   it('renders dashboard metrics', async () => {
-    vi.mocked(api.get).mockResolvedValue(mockDashboard);
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.includes('/dashboard/modules')) return [];
+      return mockDashboard;
+    });
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() => {
@@ -54,11 +57,50 @@ describe('DashboardPage', () => {
   });
 
   it('shows failure rate when there are runs', async () => {
-    vi.mocked(api.get).mockResolvedValue(mockDashboard);
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.includes('/dashboard/modules')) return [];
+      return mockDashboard;
+    });
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText('2.0% failure rate')).toBeInTheDocument();
     });
+  });
+
+  it('renders modules grouped by device when flagged modules exist', async () => {
+    const mockModules = [
+      {
+        assignment_id: 'a1',
+        device_id: 'esp32-001',
+        module_id: 'sensor-reader',
+        status: 'ok',
+        output: '{"temp":21.5}',
+        error_message: null,
+        finished_at_utc: '2026-05-10T00:00:00Z',
+        variable_defs: [
+          {
+            name: 'temp',
+            type: 'number',
+            default_value: null,
+            description: null,
+            has_server_code: false,
+            visualizations: [
+              { id: 'v1', json_path: 'temp', display_name: 'Temperature', visualization_type: 'number_display' },
+            ],
+          },
+        ],
+      },
+    ];
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.includes('/dashboard/modules')) return mockModules;
+      return mockDashboard;
+    });
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('esp32-001')).toBeInTheDocument();
+    });
+    expect(screen.getByText('sensor-reader')).toBeInTheDocument();
   });
 });

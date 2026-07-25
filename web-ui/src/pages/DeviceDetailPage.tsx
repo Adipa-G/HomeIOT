@@ -450,6 +450,7 @@ export default function DeviceDetailPage() {
             assignmentId={settingsAssignmentId}
             variableDefs={module.variable_defs}
             variableValues={[]}
+            showInDashboard={assignment.show_in_dashboard}
             onClose={() => { setSettingsModuleId(null); setSettingsAssignmentId(null); }}
           />
         );

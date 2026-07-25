@@ -10,6 +10,7 @@ public sealed class ModuleAssignmentRecord
     public int TimeoutMs { get; set; } = 5000;
     public string Entrypoint { get; set; } = "run";
     public bool Enabled { get; set; } = true;
+    public bool ShowInDashboard { get; set; } = false;
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
     public DeviceRecord Device { get; set; } = null!;

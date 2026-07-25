@@ -1,5 +1,6 @@
 using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Data;
+using HomeIOT.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,10 +13,12 @@ namespace HomeIOT.Api.Controllers;
 public sealed class AdminDashboardController : UserApiControllerBase
 {
     private readonly ApiDbContext _db;
+    private readonly IModuleService _moduleService;
 
-    public AdminDashboardController(ApiDbContext db)
+    public AdminDashboardController(ApiDbContext db, IModuleService moduleService)
     {
         _db = db;
+        _moduleService = moduleService;
     }
 
     [HttpGet]
@@ -49,5 +52,12 @@ public sealed class AdminDashboardController : UserApiControllerBase
             logBatches24h,
             moduleRuns24h,
             moduleFailures24h));
+    }
+
+    [HttpGet("modules")]
+    public async Task<ActionResult<List<DashboardModuleItem>>> GetDashboardModules(CancellationToken ct)
+    {
+        var items = await _moduleService.GetDashboardModulesAsync(ct);
+        return Ok(items);
     }
 }

@@ -18,4 +18,7 @@ public sealed class UpdateAssignmentRequest
 
     [JsonPropertyName("enabled")]
     public bool? Enabled { get; set; }
+
+    [JsonPropertyName("show_in_dashboard")]
+    public bool? ShowInDashboard { get; set; }
 }

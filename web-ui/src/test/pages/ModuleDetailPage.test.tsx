@@ -46,7 +46,7 @@ const mockModule = {
     { id: 'v1', version: '1.0.0', package_hash: 'sha256:abc123def456', package_size_bytes: 256, created_at_utc: '2026-05-10T00:00:00Z' },
   ],
   assignments: [
-    { id: 'a1', device_id: 'esp32-001', module_id: 'sensor-reader', version: '1.0.0', interval_ms: 60000, timeout_ms: 30000, entrypoint: 'run', enabled: true, created_at_utc: '2026-05-10T00:00:00Z', updated_at_utc: '2026-05-10T00:00:00Z' },
+    { id: 'a1', device_id: 'esp32-001', module_id: 'sensor-reader', version: '1.0.0', interval_ms: 60000, timeout_ms: 30000, entrypoint: 'run', enabled: true, created_at_utc: '2026-05-10T00:00:00Z', updated_at_utc: '2026-05-10T00:00:00Z', show_in_dashboard: false },
   ],
 };
 

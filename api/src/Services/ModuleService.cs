@@ -205,7 +205,8 @@ public sealed class ModuleService : IModuleService
                 a.Entrypoint,
                 a.Enabled,
                 EndpointValidation.ToUtcZ(a.CreatedAtUtc),
-                EndpointValidation.ToUtcZ(a.UpdatedAtUtc)))
+                EndpointValidation.ToUtcZ(a.UpdatedAtUtc),
+                a.ShowInDashboard))
             .ToList();
 
         var variableDefs = module.VariableDefs
@@ -418,6 +419,9 @@ public sealed class ModuleService : IModuleService
         if (request.Enabled.HasValue)
             assignment.Enabled = request.Enabled.Value;
 
+        if (request.ShowInDashboard.HasValue)
+            assignment.ShowInDashboard = request.ShowInDashboard.Value;
+
         assignment.UpdatedAtUtc = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         return assignment;
@@ -434,6 +438,78 @@ public sealed class ModuleService : IModuleService
         _db.ModuleAssignments.Remove(assignment);
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    // ──────────────────────────────────────────────
+    //  Dashboard
+    // ──────────────────────────────────────────────
+
+    public async Task<List<DashboardModuleItem>> GetDashboardModulesAsync(CancellationToken ct = default)
+    {
+        var assignments = await _db.ModuleAssignments
+            .AsNoTracking()
+            .Where(a => a.ShowInDashboard)
+            .Include(a => a.Device)
+            .Include(a => a.ModuleDefinition)
+                .ThenInclude(m => m.VariableDefs)
+                    .ThenInclude(v => v.Visualizations)
+            .OrderBy(a => a.Device.DeviceId)
+            .ThenBy(a => a.ModuleDefinition.ModuleId)
+            .ToListAsync(ct);
+
+        var items = new List<DashboardModuleItem>();
+        foreach (var a in assignments)
+        {
+            var latestResult = await _db.ModuleResults
+                .AsNoTracking()
+                .Where(r => r.DeviceId == a.Device.DeviceId && r.ModuleId == a.ModuleDefinition.ModuleId)
+                .OrderByDescending(r => r.FinishedAtUtc)
+                .FirstOrDefaultAsync(ct);
+
+            var variableDefs = a.ModuleDefinition.VariableDefs
+                .OrderBy(v => v.Name)
+                .Select(v =>
+                {
+                    var visualizations = v.Visualizations
+                        .OrderBy(viz => viz.DisplayName)
+                        .Select(viz => new ModuleVariableVisualizationItem(
+                            viz.Id,
+                            viz.JsonPath,
+                            viz.DisplayName,
+                            viz.VisualizationType,
+                            viz.VisualizationConfig != null
+                                ? System.Text.Json.JsonSerializer.Deserialize<object>(viz.VisualizationConfig)
+                                : null))
+                        .ToList();
+
+                    return new ModuleVariableDefItem(
+                        v.Name,
+                        v.Type,
+                        v.DefaultValue,
+                        v.Description,
+                        v.ServerCode is not null,
+                        v.ServerCode,
+                        v.ControlType,
+                        v.ControlOptions != null
+                            ? System.Text.Json.JsonSerializer.Deserialize<object>(v.ControlOptions)
+                            : null,
+                        null,
+                        visualizations);
+                })
+                .ToList();
+
+            items.Add(new DashboardModuleItem(
+                a.Id,
+                a.Device.DeviceId,
+                a.ModuleDefinition.ModuleId,
+                latestResult?.Status,
+                latestResult?.Output,
+                latestResult?.ErrorMessage,
+                latestResult is not null ? EndpointValidation.ToUtcZ(latestResult.FinishedAtUtc) : null,
+                variableDefs));
+        }
+
+        return items;
     }
 
     // ──────────────────────────────────────────────

@@ -294,6 +294,26 @@ public class ModuleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateAssignment_UpdatesShowInDashboard()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var (module, version) = await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        var assignment = await SeedAssignmentAsync(device, module, version);
+
+        Assert.False(assignment.ShowInDashboard);
+
+        var request = new UpdateAssignmentRequest
+        {
+            ShowInDashboard = true,
+        };
+
+        var result = await _service.UpdateAssignmentAsync(assignment.Id, request);
+
+        Assert.NotNull(result);
+        Assert.True(result.ShowInDashboard);
+    }
+
+    [Fact]
     public async Task RemoveAssignment_DeletesRecord()
     {
         var device = await SeedDeviceAsync("dev-001");
@@ -398,6 +418,70 @@ public class ModuleServiceTests : IDisposable
         
         Assert.True(result);
         Assert.Empty(await _db.ModuleVersions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_ReturnsEmptyList_WhenNoneFlagged()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var (module, version) = await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        await SeedAssignmentAsync(device, module, version);
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_ReturnsFlaggedAssignment_WithLatestResult()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var (module, version) = await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        var assignment = await SeedAssignmentAsync(device, module, version);
+        assignment.ShowInDashboard = true;
+        await _db.SaveChangesAsync();
+
+        _db.ModuleResults.Add(new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            DeviceId = device.DeviceId,
+            ModuleId = module.ModuleId,
+            ModuleVersion = version.Version,
+            RunId = "run-1",
+            StartedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
+            FinishedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            ElapsedMs = 100,
+            Status = "ok",
+            Output = "{\"value\":42}",
+            ReceivedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        Assert.Single(result);
+        Assert.Equal(device.DeviceId, result[0].DeviceId);
+        Assert.Equal(module.ModuleId, result[0].ModuleId);
+        Assert.Equal("ok", result[0].Status);
+        Assert.Equal("{\"value\":42}", result[0].Output);
+        Assert.NotNull(result[0].FinishedAtUtc);
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_ExcludesUnflaggedAssignments()
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var (moduleA, versionA) = await SeedModuleWithVersionAsync("mod-a", "1.0.0");
+        var (moduleB, versionB) = await SeedModuleWithVersionAsync("mod-b", "1.0.0");
+        var flagged = await SeedAssignmentAsync(device, moduleA, versionA);
+        flagged.ShowInDashboard = true;
+        await SeedAssignmentAsync(device, moduleB, versionB);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        Assert.Single(result);
+        Assert.Equal("mod-a", result[0].ModuleId);
     }
 
     // ─── Helpers ─────────────────────────────────
