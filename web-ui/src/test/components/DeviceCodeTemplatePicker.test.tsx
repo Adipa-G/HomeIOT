@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ModuleTemplatePicker } from '../../components/ModuleTemplatePicker';
+import { DeviceCodeTemplatePicker } from '../../components/DeviceCodeTemplatePicker';
 import { renderWithProviders } from '../test-utils';
 import { api } from '../../api/client';
 
@@ -26,7 +26,7 @@ const templates = [
   },
 ];
 
-describe('ModuleTemplatePicker', () => {
+describe('DeviceCodeTemplatePicker', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.setItem('auth_token', 'test-token');
@@ -34,9 +34,9 @@ describe('ModuleTemplatePicker', () => {
 
   it('does not fetch templates until opened', () => {
     renderWithProviders(
-      <ModuleTemplatePicker onSelect={vi.fn()}>
+      <DeviceCodeTemplatePicker onSelect={vi.fn()}>
         {(open) => <button onClick={open}>Use a template</button>}
-      </ModuleTemplatePicker>,
+      </DeviceCodeTemplatePicker>,
     );
 
     expect(api.get).not.toHaveBeenCalled();
@@ -47,9 +47,9 @@ describe('ModuleTemplatePicker', () => {
     vi.mocked(api.get).mockResolvedValue(templates);
 
     renderWithProviders(
-      <ModuleTemplatePicker onSelect={vi.fn()}>
+      <DeviceCodeTemplatePicker onSelect={vi.fn()}>
         {(open) => <button onClick={open}>Use a template</button>}
-      </ModuleTemplatePicker>,
+      </DeviceCodeTemplatePicker>,
     );
 
     await user.click(screen.getByText('Use a template'));
@@ -57,7 +57,7 @@ describe('ModuleTemplatePicker', () => {
     await waitFor(() => {
       expect(screen.getByText('Read a digital pin')).toBeInTheDocument();
     });
-    expect(api.get).toHaveBeenCalledWith('/api/admin/modules/templates');
+    expect(api.get).toHaveBeenCalledWith('/api/admin/modules/device-code-templates');
   });
 
   it('switching platform tabs changes the shown code', async () => {
@@ -65,9 +65,9 @@ describe('ModuleTemplatePicker', () => {
     vi.mocked(api.get).mockResolvedValue(templates);
 
     renderWithProviders(
-      <ModuleTemplatePicker onSelect={vi.fn()}>
+      <DeviceCodeTemplatePicker onSelect={vi.fn()}>
         {(open) => <button onClick={open}>Use a template</button>}
-      </ModuleTemplatePicker>,
+      </DeviceCodeTemplatePicker>,
     );
 
     await user.click(screen.getByText('Use a template'));
@@ -87,9 +87,9 @@ describe('ModuleTemplatePicker', () => {
     const onSelect = vi.fn();
 
     renderWithProviders(
-      <ModuleTemplatePicker onSelect={onSelect}>
+      <DeviceCodeTemplatePicker onSelect={onSelect}>
         {(open) => <button onClick={open}>Use a template</button>}
-      </ModuleTemplatePicker>,
+      </DeviceCodeTemplatePicker>,
     );
 
     await user.click(screen.getByText('Use a template'));
@@ -98,6 +98,6 @@ describe('ModuleTemplatePicker', () => {
     await user.click(screen.getByRole('button', { name: 'Use this template' }));
 
     expect(onSelect).toHaveBeenCalledWith('esp32 code here');
-    expect(screen.queryByText('Module Templates')).not.toBeInTheDocument();
+    expect(screen.queryByText('Device Code Templates')).not.toBeInTheDocument();
   });
 });
