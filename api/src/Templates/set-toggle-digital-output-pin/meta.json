@@ -1,0 +1,10 @@
+{
+  "id": "set-toggle-digital-output-pin",
+  "name": "Set/toggle a digital output pin",
+  "description": "Drive an LED or relay on/off, controllable from the dashboard.",
+  "setup_guide": "Change PIN_NUMBER to match your wiring. This template reads an input variable named `PIN_STATE` \u2014 add it under Variables (Type: boolean, Control Type: toggle) so you can switch the pin on/off from the module's settings gear icon on the device page. The module also returns `state` on every run, which you can visualize with a Text Display or Progress Bar.",
+  "variants": [
+    { "platform": "esp32", "file": "esp32.py" },
+    { "platform": "pico", "file": "pico.py" }
+  ]
+}

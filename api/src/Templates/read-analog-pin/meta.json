@@ -1,0 +1,10 @@
+{
+  "id": "read-analog-pin",
+  "name": "Read an analog pin (ADC)",
+  "description": "Read a potentiometer, light sensor, or other analog input.",
+  "setup_guide": "This template returns `raw_value` (0-65535) and `voltage` (0-3.3V) on every run. To see it on the dashboard: open the module, go to the Variables section, add a new variable named `voltage` (Type: number), then attach a Gauge or Line Chart visualization with JSON Path `voltage`, min 0, max 3.3, unit 'V', 2 decimals.",
+  "variants": [
+    { "platform": "esp32", "file": "esp32.py" },
+    { "platform": "pico", "file": "pico.py" }
+  ]
+}

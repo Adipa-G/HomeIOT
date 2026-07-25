@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import type { CreateModuleRequest, ModuleDetailResponse } from '../types/api';
 import { toast } from '../components/Toast';
 import { ApiError } from '../api/client';
+import { ModuleTemplatePicker } from '../components/ModuleTemplatePicker';
 
 export default function ModuleCreatePage() {
   const navigate = useNavigate();
@@ -55,7 +56,22 @@ export default function ModuleCreatePage() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Code <span className="text-gray-400 font-normal">(optional)</span></label>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">Code <span className="text-gray-400 font-normal">(optional)</span></label>
+            <ModuleTemplatePicker
+              onSelect={(code) => setForm((f) => ({ ...f, code, version: f.version || '1.0.0' }))}
+            >
+              {(openPicker) => (
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  Use a template
+                </button>
+              )}
+            </ModuleTemplatePicker>
+          </div>
           <textarea
             value={form.code ?? ''}
             onChange={(e) => setForm({ ...form, code: e.target.value || undefined })}

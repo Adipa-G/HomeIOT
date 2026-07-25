@@ -1,0 +1,9 @@
+{
+  "id": "make-web-request",
+  "name": "Make a web request",
+  "description": "Fetch data from a web API or endpoint on your network or the internet.",
+  "setup_guide": "Change the URL constant to the endpoint you want to poll. This template returns `status_code` and `body` on every run. To see it on the dashboard: open the module, go to the Variables section, add a new variable named `body` (Type: string), then attach a Text Display visualization with JSON Path `body`.",
+  "variants": [
+    { "platform": "generic", "file": "generic.py" }
+  ]
+}

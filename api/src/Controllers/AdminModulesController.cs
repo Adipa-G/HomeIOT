@@ -12,13 +12,23 @@ public sealed class AdminModulesController : UserApiControllerBase
 {
     private readonly IModuleService _moduleService;
     private readonly IModuleVariableService _variableService;
+    private readonly IModuleTemplateService _templateService;
 
     public AdminModulesController(
         IModuleService moduleService,
-        IModuleVariableService variableService)
+        IModuleVariableService variableService,
+        IModuleTemplateService templateService)
     {
         _moduleService = moduleService;
         _variableService = variableService;
+        _templateService = templateService;
+    }
+
+    [HttpGet("templates")]
+    public async Task<ActionResult<List<ModuleTemplateItem>>> GetTemplates(CancellationToken ct)
+    {
+        var templates = await _templateService.GetTemplatesAsync(ct);
+        return Ok(templates);
     }
 
     [HttpGet]

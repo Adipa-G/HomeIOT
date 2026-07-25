@@ -11,6 +11,7 @@ import type {
   UpsertVariableDefRequest,
 } from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ModuleTemplatePicker } from '../components/ModuleTemplatePicker';
 import AssignmentVariablesPanel from '../components/AssignmentVariablesPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { toast } from '../components/Toast';
@@ -577,6 +578,22 @@ export default function ModuleDetailPage() {
                   Code
                 </button>
               </div>
+              <ModuleTemplatePicker
+                onSelect={(code) => {
+                  setVersionSource(code);
+                  setUploadMode('code');
+                }}
+              >
+                {(openPicker) => (
+                  <button
+                    type="button"
+                    onClick={openPicker}
+                    className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                  >
+                    Use a template
+                  </button>
+                )}
+              </ModuleTemplatePicker>
             </div>
 
             {uploadMode === 'file' ? (

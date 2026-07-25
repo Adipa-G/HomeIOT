@@ -13,19 +13,47 @@ public class AdminModulesControllerTests
 {
     private readonly Mock<IModuleService> _mockService;
     private readonly Mock<IModuleVariableService> _mockVariableService;
+    private readonly Mock<IModuleTemplateService> _mockTemplateService;
     private readonly AdminModulesController _controller;
 
     public AdminModulesControllerTests()
     {
         _mockService = new Mock<IModuleService>();
         _mockVariableService = new Mock<IModuleVariableService>();
-        _controller = new AdminModulesController(_mockService.Object, _mockVariableService.Object)
+        _mockTemplateService = new Mock<IModuleTemplateService>();
+        _controller = new AdminModulesController(_mockService.Object, _mockVariableService.Object, _mockTemplateService.Object)
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext(),
             },
         };
+    }
+
+    [Fact]
+    public async Task GetTemplates_ReturnsOkWithTemplates_FromTemplateService()
+    {
+        var templates = new List<ModuleTemplateItem>
+        {
+            new(
+                Id: "read-digital-pin",
+                Name: "Read a digital pin",
+                Description: "Read a button or switch.",
+                SetupGuide: "Add a variable named value.",
+                Variants: new List<ModuleTemplateVariantItem>
+                {
+                    new("esp32", "from machine import Pin"),
+                }),
+        };
+
+        _mockTemplateService.Setup(s => s.GetTemplatesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(templates);
+
+        var result = await _controller.GetTemplates(CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returned = Assert.IsType<List<ModuleTemplateItem>>(okResult.Value);
+        Assert.Single(returned);
+        Assert.Equal("read-digital-pin", returned[0].Id);
     }
 
     [Fact]

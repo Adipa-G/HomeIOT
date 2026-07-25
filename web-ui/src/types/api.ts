@@ -225,6 +225,19 @@ export interface DashboardModuleItem {
   variable_defs: ModuleVariableDefItem[];
 }
 
+export interface ModuleTemplateVariant {
+  platform: string;
+  code: string;
+}
+
+export interface ModuleTemplateItem {
+  id: string;
+  name: string;
+  description: string;
+  setup_guide: string;
+  variants: ModuleTemplateVariant[];
+}
+
 export interface UploadVersionRequest {
   version: string;
   code: string;

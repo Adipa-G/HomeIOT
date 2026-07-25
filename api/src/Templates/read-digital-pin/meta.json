@@ -1,0 +1,10 @@
+{
+  "id": "read-digital-pin",
+  "name": "Read a digital pin",
+  "description": "Read a button, switch, or motion sensor connected to a GPIO pin.",
+  "setup_guide": "This template returns `value` (0 or 1) and `is_high` (true/false) on every run. To see it on the dashboard: open the module, go to the Variables section, add a new variable named `value` (Type: number), then open that variable's Visualizations and add one with JSON Path `value`, Display Name 'Pin State', and Visualization Type 'number_display' or 'progress_bar' (min 0, max 1).",
+  "variants": [
+    { "platform": "esp32", "file": "esp32.py" },
+    { "platform": "pico", "file": "pico.py" }
+  ]
+}

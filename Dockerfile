@@ -46,6 +46,9 @@ WORKDIR /app
 # Copy published application from publish stage
 COPY --from=publish /app/publish .
 
+# Copy module example templates (static content shipped with the app)
+COPY ["api/src/Templates/", "./Templates/"]
+
 # Copy React build artifacts to wwwroot
 COPY --from=react-build /src/web-ui/dist ./wwwroot
 

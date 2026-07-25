@@ -1,0 +1,10 @@
+{
+  "id": "read-onboard-temperature",
+  "name": "Read onboard temperature",
+  "description": "Read the device's built-in temperature sensor — no extra wiring required.",
+  "setup_guide": "This template returns `raw_value` and `temp_celsius` on every run. To see it on the dashboard: open the module, go to the Variables section, add a new variable named `temp_celsius` (Type: number), then attach a Gauge or Line Chart visualization with JSON Path `temp_celsius`, unit '\u00b0C', suggested min 0 / max 50.",
+  "variants": [
+    { "platform": "esp32", "file": "esp32.py" },
+    { "platform": "pico", "file": "pico.py" }
+  ]
+}
