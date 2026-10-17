@@ -223,6 +223,31 @@ export interface DashboardModuleItem {
   error_message: string | null;
   finished_at_utc: string | null;
   variable_defs: ModuleVariableDefItem[];
+  /** Aggregated history for each chart visualization (matched by visualization id). */
+  chart_series?: ChartSeries[];
+}
+
+/**
+ * One plotted slot: a single sample (count 1) or the aggregate of a time bucket.
+ * Empty buckets have count 0 and null values so charts can show gaps.
+ */
+export interface ChartSeriesPoint {
+  start_utc: string;
+  end_utc: string;
+  avg: number | null;
+  min: number | null;
+  max: number | null;
+  count: number;
+}
+
+export interface ChartSeries {
+  visualization_id: string;
+  points: ChartSeriesPoint[];
+}
+
+export interface ModuleChartSeriesItem {
+  module_id: string;
+  series: ChartSeries[];
 }
 
 export interface DeviceCodeTemplateVariant {

@@ -484,7 +484,200 @@ public class ModuleServiceTests : IDisposable
         Assert.Equal("mod-a", result[0].ModuleId);
     }
 
+    [Fact]
+    public async Task GetDashboardModulesAsync_NoChartVisualizations_ReturnsNoChartSeries()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("gauge", null));
+        SeedResult(device, module, version, "ok", "{\"v\":1}", 1);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        Assert.Empty(result[0].ChartSeries);
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_ChartSeries_UsesSuccessfulRunsOldestFirst()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("line_chart", "{\"historyPoints\":3}"));
+        SeedResult(device, module, version, "ok", "{\"v\":1}", 5);
+        SeedResult(device, module, version, "success", "{\"v\":2}", 4);
+        SeedResult(device, module, version, "error", "{\"v\":99}", 3);
+        SeedResult(device, module, version, "ok", null, 2);
+        SeedResult(device, module, version, "ok", "{\"v\":3}", 1);
+        SeedResult(device, module, version, "ok", "{\"v\":4}", 0);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        var series = Assert.Single(result[0].ChartSeries);
+        var viz = result[0].VariableDefs.Single().Visualizations.Single();
+        Assert.Equal(viz.Id, series.VisualizationId);
+        Assert.Equal(new double?[] { 2, 3, 4 }, series.Points.Select(p => p.Avg));
+        Assert.All(series.Points, p =>
+        {
+            Assert.Equal(1, p.Count);
+            Assert.EndsWith("Z", p.StartUtc);
+            Assert.Equal(p.StartUtc, p.EndUtc);
+        });
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_EachChartUsesItsOwnHistoryPoints()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("bar_chart", "{\"historyPoints\":2}"), ("line_chart", "{\"historyPoints\":4}"));
+        for (var i = 0; i < 6; i++) SeedResult(device, module, version, "ok", $"{{\"v\":{i}}}", i);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        var series = result[0].ChartSeries;
+        Assert.Equal(2, series.Count);
+        Assert.Equal(new double?[] { 1, 0 }, series[0].Points.Select(p => p.Avg));
+        Assert.Equal(new double?[] { 3, 2, 1, 0 }, series[1].Points.Select(p => p.Avg));
+    }
+
+    [Theory]
+    [InlineData(null, 10)]
+    [InlineData("{}", 10)]
+    [InlineData("{\"historyPoints\":0}", 10)]
+    [InlineData("{\"historyPoints\":25}", 25)]
+    public async Task GetDashboardModulesAsync_HistoryPoints_DefaultsWhenUnsetOrInvalid(string? config, int expected)
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("bar_chart", config));
+        for (var i = 0; i < 60; i++) SeedResult(device, module, version, "ok", $"{{\"v\":{i}}}", i);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        var points = result[0].ChartSeries.Single().Points;
+        Assert.Equal(expected, points.Count);
+        Assert.All(points, p => Assert.Equal(1, p.Count));
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_LongHistory_IsAveragedIntoBuckets()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("line_chart", "{\"historyPoints\":1440}"));
+        for (var i = 0; i < 480; i++) SeedResult(device, module, version, "ok", $"{{\"v\":{i % 2}}}", i);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        var points = result[0].ChartSeries.Single().Points;
+        Assert.Equal(ChartSeriesAggregator.MaxBuckets, points.Count);
+        Assert.Equal(480, points.Sum(p => p.Count));
+        Assert.Contains(points, p => p.Count > 1 && p.Min == 0 && p.Max == 1);
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_HistoryPoints_ClampedTo1440()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("bar_chart", "{\"historyPoints\":5000}"));
+        for (var i = 0; i < 1500; i++) SeedResult(device, module, version, "ok", "{\"v\":1}", i);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        Assert.Equal(1440, result[0].ChartSeries.Single().Points.Sum(p => p.Count));
+    }
+
+    [Fact]
+    public async Task GetDashboardModulesAsync_ChartSeries_SkipsNonNumericAndInvalidOutput()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("bar_chart", null));
+        SeedResult(device, module, version, "ok", "{\"v\":\"abc\"}", 3);
+        SeedResult(device, module, version, "ok", "not json", 2);
+        SeedResult(device, module, version, "ok", "{\"other\":1}", 1);
+        SeedResult(device, module, version, "ok", "{\"v\":\"5\"}", 0);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDashboardModulesAsync();
+
+        Assert.Equal(new double?[] { 5 }, result[0].ChartSeries.Single().Points.Select(p => p.Avg));
+    }
+
+    [Fact]
+    public async Task GetDeviceChartSeriesAsync_ReturnsChartsForDevice_RegardlessOfDashboardFlag()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("line_chart", null), ("gauge", null));
+        (await _db.ModuleAssignments.SingleAsync()).ShowInDashboard = false;
+        SeedResult(device, module, version, "ok", "{\"v\":7}", 0);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetDeviceChartSeriesAsync("dev-001");
+
+        var item = Assert.Single(result);
+        Assert.Equal("test-mod", item.ModuleId);
+        var series = Assert.Single(item.Series);
+        Assert.Equal(new double?[] { 7 }, series.Points.Select(p => p.Avg));
+    }
+
+    [Fact]
+    public async Task GetDeviceChartSeriesAsync_ExcludesModulesWithoutCharts_AndOtherDevices()
+    {
+        var (device, module, version) = await SeedDashboardModuleAsync(("gauge", null));
+        SeedResult(device, module, version, "ok", "{\"v\":7}", 0);
+        await _db.SaveChangesAsync();
+
+        Assert.Empty(await _service.GetDeviceChartSeriesAsync("dev-001"));
+        Assert.Empty(await _service.GetDeviceChartSeriesAsync("dev-unknown"));
+    }
+
     // ─── Helpers ─────────────────────────────────
+
+    private async Task<(DeviceRecord Device, ModuleDefinitionRecord Module, ModuleVersionRecord Version)> SeedDashboardModuleAsync(
+        params (string Type, string? Config)[] visualizations)
+    {
+        var device = await SeedDeviceAsync("dev-001");
+        var (module, version) = await SeedModuleWithVersionAsync("test-mod", "1.0.0");
+        var assignment = await SeedAssignmentAsync(device, module, version);
+        assignment.ShowInDashboard = true;
+
+        var varDef = new ModuleVariableDefRecord
+        {
+            Id = Guid.NewGuid(),
+            ModuleDefinitionId = module.Id,
+            Name = "reading",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        foreach (var (type, config) in visualizations)
+        {
+            varDef.Visualizations.Add(new ModuleVariableVisualizationRecord
+            {
+                Id = Guid.NewGuid(),
+                ModuleVariableDefId = varDef.Id,
+                JsonPath = "v",
+                DisplayName = type,
+                VisualizationType = type,
+                VisualizationConfig = config,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            });
+        }
+        _db.Add(varDef);
+        await _db.SaveChangesAsync();
+        return (device, module, version);
+    }
+
+    private void SeedResult(DeviceRecord device, ModuleDefinitionRecord module, ModuleVersionRecord version, string status, string? output, int minutesAgo)
+    {
+        _db.ModuleResults.Add(new ModuleResultRecord
+        {
+            Id = Guid.NewGuid(),
+            DeviceId = device.DeviceId,
+            ModuleId = module.ModuleId,
+            ModuleVersion = version.Version,
+            RunId = Guid.NewGuid().ToString(),
+            StartedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-minutesAgo - 1),
+            FinishedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-minutesAgo),
+            ElapsedMs = 100,
+            Status = status,
+            Output = output,
+            ReceivedAtUtc = DateTimeOffset.UtcNow,
+        });
+    }
 
     private async Task<DeviceRecord> SeedDeviceAsync(string deviceId)
     {

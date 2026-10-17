@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, ModuleResultListItem, PaginatedResponse, ModuleDetailResponse } from '../types/api';
+import type { DeviceDetailResponse, HeartbeatListItem, LogBatchListItem, LogEntry, ModuleChartSeriesItem, ModuleResultListItem, PaginatedResponse, ModuleDetailResponse } from '../types/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Pagination } from '../components/Pagination';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { toast } from '../components/Toast';
 import { formatUtc, formatMs, formatBytes } from '../lib/format';
 import { DeviceModuleSettingsPanel } from '../components/DeviceModuleSettingsPanel';
-import { ModuleVariableVisualizer, extractJsonValue } from '../components/ModuleVariableVisualizer';
+import { ModuleVariableVisualizer } from '../components/ModuleVariableVisualizer';
+import { extractJsonValue } from '../lib/visualization';
 import { ActivityDrilldownPanel } from '../components/ActivityDrilldownPanel';
 
 export default function DeviceDetailPage() {
@@ -56,6 +57,12 @@ export default function DeviceDetailPage() {
     enabled: tab === 'modules' && selectedModule === null,
   });
 
+  const chartSeries = useQuery({
+    queryKey: ['chartSeries', deviceId],
+    queryFn: () => api.get<ModuleChartSeriesItem[]>(`/api/admin/modules/chart-series?device_id=${deviceId}`),
+    enabled: tab === 'modules' && selectedModule === null,
+  });
+
   const moduleHistory = useQuery({
     queryKey: ['moduleHistory', deviceId, selectedModule, modHistoryOffset],
     queryFn: () => api.get<PaginatedResponse<ModuleResultListItem>>(`/api/admin/modules/results?device_id=${deviceId}&module_id=${selectedModule}&offset=${modHistoryOffset}&limit=25`),
@@ -82,28 +89,9 @@ export default function DeviceDetailPage() {
 
   if (isLoading || !device) return <p className="text-sm text-gray-500">Loading…</p>;
 
-  // Helper to extract historical values for a json_path from recent module results
-  const getHistoricalValues = (moduleId: string, jsonPath: string, config: any): (string | number | null)[] | undefined => {
-    const historyPoints = (config as any)?.historyPoints;
-    if (!historyPoints || historyPoints < 2) return undefined;
-    
-    const results = moduleResults.data?.items?.filter((r: ModuleResultListItem) => 
-      r.module_id === moduleId && r.output && r.status === 'success'
-    ) ?? [];
-    
-    if (results.length === 0) return undefined;
-    
-    // Get last N results and extract values
-    const recentResults = results.slice(-historyPoints);
-    return recentResults.map((r: ModuleResultListItem) => {
-      try {
-        const outputData = JSON.parse(r.output || '{}');
-        return extractJsonValue(outputData, jsonPath);
-      } catch {
-        return null;
-      }
-    });
-  };
+  const seriesByVisualization = new Map(
+    (chartSeries.data ?? []).flatMap((m) => m.series.map((s) => [s.visualization_id, s.points] as const)),
+  );
 
   const tabClass = (t: string) =>
     `px-4 py-2 text-sm font-medium ${tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`;
@@ -268,14 +256,13 @@ export default function DeviceDetailPage() {
                             {visualizations.map((viz, idx) => {
                               const value = extractJsonValue(outputData, viz.json_path);
                               if (value === null) return null;
-                              const historicalValues = getHistoricalValues(r.module_id, viz.json_path, viz.visualization_config);
                               return (
                                 <ModuleVariableVisualizer
                                   key={`${r.id}-${idx}`}
                                   type={viz.visualization_type || 'number_display'}
                                   config={viz.visualization_config}
                                   value={value}
-                                  values={historicalValues}
+                                  series={seriesByVisualization.get(viz.id)}
                                   displayName={viz.display_name}
                                 />
                               );

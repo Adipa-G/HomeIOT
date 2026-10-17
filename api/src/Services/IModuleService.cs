@@ -34,4 +34,5 @@ public interface IModuleService
 
     // Dashboard
     Task<List<DashboardModuleItem>> GetDashboardModulesAsync(CancellationToken ct = default);
+    Task<List<ModuleChartSeriesItem>> GetDeviceChartSeriesAsync(string deviceId, CancellationToken ct = default);
 }

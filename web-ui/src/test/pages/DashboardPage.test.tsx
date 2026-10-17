@@ -290,6 +290,59 @@ describe('DashboardPage', () => {
     expect(tileGrid?.className).not.toContain('lg:grid-cols-3');
   });
 
+  it('passes the aggregated chart series to chart tiles', async () => {
+    const mockModules = [
+      {
+        assignment_id: 'a9',
+        device_id: 'esp32-009',
+        module_id: 'power-meter',
+        status: 'ok',
+        output: '{"watts":30}',
+        error_message: null,
+        finished_at_utc: '2026-05-10T00:10:00Z',
+        variable_defs: [
+          {
+            name: 'watts',
+            type: 'number',
+            default_value: null,
+            description: null,
+            has_server_code: false,
+            visualizations: [
+              { id: 'v1', json_path: 'watts', display_name: 'Power', visualization_type: 'bar_chart', visualization_config: { min: 0, max: 40 } },
+            ],
+          },
+        ],
+        chart_series: [
+          {
+            visualization_id: 'v1',
+            points: [
+              { start_utc: '2026-05-10T00:00:00Z', end_utc: '2026-05-10T00:05:00Z', avg: 10, min: 8, max: 12, count: 5 },
+              { start_utc: '2026-05-10T00:05:00Z', end_utc: '2026-05-10T00:10:00Z', avg: 20, min: 18, max: 22, count: 5 },
+              { start_utc: '2026-05-10T00:10:00Z', end_utc: '2026-05-10T00:15:00Z', avg: 30, min: 30, max: 30, count: 5 },
+            ],
+          },
+        ],
+      },
+    ];
+    vi.mocked(api.get).mockImplementation(async (path: string) => {
+      if (path.includes('/dashboard/modules')) return mockModules;
+      return mockDashboard;
+    });
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('chart-bar')).toHaveLength(3);
+    });
+    expect(screen.getByText('3 bars · 15 samples')).toBeInTheDocument();
+    expect(screen.getAllByTestId('chart-range')).toHaveLength(2);
+    expect(screen.getAllByTestId('chart-y-tick').map((t) => t.textContent)).toEqual(['0', '10', '20', '30', '40']);
+
+    // Charts get a full tile row and a wider device card so they stay legible.
+    const chartTile = screen.getByText('Power').closest('.cursor-pointer.rounded');
+    expect(chartTile?.className).toContain('col-span-full');
+    expect(screen.getByText('esp32-009').parentElement?.className).toContain('col-span-2');
+  });
+
   it('expands the tile grid to 3 columns at lg once there are 3 or more tiles', async () => {
     const mockModules = [
       {

@@ -3,64 +3,8 @@ import { useNavigate } from 'react-router';
 import { api } from '../api/client';
 import type { DashboardModuleItem, DashboardResponse } from '../types/api';
 import { MetricCard } from '../components/MetricCard';
-import { ModuleVariableVisualizer, extractJsonValue } from '../components/ModuleVariableVisualizer';
-
-type DashboardTile =
-  | { kind: 'viz'; key: string; moduleId: string; visualizationType: string; config: unknown; value: string | number; displayName: string }
-  | { kind: 'status'; key: string; moduleId: string; text: string }
-  | { kind: 'error'; key: string; moduleId: string; text: string };
-
-function buildTiles(items: DashboardModuleItem[]): DashboardTile[] {
-  const tiles: DashboardTile[] = [];
-
-  for (const item of items) {
-    const visualizations = item.variable_defs.flatMap((v) => v.visualizations ?? []);
-
-    let outputData: unknown;
-    let parseFailed = false;
-    if (item.output) {
-      try {
-        outputData = JSON.parse(item.output);
-      } catch {
-        parseFailed = true;
-      }
-    }
-
-    if (visualizations.length === 0 || !item.output || parseFailed) {
-      tiles.push({
-        kind: 'status',
-        key: `${item.assignment_id}-status`,
-        moduleId: item.module_id,
-        text: item.status ? `Status: ${item.status}` : 'No data yet',
-      });
-    } else {
-      for (const [idx, viz] of visualizations.entries()) {
-        const value = extractJsonValue(outputData, viz.json_path);
-        if (value === null) continue;
-        tiles.push({
-          kind: 'viz',
-          key: `${item.assignment_id}-viz-${idx}`,
-          moduleId: item.module_id,
-          visualizationType: viz.visualization_type || 'number_display',
-          config: viz.visualization_config,
-          value,
-          displayName: viz.display_name,
-        });
-      }
-    }
-
-    if (item.error_message) {
-      tiles.push({
-        kind: 'error',
-        key: `${item.assignment_id}-error`,
-        moduleId: item.module_id,
-        text: item.error_message,
-      });
-    }
-  }
-
-  return tiles;
-}
+import { ModuleVariableVisualizer } from '../components/ModuleVariableVisualizer';
+import { buildTiles, isChartTile } from '../lib/dashboardTiles';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -116,8 +60,14 @@ export default function DashboardPage() {
               // fill it; otherwise stick to 2 columns so a lone/pair of tiles get
               // a sensible half-width size instead of shrinking to a third.
               const tileGridClass = tiles.length >= 3 ? 'grid grid-cols-2 gap-2 lg:grid-cols-3' : 'grid grid-cols-2 gap-2';
+              // Charts need horizontal room to be legible: give them a full row in the
+              // tile grid and let their device card span two dashboard columns.
+              const hasChart = tiles.some(isChartTile);
               return (
-                <div key={deviceId} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                <div
+                  key={deviceId}
+                  className={`rounded-lg border border-gray-200 bg-white p-3 shadow-sm${hasChart ? ' col-span-2' : ''}`}
+                >
                   <h4
                     className="mb-2 cursor-pointer text-sm font-medium text-blue-600 hover:underline"
                     onClick={() => navigate(`/devices/${deviceId}`)}
@@ -128,7 +78,7 @@ export default function DashboardPage() {
                     {tiles.map((tile) => (
                       <div
                         key={tile.key}
-                        className="cursor-pointer rounded border border-gray-100 p-2 hover:border-gray-300"
+                        className={`cursor-pointer rounded border border-gray-100 p-2 hover:border-gray-300${isChartTile(tile) ? ' col-span-full' : ''}`}
                         onClick={() => navigate(`/devices/${deviceId}`)}
                       >
                         <div className="mb-1 truncate text-[10px] text-gray-400">{tile.moduleId}</div>
@@ -137,7 +87,9 @@ export default function DashboardPage() {
                             type={tile.visualizationType}
                             config={tile.config}
                             value={tile.value}
+                            series={tile.series}
                             displayName={tile.displayName}
+                            compact
                           />
                         )}
                         {tile.kind === 'status' && <div className="text-xs text-gray-500">{tile.text}</div>}
