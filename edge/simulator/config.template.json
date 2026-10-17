@@ -1,7 +1,7 @@
 {
   "device_id": "simulator-device-1",
   "api_url": "http://localhost:5228",
-  "api_key": "your-api-key-here",
+  "api_key": "simulator-api-key",
   "wifi_ssid": "HomeNetwork",
   "wifi_password": "your-password-here",
   "heartbeat_interval_ms": 30000,

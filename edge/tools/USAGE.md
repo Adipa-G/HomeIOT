@@ -1,171 +1,18 @@
 # Edge Tools Usage
 
-This folder provides four tools:
+This folder provides two tools:
 
-1. `provision_config.py` - generates a per-device `config.json`
-2. `deploy_device.py` - deploys runtime files to a MicroPython device
-3. `build_artifact.py` - builds an OTA artifact from the current edge source tree
-4. `run_dev_command.py` - sends arbitrary Python code to a device for remote execution
+1. `build_artifact.py` - builds an OTA firmware release from the current edge source tree
+2. `run_dev_command.py` - sends arbitrary Python code to a device for remote execution
 
-Secrets policy:
-
-- `provision_config.py` always encrypts `api_key` and `wifi_password` using device unique id binding.
-- Runtime still supports plaintext secrets in `config.json` if you manually maintain them.
-- `deploy_device.py` accepts both plaintext and encrypted config formats.
+New devices are not configured or flashed with tools. Use **Add device** on the web UI Devices page, which registers the device and downloads a `main.py` installer that writes `config.json` and installs the latest release built by `build_artifact.py`. See [Edge Device Setup](../../docs/setup-edge-device.md).
 
 API route policy:
 
 - Endpoint paths are centralized in shared code and are not meant to be customized in config.
 - Logging uplink uses the shared logs route constant.
 
-## Tool 1: provision_config.py
-
-Generate a device-specific config file:
-
-```bash
-python edge/tools/provision_config.py \
-  --platform esp32 \
-  --device-id esp32-001 \
-  --api-url http://192.168.1.10:8000 \
-  --api-key YOUR_DEVICE_KEY \
-  --wifi-ssid YOUR_WIFI \
-  --wifi-password YOUR_WIFI_PASSWORD
-```
-
-Generated config stores encrypted fields:
-
-- `api_key_enc`
-- `wifi_password_enc`
-
-Default output:
-
-- `edge/tools/generated/esp32-config.json`
-- `edge/tools/generated/pico-config.json`
-
-Overwrite existing generated output:
-
-```bash
-python edge/tools/provision_config.py ... --overwrite
-```
-
-Use a custom output path:
-
-```bash
-python edge/tools/provision_config.py ... --output edge/tools/generated/lab-node-01.json
-```
-
-## Tool 2: deploy_device.py
-
-Deploy runtime essentials (`edge/`, `boot.py`, `main.py`) to a connected device:
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --port auto
-```
-
-Safe config policy by default:
-
-- Existing device `config.json` is preserved
-- `config.json` is only uploaded if missing
-- When `--force-config` overwrites the device config, the previous copy is backed up as `config_prev.json`
-- `--config-only` skips runtime file upload and marks the update as config-only for selective rollback
-
-Force overwrite device config:
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --port auto --force-config
-```
-
-Use custom config file for upload policy:
-
-```bash
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port auto \
-  --config-file edge/tools/generated/esp32-config.json \
-  --force-config
-```
-
-Verify deployment imports only (no writes):
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --verify-only
-```
-
-Skip reset after deploy:
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --no-reset
-```
-
-Config-only update with rollback metadata:
-
-```bash
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port auto \
-  --config-file edge/tools/generated/esp32-config.json \
-  --force-config \
-  --config-only
-```
-
-## Common Combinations (2-tool workflows)
-
-1. Provision once, deploy with forced config
-
-```bash
-python edge/tools/provision_config.py \
-  --platform esp32 \
-  --device-id esp32-001 \
-  --api-url http://192.168.1.10:8000 \
-  --api-key YOUR_DEVICE_KEY \
-  --wifi-ssid YOUR_WIFI \
-  --wifi-password YOUR_WIFI_PASSWORD
-
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port auto \
-  --config-file edge/tools/generated/esp32-config.json \
-  --force-config
-```
-
-2. Provision multiple devices, deploy each with different config
-
-```bash
-python edge/tools/provision_config.py ... --device-id esp32-001 --output edge/tools/generated/esp32-001.json
-python edge/tools/provision_config.py ... --device-id esp32-002 --output edge/tools/generated/esp32-002.json
-
-python edge/tools/deploy_device.py --platform esp32 --config-file edge/tools/generated/esp32-001.json --force-config
-python edge/tools/deploy_device.py --platform esp32 --config-file edge/tools/generated/esp32-002.json --force-config
-```
-
-3. Code-only update, keep device credentials
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --port auto
-```
-
-4. Dry-run style connection/import check before rollout
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --verify-only
-```
-
-5. Config-only update with selective rollback
-
-```bash
-python edge/tools/deploy_device.py --platform esp32 --config-file edge/tools/generated/esp32-config.json --force-config --config-only
-```
-
-## Notes
-
-- `deploy_device.py` requires `mpremote` installed and available in PATH.
-- `--platform` supports `esp32` and `pico`.
-- `--config-file` is validated before any upload begins.
-- Provisioned encrypted secrets are bound to the provided `--device-id` value.
-- `current_version` in the generated config is the config version marker used by the runtime rollback flow.
-- Selective rollback now restores only the surfaces marked as changed by the update path.
-
-## Tool 3: build_artifact.py
+## Tool 1: build_artifact.py
 
 Build an OTA artifact from the current edge source tree. Copies all deployable files to `api/artifacts/{platform}/{version}/`, computes SHA256 hashes, and writes a `manifest.json`.
 
@@ -194,8 +41,14 @@ Important:
 
 - Must be re-run after every edit to edge source files — the artifact is a snapshot and stale hashes cause OTA hash mismatch failures on the device.
 - `config.json` in the artifact should use placeholder values (`"replace-with-device-id"`, `"replace-with-api-url"`) so device-specific values are preserved during OTA merge.
+- The **Add device** installer is built from the latest release of the selected platform, so at least one release must exist before a device can be added.
 
-## Tool 4: run_dev_command.py
+Publishing a release:
+
+- When the API runs locally from source, the default `--out api/artifacts` is the API's artifact root, so the release is available immediately.
+- For a Docker or remote server, zip the *contents* of `api/artifacts/{platform}/{version}/` into `{version}.zip` (e.g. `1.0.0.zip`) and upload it in the web UI at `/ota/{platform}` (the zip file name becomes the version).
+
+## Tool 2: run_dev_command.py
 
 Send arbitrary Python code to a device for remote execution via the admin API. The code runs on the device via `exec()` in memory — nothing is written to the device filesystem. This is the interactive development environment for testing module logic before deploying it.
 

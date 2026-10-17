@@ -8,6 +8,22 @@ Navigate to **Admin → Devices** to see the device list.
 
 ---
 
+## Adding a Device
+
+Click **Add device** on the Devices list. Enter a device ID, platform (`esp32`/`pico`), API URL (as reachable from the device) and WiFi credentials, then click **Create & download main.py**.
+
+The server:
+- registers the device and generates its API key (stored hashed),
+- returns a `main.py` installer built for the latest firmware release of that platform. WiFi credentials go into the file only and are not stored on the server.
+
+Copy `main.py` to a board running MicroPython and reset it. The installer writes `config.json` and installs the firmware through OTA. Until the first heartbeat, the device shows an **Awaiting first boot** badge. A firmware release for the platform must exist first.
+
+Devices cannot register themselves. Requests from unknown device IDs, or with a wrong key, get `401`.
+
+See [Edge Device Setup](setup-edge-device.md) for the full walkthrough.
+
+---
+
 ## Device List
 
 ### Viewing Devices
@@ -120,6 +136,18 @@ Toggle between `production` and `development` modes:
 3. Confirm mode change
 4. Mode takes effect at next heartbeat (within 60 seconds)
 
+### Re-provision
+
+Rotates the device API key and downloads a new `main.py`. Use it to change WiFi or API URL, or to reinstall a board.
+
+**Steps:**
+1. Click device
+2. Click **Re-provision** button
+3. Enter API URL and WiFi credentials
+4. Click **Rotate key & download main.py**, then copy the file to the board and reset it
+
+**Note:** The old key stops working immediately. History, modules and settings are kept.
+
 ### Delete Device
 
 Permanently remove device from the system:
@@ -129,18 +157,18 @@ Permanently remove device from the system:
 2. Click **Delete** button
 3. Confirm deletion
 
-**Note:** Device can be re-registered anytime by deploying firmware again with the same device-id. Deleting removes all associated data (logs, heartbeats, results).
+**Note:** Deleting removes the device's API key and all associated data (logs, heartbeats, results). The board can no longer connect. To reuse it, add it again with **Add device** and install the new `main.py`.
 
 ---
 
 ## Device Lifecycle
 
-### New Device (Just Deployed)
+### New Device (Just Added)
 
-1. Device registers on first heartbeat
-2. Appears in **Devices** list with status `online`
-3. Mode defaults to `production`
-4. Last heartbeat is "now"
+1. Device is created by **Add device** and appears with an **Awaiting first boot** badge
+2. Mode defaults to `production`
+3. After `main.py` installs the firmware, the device sends its first heartbeat and reports its version and metadata
+4. Badge disappears, status becomes `online`
 
 ### Online Device
 

@@ -5,7 +5,7 @@ A comprehensive IoT platform for managing embedded devices (ESP32/Pico). This pl
 
 ## Key Features
 
-- **Device Management**: Register, monitor, and control multiple IoT devices across platforms (ESP32, Raspberry Pi Pico)
+- **Device Management**: Add devices from the web UI with one downloaded `main.py`, then monitor and control them across platforms (ESP32, Raspberry Pi Pico)
 - **Module System**: Deploy and manage versioned Python modules on devices with remote execution and result tracking
 - **Interactive Dev Commands**: Execute arbitrary Python code on devices for debugging and testing
 - **Dashboard Analytics**: Real-time metrics on device health, module activity, and system status. The dashboard supports visual elements such as graphs and guages.
@@ -58,7 +58,8 @@ HomeIOT/
 ├── edge/                  # MicroPython edge runtime
 │   ├── platforms/         # Platform-specific code (ESP32, Pico)
 │   ├── shared/            # Common app logic and HAL
-│   └── tools/             # Provisioning, deployment, and utility scripts
+│   ├── bootstrap/         # First-boot installer embedded in the generated main.py
+│   └── tools/             # Firmware release build and dev command scripts
 ├── web-ui/                # React + TypeScript Web Dashboard
 ├── data/                  # SQLite database (auto-created)
 └── docs/                  # Detailed guides and references
@@ -80,15 +81,14 @@ graph TB
     end
     
     subgraph "Admin Tools"
-        TOOLS["Python Tools<br/>(provision, deploy, build)"]
+        TOOLS["Python Tools<br/>(build release)"]
     end
     
     WEB -->|Admin API| API
     API -->|Store/Query| DB
-    ESP32 -->|Device API| API
-    PICO -->|Device API| API
-    TOOLS -->|Deploy| ESP32
-    TOOLS -->|Deploy| PICO
+    ESP32 -->|Device API + OTA| API
+    PICO -->|Device API + OTA| API
+    TOOLS -->|Release| API
     
     style API fill:#0078d4
     style WEB fill:#61dafb
@@ -115,14 +115,14 @@ graph TB
 | Guide | Purpose |
 |-------|---------|
 | [📖 Server Setup](docs/setup-server.md) | Install and configure the API server (direct .NET & Docker) |
-| [📖 Edge Device Setup](docs/setup-edge-device.md) | Provision and deploy firmware to ESP32/Pico devices |
+| [📖 Edge Device Setup](docs/setup-edge-device.md) | Add ESP32/Pico devices and install firmware with the generated `main.py` |
 
 ### For Feature Usage
 
 | Guide | Purpose |
 |-------|---------|
 | [📖 Dashboard](docs/features-dashboard.md) | Understand real-time metrics and system status |
-| [📖 Device Management](docs/features-devices.md) | Monitor, filter, and control devices |
+| [📖 Device Management](docs/features-devices.md) | Add, re-provision, monitor, filter, and control devices |
 | [📖 Module System](docs/features-modules.md) | Create, upload, assign, and execute modules |
 | [📖 Data Visualizations](docs/features-visualizations.md) | Configure and use gauges, charts, and threshold colors |
 | [📖 User Management](docs/features-users.md) | Manage admin users and authentication |
@@ -133,10 +133,10 @@ graph TB
 ## Prerequisites
 
 - **C# / .NET 10 SDK** — Required to run the API server
-- **Python 3.8+** — Required for edge tools (provisioning, deployment, building)
+- **Python 3.8+** — Required for edge tools (building firmware releases) and tests
 - **Node.js 18+** — Required for Web UI development
 - **Docker** (optional) — For containerized deployment via Docker Compose
-- **mpremote** — Required for device deployment (`pip install mpremote`)
+- **mpremote** — To copy the generated `main.py` onto a device (`pip install mpremote`), or use Thonny
 
 ## Installation
 
@@ -237,26 +237,22 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 
 ### Setting Up a New Device
 
-1. **Generate device config** (one-time per device)
+1. **Publish a firmware release** for the platform (once per version)
    ```bash
-   python edge/tools/provision_config.py \
-     --platform esp32 \
-     --device-id my-device-001 \
-     --api-url http://192.168.1.100:5228 \
-     --api-key <generated-key> \
-     --wifi-ssid YOUR_WIFI \
-     --wifi-password YOUR_PASSWORD
+   python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
    ```
+   When the API runs elsewhere (e.g. Docker), upload the release zip on the **OTA** page instead.
 
-2. **Deploy firmware to device** (via USB)
+2. **Add the device** under **Devices > Add device**. Enter the device ID, platform, API URL (an IP or a hostname the device can resolve) and WiFi credentials. The browser downloads `main.py`.
+
+3. **Install on the board.** Flash MicroPython, then copy the file and reset:
    ```bash
-   python edge/tools/deploy_device.py \
-     --platform esp32 \
-     --port auto \
-     --config-file edge/tools/generated/esp32-config.json
+   mpremote cp main.py :main.py
+   mpremote reset
    ```
+   The installer writes `config.json`, connects to WiFi, and installs the latest release through OTA. Delete the downloaded `main.py` afterwards, because it contains the device key and WiFi password.
 
-3. **Verify in Dashboard** — Device should appear online within 60 seconds
+4. **Verify in Dashboard** — Device should appear online within 60 seconds
 
 👉 Full guide: [Edge Device Setup](docs/setup-edge-device.md)
 
@@ -310,8 +306,8 @@ For production, also change:
 
 ### Device Configuration
 
-Device config is auto-generated by `provision_config.py` and includes:
-- WiFi credentials (encrypted, device-ID-bound)
+Device `config.json` is written on the device by the `main.py` installer from **Add device** / **Re-provision**, and includes:
+- WiFi credentials and API key (encrypted, device-ID-bound)
 - API URL and authentication
 - Polling intervals and power settings
 - Logging configuration
@@ -321,7 +317,8 @@ Device config is auto-generated by `provision_config.py` and includes:
 ## Troubleshooting
 
 ### Device not appearing in dashboard
-- Check API URL is correct and reachable from device
+- Check API URL is correct and reachable from device (bare machine names like `homesvr` often don't resolve on the device; use an IP)
+- Watch the `[bootstrap]` output with `mpremote repl` during first install
 - Verify WiFi connection on device (use dev commands to test)
 - Check device logs via `GET /api/devices/{id}/logs` in dashboard
 

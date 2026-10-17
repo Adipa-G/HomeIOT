@@ -1,20 +1,159 @@
 # Edge Device Setup Guide
 
-This guide walks you through provisioning and deploying firmware to an ESP32 or Raspberry Pi Pico device, or running a PC simulator for development.
+This guide covers adding an ESP32 or Raspberry Pi Pico to HomeIOT, and running the PC simulator for development.
+
+Devices are added from the web UI. **Add device** registers the device, generates its API key, and downloads a single `main.py` installer. When that file runs on the board, it writes `config.json`, connects to WiFi, and installs the latest firmware release through the normal OTA updater. You don't need to generate config or deploy files by hand.
 
 ## Prerequisites
 
-- **Server running** — Verify at `http://localhost:5228` (see [Server Setup](setup-server.md))
-- **Python 3.8+** — Required for provisioning and deployment tools
-- **mpremote installed** — `pip install mpremote` (for real devices only)
-- **Device connected via USB** — ESP32 or Raspberry Pi Pico (for real devices only)
-- **WiFi credentials** — SSID and password for the device to connect (for real devices only)
+- **Server running.** See [Server Setup](setup-server.md).
+- **A firmware release for the device's platform.** The installer downloads the latest release, so at least one must exist. See [Step 1](#step-1-publish-a-firmware-release).
+- **MicroPython flashed on the board.** Use the firmware from [micropython.org/download](https://micropython.org/download/).
+- **A way to copy one file to the board.** Either `mpremote` (`pip install mpremote`) or Thonny.
+- **WiFi credentials** for the network the device will join (2.4 GHz).
+
+---
+
+## Step 1: Publish a Firmware Release
+
+Skip this step if the OTA page already lists a release for your platform.
+
+1. Build the release from the edge source tree:
+   ```bash
+   python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
+   ```
+2. Make it available to the API:
+   - **API running from source:** nothing more to do. The release is written to `api/artifacts/{platform}/{version}`, which is the development artifact root.
+   - **Docker or remote server:** zip the *contents* of `api/artifacts/esp32/1.0.0/` into `1.0.0.zip`. Upload it in the web UI at **OTA → esp32** (or open `/ota/esp32` directly if no platform is listed yet). The zip file name becomes the version.
+
+See [edge/tools/USAGE.md](../edge/tools/USAGE.md) for build options.
+
+---
+
+## Step 2: Add the Device
+
+1. In the web UI, go to **Devices** and click **Add device**.
+2. Fill in the form:
+
+   | Field | Description | Example |
+   |-------|-------------|---------|
+   | Device ID | Unique identifier: letters, digits, `.`, `_` or `-` (max 64) | `kitchen-sensor-01` |
+   | Platform | `esp32` or `pico` | `esp32` |
+   | API URL | Server URL **as seen from the device** | `http://192.168.1.100:8080` |
+   | WiFi SSID | Network name | `MyHome` |
+   | WiFi password | Network password | |
+
+3. Click **Create & download main.py**. The browser downloads `main.py`.
+
+The device now appears in the list with an **Awaiting first boot** badge.
+
+> **API URL must resolve on the device.** The board uses your router's DNS, which usually can't resolve bare local machine names such as `homesvr`. Use an IP address or a hostname your router's DNS knows. The URL defaults to the address you are browsing from; change it if that is `localhost`.
+
+> **`main.py` contains secrets.** It holds the device API key and your WiFi password, in plain text. Delete the downloaded file once it is on the device. WiFi credentials are not stored on the server.
+
+---
+
+## Step 3: Install on the Board
+
+1. Connect the board via USB. It must already run MicroPython.
+2. Copy the installer and reset the board:
+   ```bash
+   mpremote cp main.py :main.py
+   mpremote reset
+   ```
+   With Thonny instead: open `main.py`, choose **File → Save as… → MicroPython device**, name it `main.py`, then press the board's reset button.
+3. Optionally watch progress with `mpremote repl`.
+
+### What Happens
+
+1. The installer unpacks its embedded bootstrap code (shared edge code) into `bootstrap_lib/`.
+2. It writes `config.json`, with the API key and WiFi password encrypted and bound to the device ID.
+3. It connects to WiFi.
+4. It asks the API for the latest release (`/api/ota/check`), downloads every file, and verifies the hashes. This is the same updater that handles OTA updates.
+5. The new firmware replaces `main.py`, and the board resets.
+6. The firmware sends its first heartbeat. The **Awaiting first boot** badge disappears.
+
+### Expected Output
+
+```
+[bootstrap] Unpacking installer payload
+[bootstrap] INFO Bootstrap started {"device_id": "kitchen-sensor-01", "platform": "esp32"}
+[bootstrap] INFO Config written {"path": "config.json"}
+[bootstrap] INFO Connecting to WiFi {"ssid": "MyHome", "attempt": 1}
+[bootstrap] INFO WiFi connected {"ip": "192.168.1.57"}
+[bootstrap] INFO Sending OTA check request {...}
+[bootstrap] INFO Installing firmware {"version": "1.0.0"}
+...
+```
+
+If installation fails, the installer prints `[bootstrap] Install failed: ...`, waits 60 seconds, and tries again. See [Troubleshooting](#troubleshooting).
+
+---
+
+## Step 4: Verify the Device
+
+Within about a minute of the reset, check the device in **Devices**:
+
+| Field | Expected Value |
+|-------|-----------------|
+| Device ID | Your device ID |
+| Platform | `esp32` or `pico` |
+| Mode | `production` |
+| Last Heartbeat | Recent |
+| Version | The release that was installed |
+
+The **Heartbeats** and **Logs** tabs on the device detail page show ongoing activity.
+
+---
+
+## Multiple Devices
+
+Repeat [Step 2](#step-2-add-the-device) and [Step 3](#step-3-install-on-the-board) for each board. Every device needs its own ID and its own downloaded `main.py`, because each file carries that device's unique API key.
+
+---
+
+## Re-provisioning a Device
+
+Re-provision a device to change its WiFi network or API URL, recover a lost key, or reinstall a board from scratch.
+
+1. Open the device detail page and click **Re-provision**.
+2. Enter the API URL and WiFi credentials, then click **Rotate key & download main.py**.
+3. Copy it to the board and reset, as in [Step 3](#step-3-install-on-the-board).
+
+Re-provisioning **rotates the device API key**. The old key stops working immediately, so a board still running with old config gets `401` responses until it runs the new installer. The device keeps its history, modules and settings.
+
+---
+
+## Switching to Development Mode
+
+Development mode enables verbose logging and faster polling for debugging.
+
+1. Go to **Devices** and open your device.
+2. Click **Switch Mode** and select `development`.
+3. The device applies the change at its next heartbeat.
+
+| Setting | Production | Development |
+|---------|-----------|-------------|
+| Heartbeat Interval | 60s | 60s |
+| Dev Command Polling | 2s | 2s |
+| Log Level | INFO | DEBUG |
+| Module Polling | 60s | 60s |
+| WiFi Power Save | Enabled | Disabled |
+
+---
+
+## Removing a Device
+
+1. Go to **Devices** and open your device.
+2. Click **Delete** and confirm.
+
+The device's API key is deleted with it, so the board can no longer talk to the server. To reuse the board, add it again with **Add device** (the same or a new ID) and install the new `main.py`.
 
 ---
 
 ## Alternative: Running a PC Simulator
 
-If you don't have a physical device, you can run a simulator on your PC to test edge logic without hardware.
+Without a physical device, you can run the edge control loop on your PC.
 
 ### Quick Start
 
@@ -22,37 +161,30 @@ If you don't have a physical device, you can run a simulator on your PC to test 
    ```bash
    pip install -r edge/shared/tests/requirements.txt
    ```
-   The simulator's HTTP client uses the `requests` package (declared in this
-   requirements file) since it runs as CPython rather than MicroPython.
+   The simulator runs as CPython, so its HTTP client uses the `requests` package from this requirements file.
 
-2. **Generate simulator config**
+2. **Create the simulator config**
    ```bash
    cp edge/simulator/config.template.json simulator-config.json
-   
-   # Edit simulator-config.json to match your server setup:
-   # - Set "api_url" to your local API (e.g., "http://localhost:5228")
-   # - Set "api_key" to a valid device API key
-   # - Optionally customize "device_id" (e.g., "my-simulator-01")
    ```
+   Set `api_url` to your API (e.g. `http://localhost:5228`). Then set `device_id` and `api_key` to a device the server knows. The server rejects unknown devices. Either:
+   - keep the defaults (`simulator-device-1` / `simulator-api-key`), which match the development seed device (see [Server Setup](setup-server.md)); or
+   - create a device with **Add device**, then copy its `device_id` and `api_key` from the `#@@PROVISION {...}` line near the top of the downloaded `main.py`. The simulator config takes the plain-text key.
 
 3. **Run the simulator**
    ```bash
    python edge/simulator/worker.py --config simulator-config.json
    ```
 
-4. **View in dashboard**
-   - Open web UI at `http://localhost:5173`
-   - Go to **Admin → Devices**
-   - Find your simulator device (device ID from config)
-   - View logs, heartbeats, and module assignments in real-time
+4. **View in dashboard.** Open the web UI, go to **Devices**, and select your simulator device to see logs, heartbeats and module assignments.
 
 ### Simulator Features
 
-- ✅ Runs the same control loop as real devices
-- ✅ Connects to real API (requires running server)
-- ✅ Real module execution (modules run as CPython, not MicroPython)
-- ✅ Real heartbeats and dev command polling
-- ✅ Logs appear in web dashboard like real devices
+- Runs the same control loop as real devices
+- Connects to the real API (requires a running server)
+- Runs modules as CPython, not MicroPython
+- Sends real heartbeats and polls for dev commands
+- Logs appear in the web dashboard like those from real devices
 
 ### CLI Options
 
@@ -68,380 +200,67 @@ python edge/simulator/worker.py \
 ### Troubleshooting the Simulator
 
 **`ModuleNotFoundError: No module named 'requests'`:**
-- Install dependencies: `pip install -r edge/shared/tests/requirements.txt`
-- Make sure you're running with the same Python/venv you installed into
+- Install the dependencies: `pip install -r edge/shared/tests/requirements.txt`. Use the same Python/venv you run the simulator with.
 
-**Simulator won't connect to API:**
-- Verify server is running: `http://localhost:5228`
-- Check API URL in config file
-- Verify API key is valid
+**`401 Unauthorized` / device not shown:**
+- The device ID must already exist on the server, and the API key must match it. Self-registration is disabled.
+- If the device was re-provisioned, copy the new key from the new `main.py`.
 
 **Module execution errors:**
-- Modules run as standard Python (not MicroPython)
-- Check if modules use MicroPython-specific imports (e.g., `machine`, `utime`)
-- Modules requiring hardware won't work in simulator
-
-**Device doesn't appear in dashboard:**
-- Wait 30+ seconds for first heartbeat
-- Check API logs for registration errors
-- Verify device ID is unique
-
----
-
-## Step 1: Generate Device Configuration
-
-Device configuration binds security credentials to the device ID and includes WiFi settings, API URL, and polling intervals.
-
-### Command
-
-```bash
-python edge/tools/provision_config.py \
-  --platform esp32 \
-  --device-id my-esp32-001 \
-  --api-url http://192.168.1.100:5228 \
-  --api-key auto-generate \
-  --wifi-ssid YOUR_WIFI_SSID \
-  --wifi-password YOUR_WIFI_PASSWORD
-```
-
-### Parameters
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `--platform` | Target platform | `esp32` or `pico` |
-| `--device-id` | Unique device identifier (used in URL requests) | `kitchen-sensor-01` |
-| `--api-url` | Server URL (must be reachable from device) | `http://192.168.1.100:5228` |
-| `--api-key` | Device API key or `auto-generate` | `auto-generate` |
-| `--wifi-ssid` | WiFi network name | `MyHome5G` |
-| `--wifi-password` | WiFi password | `SuperSecure123!` |
-
-### What Gets Created
-
-```
-edge/tools/generated/
-└── esp32-config.json       # Device-specific config (encrypted credentials)
-```
-
-The config file contains:
-- Device ID and API key (device-ID-bound encryption)
-- WiFi credentials (device-ID-bound encryption)
-- Server API URL
-- Polling intervals (heartbeat: 60s, dev commands: 2s, modules: 60s)
-- Logging configuration
-- Power management settings (device-specific)
-
----
-
-## Step 2: Deploy Firmware to Device
-
-Deploy the runtime and configuration to the connected device.
-
-### Prerequisites
-
-1. **Device connected via USB** — Computer should recognize the serial port
-2. **Configuration file generated** — From Step 1 above
-
-### Command
-
-```bash
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port auto \
-  --config-file edge/tools/generated/esp32-config.json
-```
-
-### Parameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `--platform` | Target platform | Required: `esp32` or `pico` |
-| `--port` | Serial port (`auto` to detect, or `COM3`, `/dev/ttyUSB0`) | `auto` |
-| `--config-file` | Path to config JSON from Step 1 | Optional |
-| `--force-config` | Overwrite device config even if present | `False` |
-| `--verify-only` | Validate without uploading (dry-run) | `False` |
-
-### What Happens
-
-1. **Validates** config file syntax
-2. **Connects** to device via serial (USB)
-3. **Uploads** files:
-   - Runtime (`main.py`, `boot.py`)
-   - Platform-specific modules
-   - Configuration (`config.json`)
-4. **Device reboots** automatically
-5. **Device boots** and connects to WiFi
-6. **Device registers** with server on first heartbeat
-
-### Expected Output
-
-```
-[INFO] Connecting to device on COM4...
-[INFO] Device connected (MicroPython vX.X.X)
-[INFO] Uploading files...
-[INFO] Uploaded: boot.py
-[INFO] Uploaded: main.py
-[INFO] Uploaded: config.json
-[INFO] Device rebooting...
-[SUCCESS] Deploy complete! Device should connect within 60 seconds.
-```
-
----
-
-## Step 3: Verify Device Registration
-
-After deployment, the device should appear in the HomeIOT dashboard within 60 seconds.
-
-### Check in Web UI
-
-1. Open `http://localhost:5228` in browser
-2. Navigate to **Dashboard**
-3. Verify **"Online Devices"** count increased by 1
-4. Go to **Admin → Devices**
-5. Look for your device ID in the list (e.g., `my-esp32-001`)
-
-### What You Should See
-
-| Field | Expected Value |
-|-------|-----------------|
-| Device ID | `my-esp32-001` (matches your device-id) |
-| Platform | `esp32` |
-| Mode | `production` |
-| Last Heartbeat | Recent (within last 60 seconds) |
-| Status | `online` |
-| Version | Shows current firmware version |
-
-### If Device Doesn't Appear
-
-**Check device connectivity:**
-1. Verify device is powered on (LED indicator)
-2. Verify WiFi connection:
-   - Use **Dev Commands** to check WiFi status
-   - Navigate to device detail → click **Dev Commands**
-   - Execute: `import network; sta = network.WLAN(0); print("Connected:", sta.isconnected())`
-3. Verify API URL reachability:
-   - Execute: `import socket; s = socket.socket(); s.connect(('192.168.1.100', 5228)); print('OK')`
-4. Check device logs:
-   - In device detail → **Logs** tab
-   - Look for connection errors or WiFi failures
-
-**Troubleshooting:**
-- Wrong WiFi password → Re-run provision_config.py with correct credentials
-- API URL incorrect → Verify device can reach server IP from device's network
-- Port blocked → Ensure firewall allows port 5228
-- Device offline → Check WiFi signal strength
-
----
-
-## Step 4: Verify Device Heartbeat (Optional)
-
-Monitor device communication to ensure everything is working.
-
-### View Heartbeat History
-
-1. Navigate to device detail page
-2. Click **Heartbeats** tab
-3. You should see a list of recent heartbeats (one every 60 seconds by default)
-4. Each entry shows:
-   - Timestamp received by server
-   - Device uptime (milliseconds)
-   - Free memory (bytes)
-
-### Real-Time Monitoring
-
-1. Navigate to device detail page
-2. **Last Heartbeat** should update every ~60 seconds
-3. If it's getting older, device is offline or not sending heartbeats
-
----
-
-## Multiple Devices
-
-To provision and deploy multiple devices:
-
-1. **Generate config for each device** (unique device-id per device)
-   ```bash
-   python edge/tools/provision_config.py \
-     --platform esp32 \
-     --device-id kitchen-sensor-01 \
-     --api-url http://192.168.1.100:5228 \
-     --api-key auto-generate \
-     --wifi-ssid YOUR_WIFI \
-     --wifi-password YOUR_WIFI_PASSWORD
-   
-   # Repeat for device 2, 3, etc.
-   ```
-
-2. **Deploy to each device** (one at a time, via USB)
-   ```bash
-   # Device 1
-   python edge/tools/deploy_device.py \
-     --platform esp32 \
-     --port auto \
-     --config-file edge/tools/generated/esp32-config.json
-   
-   # Disconnect device 1, connect device 2
-   # Device 2 config already generated with different device-id
-   python edge/tools/deploy_device.py \
-     --platform pico \
-     --port auto \
-     --config-file edge/tools/generated/pico-config.json
-   ```
-
-3. **Verify all devices** appear in dashboard
-
----
-
-## Switching to Development Mode
-
-Development mode enables verbose logging and faster polling for debugging.
-
-### Via Web UI
-
-1. Navigate to **Admin → Devices**
-2. Find your device
-3. Click **Switch Mode** button
-4. Select `development`
-5. Device applies mode change at next heartbeat (~60 seconds)
-
-### Effects of Development Mode
-
-| Setting | Production | Development |
-|---------|-----------|-------------|
-| Heartbeat Interval | 60s | 60s |
-| Dev Command Polling | 2s | 2s |
-| Log Level | INFO | DEBUG |
-| Module Polling | 60s | 60s |
-| WiFi Power Save | Enabled | Disabled |
-
----
-
-## Updating Device Config
-
-If you need to change WiFi or API settings after deployment:
-
-### Method 1: Re-provision and Deploy (Recommended)
-
-```bash
-# Generate new config
-python edge/tools/provision_config.py \
-  --platform esp32 \
-  --device-id my-esp32-001 \
-  --api-url http://NEW_IP:5228 \
-  --wifi-ssid NEW_WIFI \
-  --wifi-password NEW_PASSWORD
-
-# Force config update on device
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port auto \
-  --config-file edge/tools/generated/esp32-config.json \
-  --force-config
-```
-
-### Method 2: Config-Only Update
-
-To update config without re-uploading runtime:
-
-```bash
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port auto \
-  --config-file edge/tools/generated/esp32-config.json
-```
-
-The tool preserves the runtime by default.
-
----
-
-## Removing a Device
-
-### From Web UI
-
-1. Navigate to **Admin → Devices**
-2. Find your device
-3. Click **Delete** button
-4. Confirm deletion
-
-Device will no longer appear in dashboard (but can be re-registered anytime).
-
-### Physical Device
-
-To repurpose the device:
-1. Delete from dashboard (above)
-2. Connect device via USB again
-3. Run `provision_config.py` with new device-id
-4. Run `deploy_device.py` to deploy with new config
+- Modules that import MicroPython-only modules (`machine`, `utime`) or need hardware won't work in the simulator.
 
 ---
 
 ## Troubleshooting
 
-### Device Connection Issues
+### Installer Errors (`[bootstrap] Install failed: ...`)
 
-**Symptom: Device never appears in dashboard**
+**`OSError: -2` / `-202`, or "Cannot resolve the API host"**
+- The device can't resolve the API host name. Re-provision with an IP address (e.g. `http://192.168.1.100:8080`) or a hostname your router's DNS resolves.
 
-```bash
-# Check device serial output (real-time log)
-python -m mpremote connect COM4 repl
+**"No firmware release received"**
+- Check that a release exists for the device's platform ([Step 1](#step-1-publish-a-firmware-release)).
+- Check that the API URL is correct, and that the device wasn't deleted or re-provisioned after this `main.py` was downloaded.
 
-# In REPL, run:
-import network
-sta = network.WLAN(0)
-print("Connected:", sta.isconnected())
-print("IP:", sta.ifconfig())
+**WiFi connection failed**
+- Check the SSID and password, and that the network is 2.4 GHz. Re-provision with the correct credentials.
 
-# Exit with Ctrl+X
-```
+**Connection refused / timeouts**
+- Check that the server is reachable from the device's network, and that the firewall allows the API port.
 
-**Solutions:**
-- Verify WiFi SSID and password in config (re-run provision_config.py)
-- Check device can reach API server: `socket.connect(('192.168.1.100', 5228))`
-- Verify firewall allows port 5228
+**Hash mismatch**
+- The release on the server is stale or incomplete. Rebuild it with `build_artifact.py` and publish it again.
+
+### Add Device Errors
+
+| Message | Cause |
+|---------|-------|
+| Device already exists | The ID is taken. Pick another ID, or use **Re-provision** on the existing device. |
+| No firmware release | Publish a release for the platform first ([Step 1](#step-1-publish-a-firmware-release)). |
+| Release incomplete | The latest release is missing files. Rebuild and publish it again. |
 
 ### Device Goes Offline
 
-**Symptom: Device was online, now offline**
+1. Check that the device has power.
+2. Check WiFi signal strength.
+3. Check the **Logs** tab on the device detail page for WiFi or HTTP errors.
+4. If logs show `401`, the key was rotated. Re-provision the device.
+5. Power-cycle the device.
 
-1. Check device is powered on
-2. Check WiFi signal (move device closer to router)
-3. Check logs:
-   - Device detail → **Logs** tab
-   - Look for WiFi disconnection errors
-4. Restart device (power cycle or soft reset)
+To inspect a connected board directly:
 
-### Deploy Fails
-
-**Error: `mpremote: command not found`**
 ```bash
-# Install mpremote
-pip install mpremote
-
-# Verify installation
-mpremote version
+mpremote repl
+# In the REPL:
+import network
+sta = network.WLAN(0)
+print("Connected:", sta.isconnected(), sta.ifconfig())
 ```
-
-**Error: `No device found on port`**
-```bash
-# Check connected devices
-python -m mpremote list
-
-# Manually specify port
-python edge/tools/deploy_device.py \
-  --platform esp32 \
-  --port COM3 \
-  --config-file edge/tools/generated/esp32-config.json
-```
-
-**Error: `Config validation failed`**
-- Verify JSON syntax in generated config file
-- Ensure all required fields present (device_id, api_url, wifi_ssid, wifi_password)
-- Re-run provision_config.py to regenerate
 
 ---
 
 ## Next Steps
 
-1. ✅ Device is provisioned and registered
-2. ⏭️ [Assign modules to device](features-modules.md)
-3. ⏭️ [Execute dev commands for testing](features-dev-commands.md)
-4. ⏭️ [Monitor device via Dashboard](features-dashboard.md)
+1. ⏭️ [Assign modules to device](features-modules.md)
+2. ⏭️ [Execute dev commands for testing](features-dev-commands.md)
+3. ⏭️ [Monitor device via Dashboard](features-dashboard.md)
