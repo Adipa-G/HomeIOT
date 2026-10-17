@@ -1,6 +1,6 @@
 # Multi-stage build for HomeIOT API with React frontend
 # Stage 1: Build React frontend
-FROM --platform=$BUILDPLATFORM node:20-alpine AS react-build
+FROM --platform=$BUILDPLATFORM node:24-alpine AS react-build
 
 WORKDIR /src/web-ui
 
