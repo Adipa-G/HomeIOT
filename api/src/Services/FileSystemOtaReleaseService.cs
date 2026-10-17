@@ -112,6 +112,44 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
         await output.FlushAsync(ct);
     }
 
+    public string? GetLatestVersion(string platform)
+    {
+        var platformRoot = Path.Combine(_artifactRoot, platform);
+        if (!Directory.Exists(platformRoot))
+        {
+            return null;
+        }
+
+        string? latest = null;
+        foreach (var release in LoadReleases(platformRoot))
+        {
+            if (latest is null || CompareVersions(release.Version, latest) > 0)
+            {
+                latest = release.Version;
+            }
+        }
+
+        return latest;
+    }
+
+    public string? ReadReleaseFileText(string platform, string version, string relativePath)
+    {
+        var cleanPath = relativePath.Replace('\\', '/').Trim();
+        if (!IsSafeRelativePath(cleanPath))
+        {
+            return null;
+        }
+
+        var releaseRoot = Path.Combine(_artifactRoot, platform, version);
+        var fullPath = TryResolveSafePath(releaseRoot, cleanPath);
+        if (fullPath is null || !File.Exists(fullPath))
+        {
+            return null;
+        }
+
+        return File.ReadAllText(fullPath, Encoding.UTF8);
+    }
+
     // ──────────────────────────────────────────────
     //  Admin
     // ──────────────────────────────────────────────

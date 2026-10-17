@@ -4,7 +4,7 @@ public sealed class DeviceRecord
 {
     public Guid Id { get; set; }
     public string DeviceId { get; set; } = string.Empty;
-    public string ApiKey { get; set; } = string.Empty;
+    public string ApiKeyHash { get; set; } = string.Empty;
     public string? Platform { get; set; }
     public string? Version { get; set; }
     public string? Ip { get; set; }

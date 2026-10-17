@@ -43,7 +43,7 @@ public class DatabaseFixture : IAsyncLifetime
         {
             Id = Guid.NewGuid(),
             DeviceId = deviceId,
-            ApiKey = apiKey,
+            ApiKeyHash = apiKey,
             Platform = platform,
             Version = version,
             Mode = "production",

@@ -36,19 +36,22 @@ public sealed class DeviceAuthMiddleware(RequestDelegate next)
         }
 
         var device = await dbContext.Devices.FirstOrDefaultAsync(x => x.DeviceId == deviceId, context.RequestAborted);
-        var isRegisterRequest = HttpMethods.IsPost(context.Request.Method)
-            && context.Request.Path.Equals("/api/devices/register", StringComparison.OrdinalIgnoreCase);
-
-        if (device is null && !isRegisterRequest)
+        if (device is null)
         {
             await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "unauthorized", "Unknown device.");
             return;
         }
 
-        if (device is not null && !string.Equals(device.ApiKey, apiKey, StringComparison.Ordinal))
+        if (!DeviceApiKeyHasher.Verify(apiKey, device.ApiKeyHash))
         {
             await WriteErrorAsync(context, StatusCodes.Status401Unauthorized, "unauthorized", "Invalid API key.");
             return;
+        }
+
+        if (!DeviceApiKeyHasher.IsHashed(device.ApiKeyHash))
+        {
+            device.ApiKeyHash = DeviceApiKeyHasher.Hash(apiKey);
+            await dbContext.SaveChangesAsync(context.RequestAborted);
         }
 
         context.SetDeviceRequestContext(new DeviceRequestContext(deviceId, apiKey, device));

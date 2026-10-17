@@ -1,0 +1,26 @@
+{
+  "loader": "edge/bootstrap/loader.py",
+  "bootstrap_files": [
+    "edge/bootstrap/__init__.py",
+    "edge/bootstrap/bootstrap.py",
+    "edge/bootstrap/provisioning.py"
+  ],
+  "release_files": [
+    "config.json",
+    "edge/__init__.py",
+    "edge/shared/__init__.py",
+    "edge/shared/hal/__init__.py",
+    "edge/shared/hal/interfaces.py",
+    "edge/shared/hal/filesystem.py",
+    "edge/shared/hal/http_client.py",
+    "edge/shared/hal/network.py",
+    "edge/shared/hal/system.py",
+    "edge/shared/app/__init__.py",
+    "edge/shared/app/secret_crypto.py",
+    "edge/shared/app/safe_io.py",
+    "edge/shared/app/config.py",
+    "edge/shared/app/endpoints.py",
+    "edge/shared/app/boot_manager.py",
+    "edge/shared/app/updater.py"
+  ]
+}

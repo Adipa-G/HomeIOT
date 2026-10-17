@@ -16,7 +16,7 @@ public class ApiDbContextTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "seed-device-001",
-            ApiKey = "seed-key-001",
+            ApiKeyHash = "seed-key-001",
             Platform = "esp32",
             Version = "1.0.0",
             Mode = "production",
@@ -28,7 +28,7 @@ public class ApiDbContextTests
         await dbContext.SaveChangesAsync();
 
         var saved = await dbContext.Devices.SingleAsync(x => x.DeviceId == "seed-device-001");
-        Assert.Equal("seed-key-001", saved.ApiKey);
+        Assert.Equal("seed-key-001", saved.ApiKeyHash);
         Assert.Equal("esp32", saved.Platform);
     }
 
@@ -45,7 +45,7 @@ public class ApiDbContextTests
             {
                 Id = Guid.NewGuid(),
                 DeviceId = deviceId,
-                ApiKey = "upsert-key-001",
+                ApiKeyHash = "upsert-key-001",
                 Mode = "production",
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -66,7 +66,7 @@ public class ApiDbContextTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "hb-device-001",
-            ApiKey = "hb-key-001",
+            ApiKeyHash = "hb-key-001",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,

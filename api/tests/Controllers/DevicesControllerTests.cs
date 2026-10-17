@@ -17,7 +17,7 @@ namespace HomeIOT.Api.Tests.Controllers;
 public class DevicesControllerTests
 {
     [Fact]
-    public async Task Register_NewDevice_Returns201Created()
+    public async Task Register_UnknownDevice_Returns401AndDoesNotCreateDevice()
     {
         await using var dbContext = CreateDbContext();
         var controller = CreateController(dbContext, new DeviceRequestContext("dev-001", "api-key-001", null));
@@ -31,37 +31,31 @@ public class DevicesControllerTests
             Timestamp = 1716890000,
         }, CancellationToken.None);
 
-        var objectResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status201Created, objectResult.StatusCode);
-
-        var payload = Assert.IsType<RegisterResponse>(objectResult.Value);
-        Assert.Equal("ok", payload.Status);
-        Assert.Equal("dev-001", payload.DeviceId);
-
-        var savedDevice = await dbContext.Devices.SingleAsync(x => x.DeviceId == "dev-001");
-        Assert.Equal("api-key-001", savedDevice.ApiKey);
-        Assert.Equal("esp32", savedDevice.Platform);
-        Assert.Equal("1.0.0", savedDevice.Version);
+        var unauthorized = Assert.IsType<UnauthorizedObjectResult>(result.Result);
+        var payload = Assert.IsType<ErrorResponse>(unauthorized.Value);
+        Assert.Equal("unauthorized", payload.Error);
+        Assert.False(await dbContext.Devices.AnyAsync());
     }
 
     [Fact]
-    public async Task Register_ExistingDevice_Returns200OK()
+    public async Task Register_ExistingDevice_Returns200AndKeepsKeyHash()
     {
         await using var dbContext = CreateDbContext();
-        dbContext.Devices.Add(new DeviceRecord
+        var device = new DeviceRecord
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "old-key",
+            ApiKeyHash = "sha256:existing",
             Platform = "esp32",
             Version = "0.9.0",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-30),
             UpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-30),
-        });
+        };
+        dbContext.Devices.Add(device);
         await dbContext.SaveChangesAsync();
 
-        var controller = CreateController(dbContext, new DeviceRequestContext("dev-001", "new-key", null));
+        var controller = CreateController(dbContext, new DeviceRequestContext("dev-001", "new-key", device));
 
         var result = await controller.HandleRegister(new RegisterRequest
         {
@@ -75,7 +69,8 @@ public class DevicesControllerTests
         Assert.Equal("dev-001", payload.DeviceId);
 
         var savedDevice = await dbContext.Devices.SingleAsync(x => x.DeviceId == "dev-001");
-        Assert.Equal("new-key", savedDevice.ApiKey);
+        Assert.Equal("sha256:existing", savedDevice.ApiKeyHash);
+        Assert.Equal("esp32", savedDevice.Platform);
         Assert.Equal("1.1.0", savedDevice.Version);
         Assert.Equal("192.168.1.11", savedDevice.Ip);
     }
@@ -105,7 +100,7 @@ public class DevicesControllerTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "api-key-001",
+            ApiKeyHash = "api-key-001",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
             UpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
@@ -157,7 +152,7 @@ public class DevicesControllerTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "api-key-001",
+            ApiKeyHash = "api-key-001",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
             UpdatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),

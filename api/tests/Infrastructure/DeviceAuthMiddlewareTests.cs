@@ -82,7 +82,7 @@ public class DeviceAuthMiddlewareTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "correct-key",
+            ApiKeyHash = "correct-key",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -129,7 +129,7 @@ public class DeviceAuthMiddlewareTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "correct-key",
+            ApiKeyHash = "correct-key",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -197,6 +197,116 @@ public class DeviceAuthMiddlewareTests
 
         Assert.True(wasNextCalled);
         Assert.NotEqual(StatusCodes.Status401Unauthorized, httpContext.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_UnknownDevice_Returns401AndDoesNotCreateDevice()
+    {
+        await using var dbContext = CreateDbContext();
+        var wasNextCalled = false;
+        var middleware = new DeviceAuthMiddleware(_ =>
+        {
+            wasNextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var httpContext = CreateDeviceRequest("/api/devices/register", "new-device", "any-key");
+
+        await middleware.InvokeAsync(httpContext, dbContext);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, httpContext.Response.StatusCode);
+        Assert.False(wasNextCalled);
+        Assert.False(await dbContext.Devices.AnyAsync());
+    }
+
+    [Fact]
+    public async Task ValidCredentials_LegacyPlaintextKey_IsUpgradedToHash()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.Devices.Add(NewDevice("dev-001", "legacy-key"));
+        await dbContext.SaveChangesAsync();
+
+        var wasNextCalled = false;
+        var middleware = new DeviceAuthMiddleware(_ =>
+        {
+            wasNextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(CreateDeviceRequest("/api/devices/heartbeat", "dev-001", "legacy-key"), dbContext);
+
+        Assert.True(wasNextCalled);
+        var saved = await dbContext.Devices.SingleAsync();
+        Assert.Equal(DeviceApiKeyHasher.Hash("legacy-key"), saved.ApiKeyHash);
+    }
+
+    [Fact]
+    public async Task ValidCredentials_HashedKey_AllowsRequestAndKeepsHash()
+    {
+        await using var dbContext = CreateDbContext();
+        var hash = DeviceApiKeyHasher.Hash("secret-key");
+        dbContext.Devices.Add(NewDevice("dev-001", hash));
+        await dbContext.SaveChangesAsync();
+
+        var wasNextCalled = false;
+        var middleware = new DeviceAuthMiddleware(_ =>
+        {
+            wasNextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(CreateDeviceRequest("/api/devices/heartbeat", "dev-001", "secret-key"), dbContext);
+
+        Assert.True(wasNextCalled);
+        Assert.Equal(hash, (await dbContext.Devices.SingleAsync()).ApiKeyHash);
+    }
+
+    [Fact]
+    public async Task HashedKey_PresentingTheHashItself_Returns401()
+    {
+        await using var dbContext = CreateDbContext();
+        var hash = DeviceApiKeyHasher.Hash("secret-key");
+        dbContext.Devices.Add(NewDevice("dev-001", hash));
+        await dbContext.SaveChangesAsync();
+
+        var middleware = new DeviceAuthMiddleware(_ => Task.CompletedTask);
+        var httpContext = CreateDeviceRequest("/api/devices/heartbeat", "dev-001", hash);
+
+        await middleware.InvokeAsync(httpContext, dbContext);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, httpContext.Response.StatusCode);
+    }
+
+    private static DeviceRecord NewDevice(string deviceId, string apiKeyHash)
+    {
+        return new DeviceRecord
+        {
+            Id = Guid.NewGuid(),
+            DeviceId = deviceId,
+            ApiKeyHash = apiKeyHash,
+            Mode = "production",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+    }
+
+    private static DefaultHttpContext CreateDeviceRequest(string path, string deviceId, string apiKey)
+    {
+        var httpContext = new DefaultHttpContext
+        {
+            Request =
+            {
+                Path = path,
+                Method = HttpMethods.Post,
+            },
+            Response =
+            {
+                Body = new MemoryStream(),
+            },
+        };
+        httpContext.Request.Headers["X-Device-ID"] = deviceId;
+        httpContext.Request.Headers["X-Api-Key"] = apiKey;
+        return httpContext;
     }
 
     private static ApiDbContext CreateDbContext()

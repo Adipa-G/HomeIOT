@@ -2,6 +2,7 @@ using HomeIOT.Api.Configuration;
 using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Data;
 using HomeIOT.Api.Data.Entities;
+using HomeIOT.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -102,7 +103,7 @@ public sealed class DevelopmentSeedService
         {
             Id = Guid.NewGuid(),
             DeviceId = DeviceId,
-            ApiKey = DeviceApiKey,
+            ApiKeyHash = DeviceApiKeyHasher.Hash(DeviceApiKey),
             Platform = "simulator",
             Version = "1.0.0",
             Mode = "development",

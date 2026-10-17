@@ -217,6 +217,48 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
         }
     }
 
+    [Fact]
+    public void GetLatestVersion_ReturnsHighestVersionOrNull()
+    {
+        CreateRelease("esp32", "1.2.0", new[] { ("main.py", "a") });
+        CreateRelease("esp32", "1.10.0", new[] { ("main.py", "b") });
+        CreateRelease("esp32", "1.9.5", new[] { ("main.py", "c") });
+
+        var service = CreateService();
+
+        Assert.Equal("1.10.0", service.GetLatestVersion("esp32"));
+        Assert.Null(service.GetLatestVersion("pico"));
+    }
+
+    [Fact]
+    public void ReadReleaseFileText_ReturnsNestedFileContent()
+    {
+        CreateRelease("pico", "1.0.0", new[] { ("main.py", "a") });
+        var nested = Path.Combine(_tempRoot, "pico", "1.0.0", "edge", "shared");
+        Directory.CreateDirectory(nested);
+        File.WriteAllText(Path.Combine(nested, "x.py"), "value = 1\n");
+
+        var service = CreateService();
+
+        Assert.Equal("value = 1\n", service.ReadReleaseFileText("pico", "1.0.0", "edge/shared/x.py"));
+        Assert.Equal("value = 1\n", service.ReadReleaseFileText("pico", "1.0.0", "edge\\shared\\x.py"));
+        Assert.Null(service.ReadReleaseFileText("pico", "1.0.0", "edge/missing.py"));
+    }
+
+    [Theory]
+    [InlineData("../secret.txt")]
+    [InlineData("/etc/passwd")]
+    [InlineData("edge/../../secret.txt")]
+    public void ReadReleaseFileText_RejectsUnsafePaths(string path)
+    {
+        CreateRelease("pico", "1.0.0", new[] { ("main.py", "a") });
+        File.WriteAllText(Path.Combine(_tempRoot, "pico", "secret.txt"), "secret");
+
+        var service = CreateService();
+
+        Assert.Null(service.ReadReleaseFileText("pico", "1.0.0", path));
+    }
+
     private FileSystemOtaReleaseService CreateService()
     {
         var envMock = new Mock<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();

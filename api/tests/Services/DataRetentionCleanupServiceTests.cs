@@ -33,7 +33,7 @@ public class DataRetentionCleanupServiceTests : IDisposable
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "key",
+            ApiKeyHash = "key",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         };

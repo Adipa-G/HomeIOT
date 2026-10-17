@@ -12,6 +12,7 @@ import { DeviceModuleSettingsPanel } from '../components/DeviceModuleSettingsPan
 import { ModuleVariableVisualizer } from '../components/ModuleVariableVisualizer';
 import { extractJsonValue } from '../lib/visualization';
 import { ActivityDrilldownPanel } from '../components/ActivityDrilldownPanel';
+import { ProvisionDeviceModal } from '../components/ProvisionDeviceModal';
 
 export default function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
@@ -29,6 +30,7 @@ export default function DeviceDetailPage() {
   const [logFilter, setLogFilter] = useState<{ from: string; to: string } | null>(null);
   const [hbPanelResetKey, setHbPanelResetKey] = useState(0);
   const [logPanelResetKey, setLogPanelResetKey] = useState(0);
+  const [reprovisioning, setReprovisioning] = useState(false);
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', deviceId],
@@ -109,6 +111,9 @@ export default function DeviceDetailPage() {
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
+          <button onClick={() => setReprovisioning(true)} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+            Re-provision
+          </button>
           <button onClick={() => toggleMode.mutate()} className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
             Switch to {device.mode === 'production' ? 'development' : 'production'}
           </button>
@@ -117,6 +122,15 @@ export default function DeviceDetailPage() {
           </ConfirmModal>
         </div>
       </div>
+
+      {reprovisioning && (
+        <ProvisionDeviceModal
+          deviceId={device.device_id}
+          defaultPlatform={device.platform}
+          onClose={() => setReprovisioning(false)}
+          onProvisioned={() => qc.invalidateQueries({ queryKey: ['device', deviceId] })}
+        />
+      )}
 
       <div className="mb-1 flex gap-6 rounded-t-lg border-b border-gray-200 bg-white px-2">
         <StatusBadge text={device.mode} variant={device.mode === 'development' ? 'yellow' : 'green'} />

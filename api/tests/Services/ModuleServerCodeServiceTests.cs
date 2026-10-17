@@ -23,7 +23,7 @@ public sealed class ModuleServerCodeServiceTests
         {
             Id = Guid.NewGuid(),
             DeviceId = "server-code-device",
-            ApiKey = "test-key",
+            ApiKeyHash = "test-key",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         };

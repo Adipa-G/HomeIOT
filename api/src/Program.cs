@@ -36,6 +36,8 @@ builder.Services.AddScoped<IDeviceCodeTemplateService, DeviceCodeTemplateService
 builder.Services.AddScoped<IServerCodeTemplateService, ServerCodeTemplateService>();
 builder.Services.AddScoped<IModuleServerCodeService, ModuleServerCodeService>();
 builder.Services.AddScoped<IDeviceAdminService, DeviceAdminService>();
+builder.Services.AddSingleton<IBootstrapScriptBuilder, BootstrapScriptBuilder>();
+builder.Services.AddScoped<IDeviceProvisioningService, DeviceProvisioningService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<DevelopmentSeedService>();
 builder.Services.AddHostedService<DataRetentionCleanupService>();
