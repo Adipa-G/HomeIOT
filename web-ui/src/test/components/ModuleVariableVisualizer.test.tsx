@@ -524,7 +524,7 @@ describe('ModuleVariableVisualizer', () => {
       expect(screen.getByText('45.68')).toBeInTheDocument();
     });
 
-    it('rejects non-numeric strings as invalid data', () => {
+    it('renders non-numeric strings as text', () => {
       render(
         <ModuleVariableVisualizer
           type="text_display"
@@ -532,7 +532,20 @@ describe('ModuleVariableVisualizer', () => {
           displayName="Status"
         />
       );
-      expect(screen.getByText(/No valid data/i)).toBeInTheDocument();
+      expect(screen.getByText('online')).toBeInTheDocument();
+    });
+
+    it('colors numeric text values using configured thresholds', () => {
+      render(
+        <ModuleVariableVisualizer
+          type="text_display"
+          value={70}
+          config={{ thresholds: [{ value: 25, color: '#10b981' }, { value: 60, color: '#fbbf24' }, { value: 85, color: '#ef4444' }] }}
+          displayName="Load band"
+        />
+      );
+
+      expect(screen.getByText('70')).toHaveStyle({ color: '#fbbf24' });
     });
 
     it('renders text display with configuration properties (decimals, unit)', () => {

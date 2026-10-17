@@ -201,9 +201,17 @@ function NumberDisplayVisualization({ value, config }: { value: number; config?:
  * Text display - simple text value
  */
 function TextDisplayVisualization({ value, config }: { value: string | number | null; config?: VisualizationConfig }) {
+  const numericValue = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  const displayValue = typeof numericValue === 'number' && Number.isFinite(numericValue)
+    ? formatValue(numericValue, config?.decimals, config?.unit)
+    : value ?? '—';
+  const color = typeof numericValue === 'number' && Number.isFinite(numericValue) && config?.thresholds?.length
+    ? getThresholdColor(numericValue, config.thresholds)
+    : undefined;
+
   return (
-    <div className="text-lg font-medium text-gray-900">
-      {formatValue(Number(value) ?? null, config?.decimals, config?.unit) || String(value) || '—'}
+    <div className="text-lg font-medium text-gray-900" style={color ? { color } : undefined}>
+      {displayValue}
     </div>
   );
 }
@@ -343,9 +351,13 @@ export const ModuleVariableVisualizer: React.FC<ModuleVariableVisualizerProps> =
   displayName,
 }) => {
   // Parse numeric value
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  const numValue = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim() !== ''
+      ? Number(value)
+      : null;
 
-  if (numValue === null || isNaN(numValue as number)) {
+  if (type !== 'text_display' && (numValue === null || typeof numValue !== 'number' || Number.isNaN(numValue))) {
     return (
       <div className="text-center text-sm text-gray-500">
         No valid data: {value === null ? 'null' : String(value)}
@@ -358,12 +370,12 @@ export const ModuleVariableVisualizer: React.FC<ModuleVariableVisualizerProps> =
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
       <h4 className="mb-3 text-sm font-medium text-gray-700">{displayName}</h4>
-      {type === 'gauge' && <GaugeVisualization value={numValue} config={visualizationConfig} />}
-      {type === 'progress_bar' && <ProgressBarVisualization value={numValue} config={visualizationConfig} />}
-      {type === 'number_display' && <NumberDisplayVisualization value={numValue} config={visualizationConfig} />}
+      {type === 'gauge' && <GaugeVisualization value={numValue ?? 0} config={visualizationConfig} />}
+      {type === 'progress_bar' && <ProgressBarVisualization value={numValue ?? 0} config={visualizationConfig} />}
+      {type === 'number_display' && <NumberDisplayVisualization value={numValue ?? 0} config={visualizationConfig} />}
       {type === 'text_display' && <TextDisplayVisualization value={value} config={visualizationConfig} />}
-      {type === 'bar_chart' && <BarChartVisualization value={numValue} values={values} config={visualizationConfig} />}
-      {type === 'line_chart' && <LineChartVisualization value={numValue} values={values} config={visualizationConfig} />}
+      {type === 'bar_chart' && <BarChartVisualization value={numValue ?? 0} values={values} config={visualizationConfig} />}
+      {type === 'line_chart' && <LineChartVisualization value={numValue ?? 0} values={values} config={visualizationConfig} />}
       {!type && (
         <div className="text-center text-sm text-gray-500">
           Unknown visualization type

@@ -3,6 +3,7 @@ using HomeIOT.Api.Data.Entities;
 using HomeIOT.Api.Services.Models;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -17,9 +18,9 @@ public sealed class ModuleServerCodeService : IModuleServerCodeService
             "System.Net.Http",
             "System.Threading.Tasks",
             "System.Text.Json",
-            "System.Data.SqlClient"
+            "Microsoft.Data.SqlClient"
            )
-        .WithReferences(typeof(object).Assembly, typeof(Enumerable).Assembly, typeof(HttpClient).Assembly, typeof(Task).Assembly, typeof(JsonSerializer).Assembly);
+        .WithReferences(typeof(object).Assembly, typeof(Enumerable).Assembly, typeof(HttpClient).Assembly, typeof(Task).Assembly, typeof(JsonSerializer).Assembly, typeof(SqlConnection).Assembly);
 
     private static readonly TimeSpan ExecutionTimeout = TimeSpan.FromSeconds(5);
 
