@@ -52,7 +52,7 @@ Server accessible at: `http://localhost:5228` (or your configured hostname)
 
 ```
 HomeIOT/
-├── api/                    # .NET 8 Backend API
+├── api/                    # .NET 10 Backend API
 │   ├── src/               # API source code (controllers, services, data)
 │   └── tests/             # xUnit tests
 ├── edge/                  # MicroPython edge runtime
@@ -69,7 +69,7 @@ HomeIOT/
 ```mermaid
 graph TB
     subgraph "Cloud/Server"
-        API["API Server<br/>(C# .NET 8)"]
+        API["API Server<br/>(C# .NET 10)"]
         DB["Database<br/>(SQLite)"]
         WEB["Web UI<br/>(React)"]
     end
@@ -102,7 +102,7 @@ graph TB
 | Layer | Technology | Role |
 |-------|-----------|------|
 | **Web UI** | React + TypeScript + Vite | Admin dashboard for managing devices, modules, users, and monitoring |
-| **API** | C# .NET 8 + Entity Framework Core | REST API for device communication and admin operations |
+| **API** | C# .NET 10 + Entity Framework Core | REST API for device communication and admin operations |
 | **Edge Runtime** | MicroPython | Firmware running on ESP32/Pico; polls for modules, executes commands |
 | **Database** | SQLite | Stores devices, modules, logs, heartbeats, users, and execution results |
 
@@ -132,7 +132,7 @@ graph TB
 
 ## Prerequisites
 
-- **C# / .NET 8 SDK** — Required to run the API server
+- **C# / .NET 10 SDK** — Required to run the API server
 - **Python 3.8+** — Required for edge tools (provisioning, deployment, building)
 - **Node.js 18+** — Required for Web UI development
 - **Docker** (optional) — For containerized deployment via Docker Compose
@@ -210,6 +210,18 @@ cd web-ui && npm test
    # Terminal 2: python -m pytest edge
    # Terminal 3: npm test (in web-ui)
    ```
+
+### Seeded Simulator Data
+
+To load the demo device, module, variables, and visualizations, set `DevelopmentSeed:Enabled` to `true` in `api/src/appsettings.Development.json` before starting the API. The seed runs at API startup in the Development environment and only creates missing records.
+
+The root `simulator-config.json` is configured for the seeded device (`simulator-device-1`). After starting the API, run the simulator from the repository root:
+
+```bash
+python -m edge.simulator.worker --config simulator-config.json
+```
+
+The `demo-sensor` readings cycle through the configured threshold bands, including the default color below the first threshold. Let the simulator run for a few cycles to see the visualization colors and build chart history. The seed does not generate the simulator config; see [Server Setup](docs/setup-server.md) for the seed credentials and setup details.
 
 ### Code Conventions
 

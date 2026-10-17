@@ -9,7 +9,7 @@ using HomeIOT.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +25,7 @@ builder.Services.Configure<ServerCodeTemplateOptions>(builder.Configuration.GetS
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.Configure<DataRetentionOptions>(builder.Configuration.GetSection(DataRetentionOptions.SectionName));
+builder.Services.Configure<DevelopmentSeedOptions>(builder.Configuration.GetSection(DevelopmentSeedOptions.SectionName));
 builder.Services.AddDbContext<ApiDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddSingleton<IOtaReleaseService, FileSystemOtaReleaseService>();
@@ -36,6 +37,7 @@ builder.Services.AddScoped<IServerCodeTemplateService, ServerCodeTemplateService
 builder.Services.AddScoped<IModuleServerCodeService, ModuleServerCodeService>();
 builder.Services.AddScoped<IDeviceAdminService, DeviceAdminService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<DevelopmentSeedService>();
 builder.Services.AddHostedService<DataRetentionCleanupService>();
 
 builder.Services.AddCors(options =>
@@ -104,19 +106,19 @@ builder.Services.AddSwaggerGen(options =>
     });
 
     // Apply all schemes globally — controllers that don't need one will simply ignore it
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "DeviceId" } },
-            Array.Empty<string>()
+            new OpenApiSecuritySchemeReference("DeviceId", document),
+            new List<string>()
         },
         {
-            new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "ApiKey" } },
-            Array.Empty<string>()
+            new OpenApiSecuritySchemeReference("ApiKey", document),
+            new List<string>()
         },
         {
-            new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } },
-            Array.Empty<string>()
+            new OpenApiSecuritySchemeReference("Bearer", document),
+            new List<string>()
         },
     });
 
@@ -155,6 +157,9 @@ using (var scope = app.Services.CreateScope())
         }
         await dbContext.SaveChangesAsync();
     }
+
+    var developmentSeed = scope.ServiceProvider.GetRequiredService<DevelopmentSeedService>();
+    await developmentSeed.SeedIfEnabledAsync();
 }
 
 // Create module platform folders if they don't exist

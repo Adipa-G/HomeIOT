@@ -4,7 +4,7 @@ This guide covers installing and configuring the HomeIOT API server on your mach
 
 ## Prerequisites
 
-- **.NET 8 SDK** — [Download](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- **.NET 10 SDK** — [Download](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 - **Git** — For cloning the repository
 - **Docker** (optional) — Only needed for Docker Compose setup
 
@@ -62,6 +62,14 @@ http://<your-machine-ip>:5228
 ### Step 6: Database
 
 The SQLite database is automatically created at `data/homeiot.db` on first run. This file persists between server restarts.
+
+### Optional: Seed a Local Simulator
+
+To create a simulator device and demo module data, set `DevelopmentSeed:Enabled` to `true` in `api/src/appsettings.Development.json`, then start the API in the Development environment. The seed runs after database migrations and only creates missing records; it does not overwrite your edits.
+
+The seeded device ID is `simulator-device-1` and its local development API key is `your-api-key-here`. Configure these values and your API URL (usually `http://localhost:5228`) in your simulator config. The seed does not create or edit the simulator config file. The `demo-sensor` module includes number, boolean, string, JSON, and server-computed variables, plus examples of all supported visualization types. Numeric visualizations include distinct threshold colors, and generated readings step through every color band on a roughly one-minute cycle. Charts show current values initially and gain history as the simulator reports repeated results.
+
+Keep this setting disabled outside local development. The seeded API key is development-only, not a production credential.
 
 ---
 

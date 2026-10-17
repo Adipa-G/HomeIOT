@@ -17,7 +17,7 @@ COPY ["web-ui/", "./"]
 RUN npm run build
 
 # Stage 2: Build .NET API
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS api-build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS api-build
 
 WORKDIR /src
 
@@ -39,7 +39,7 @@ FROM api-build AS publish
 RUN dotnet publish "api/src/api.csproj" -c Release -o /app/publish
 
 # Stage 4: Runtime
-FROM --platform=$TARGETPLATFORM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM --platform=$TARGETPLATFORM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 WORKDIR /app
 
