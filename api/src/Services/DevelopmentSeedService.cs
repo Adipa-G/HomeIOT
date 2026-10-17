@@ -11,7 +11,7 @@ namespace HomeIOT.Api.Services;
 public sealed class DevelopmentSeedService
 {
     public const string DeviceId = "simulator-device-1";
-    public const string DeviceApiKey = "your-api-key-here";
+    public const string DeviceApiKey = "simulator-api-key";
     public const string ModuleId = "demo-sensor";
     public const string ModuleVersion = "1.0.0";
 

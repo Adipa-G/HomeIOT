@@ -23,8 +23,7 @@ def build_device_config(
     """Return a device config dict built from a platform config template.
 
     Secrets are encrypted with the device id as binding so plaintext never
-    lands in config.json. Shared by edge/tools/provision_config.py (desktop)
-    and the first-boot bootstrap (on device).
+    lands in config.json. Used by the first-boot bootstrap on the device.
     """
     config = dict(template)
     config["device_id"] = str(device_id)
