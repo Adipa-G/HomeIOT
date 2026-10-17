@@ -159,6 +159,34 @@ public class AdminModulesControllerTests
     }
 
     [Fact]
+    public async Task GetChartSeries_Returns400_WhenDeviceIdMissing()
+    {
+        var result = await _controller.GetChartSeries(null, CancellationToken.None);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var error = Assert.IsType<ErrorResponse>(bad.Value);
+        Assert.Equal("invalid_request", error.Error);
+        _mockService.Verify(s => s.GetDeviceChartSeriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetChartSeries_ReturnsSeries_FromModuleService()
+    {
+        var items = new List<ModuleChartSeriesItem>
+        {
+            new("mod-1", [new ChartSeries(Guid.NewGuid(), [new ChartSeriesPoint("2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", 1, 1, 1, 1)])]),
+        };
+        _mockService
+            .Setup(s => s.GetDeviceChartSeriesAsync("dev-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(items);
+
+        var result = await _controller.GetChartSeries("dev-1", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Same(items, ok.Value);
+    }
+
+    [Fact]
     public async Task CreateModule_Returns400_WhenBodyNull()
     {
         var result = await _controller.CreateModule(null, CancellationToken.None);

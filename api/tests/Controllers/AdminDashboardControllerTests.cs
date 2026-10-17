@@ -120,7 +120,8 @@ public class AdminDashboardControllerTests : IDisposable
                 "output",
                 null,
                 DateTimeOffset.UtcNow.ToString("O"),
-                new List<ModuleVariableDefItem>()),
+                new List<ModuleVariableDefItem>(),
+                new List<ChartSeries>()),
         };
         _mockModuleService
             .Setup(s => s.GetDashboardModulesAsync(It.IsAny<CancellationToken>()))

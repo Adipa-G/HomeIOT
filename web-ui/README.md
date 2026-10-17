@@ -11,7 +11,10 @@ Currently, two official plugins are available:
 
 ### ModuleVariableVisualizer
 
-Located at `src/components/ModuleVariableVisualizer.tsx`
+Located at `src/components/ModuleVariableVisualizer.tsx`. It dispatches to one component per type in
+`src/components/visualizations/`. Shared, framework-free logic lives in `src/lib/` (`visualization.ts`,
+`chartScale.ts`, `chartAggregation.ts`, `dashboardTiles.ts`, plus the `useElementWidth.ts` hook). Bar/line chart
+history arrives pre-averaged from the API and is merged further to fit the chart width.
 
 Renders rich visual representations of module output data. Supports six visualization types: gauge, progress bar, number display, text display, bar chart, and line chart.
 
@@ -20,7 +23,7 @@ Renders rich visual representations of module output data. Supports six visualiz
 - Responsive design with dynamic scaling
 - Color theming with threshold-based colors
 - Automatic formatting with decimals and units
-- Full test coverage (60+ tests)
+- Bar/line charts with labelled y-axis, time labels and per-point threshold colours
 
 See [`docs/features-visualizations.md`](../docs/features-visualizations.md) for complete configuration guide and examples.
 
@@ -46,10 +49,10 @@ See [`docs/features-visualizations.md`](../docs/features-visualizations.md) for 
 **Testing:**
 Run visualization tests with:
 ```bash
-npm run test -- src/test/components/ModuleVariableVisualizer.test.tsx
+npm run test -- src/test/components/ModuleVariableVisualizer.test.tsx src/test/components/visualizations src/test/lib
 ```
 
-All 60 tests validate configuration properties, threshold behavior, and responsive rendering.
+These tests cover configuration properties, threshold behaviour, chart axes/colours and the shared helpers.
 
 ### MetricCard
 

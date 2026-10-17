@@ -10,4 +10,5 @@ public sealed record DashboardModuleItem(
     [property: JsonPropertyName("output")] string? Output,
     [property: JsonPropertyName("error_message")] string? ErrorMessage,
     [property: JsonPropertyName("finished_at_utc")] string? FinishedAtUtc,
-    [property: JsonPropertyName("variable_defs")] List<ModuleVariableDefItem> VariableDefs);
+    [property: JsonPropertyName("variable_defs")] List<ModuleVariableDefItem> VariableDefs,
+    [property: JsonPropertyName("chart_series")] List<ChartSeries> ChartSeries);

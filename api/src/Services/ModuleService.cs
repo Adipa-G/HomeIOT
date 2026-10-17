@@ -6,6 +6,7 @@ using HomeIOT.Api.Contracts;
 using HomeIOT.Api.Data;
 using HomeIOT.Api.Data.Entities;
 using HomeIOT.Api.Infrastructure;
+using HomeIOT.Api.Services.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -498,6 +499,12 @@ public sealed class ModuleService : IModuleService
                 })
                 .ToList();
 
+            var chartSeries = await BuildChartSeriesAsync(
+                a.Device.DeviceId,
+                a.ModuleDefinition.ModuleId,
+                a.ModuleDefinition.VariableDefs.SelectMany(v => v.Visualizations),
+                ct);
+
             items.Add(new DashboardModuleItem(
                 a.Id,
                 a.Device.DeviceId,
@@ -506,10 +513,133 @@ public sealed class ModuleService : IModuleService
                 latestResult?.Output,
                 latestResult?.ErrorMessage,
                 latestResult is not null ? EndpointValidation.ToUtcZ(latestResult.FinishedAtUtc) : null,
-                variableDefs));
+                variableDefs,
+                chartSeries));
         }
 
         return items;
+    }
+
+    public async Task<List<ModuleChartSeriesItem>> GetDeviceChartSeriesAsync(string deviceId, CancellationToken ct = default)
+    {
+        var assignments = await _db.ModuleAssignments
+            .AsNoTracking()
+            .Where(a => a.Device.DeviceId == deviceId)
+            .Include(a => a.ModuleDefinition)
+                .ThenInclude(m => m.VariableDefs)
+                    .ThenInclude(v => v.Visualizations)
+            .OrderBy(a => a.ModuleDefinition.ModuleId)
+            .ToListAsync(ct);
+
+        var items = new List<ModuleChartSeriesItem>();
+        foreach (var a in assignments)
+        {
+            var series = await BuildChartSeriesAsync(
+                deviceId,
+                a.ModuleDefinition.ModuleId,
+                a.ModuleDefinition.VariableDefs.SelectMany(v => v.Visualizations),
+                ct);
+            if (series.Count > 0) items.Add(new ModuleChartSeriesItem(a.ModuleDefinition.ModuleId, series));
+        }
+
+        return items;
+    }
+
+    private const int DefaultChartHistoryPoints = 10;
+    private const int MaxChartHistoryPoints = 1440;
+
+    /// <summary>
+    /// Builds an aggregated series for every chart visualization of a module from its most recent
+    /// successful runs. Each chart uses its own <c>historyPoints</c> window; results are loaded once
+    /// for the largest window.
+    /// </summary>
+    private async Task<List<ChartSeries>> BuildChartSeriesAsync(
+        string deviceId,
+        string moduleId,
+        IEnumerable<ModuleVariableVisualizationRecord> visualizations,
+        CancellationToken ct)
+    {
+        var charts = visualizations
+            .Where(v => v.VisualizationType is "line_chart" or "bar_chart")
+            .OrderBy(v => v.DisplayName)
+            .Select(v => (Viz: v, Points: GetChartHistoryPoints(v.VisualizationConfig)))
+            .ToList();
+        if (charts.Count == 0) return [];
+
+        var take = charts.Max(c => c.Points);
+        var recent = await _db.ModuleResults
+            .AsNoTracking()
+            .Where(r => r.DeviceId == deviceId
+                && r.ModuleId == moduleId
+                && (r.Status == "success" || r.Status == "ok")
+                && r.Output != null)
+            .OrderByDescending(r => r.FinishedAtUtc)
+            .Take(take)
+            .Select(r => new { r.Output, r.FinishedAtUtc })
+            .ToListAsync(ct);
+        recent.Reverse();
+
+        // Parse each output once and read every chart's value from it.
+        var samples = charts.Select(_ => new List<(int Index, ChartSample Sample)>()).ToList();
+        for (var i = 0; i < recent.Count; i++)
+        {
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(recent[i].Output!);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            using (doc)
+            {
+                for (var c = 0; c < charts.Count; c++)
+                {
+                    if (JsonPathValueReader.TryReadNumber(doc.RootElement, charts[c].Viz.JsonPath, out var value))
+                    {
+                        samples[c].Add((i, new ChartSample(recent[i].FinishedAtUtc, value)));
+                    }
+                }
+            }
+        }
+
+        var series = new List<ChartSeries>(charts.Count);
+        for (var c = 0; c < charts.Count; c++)
+        {
+            var firstIndex = recent.Count - charts[c].Points;
+            var windowed = samples[c].Where(s => s.Index >= firstIndex).Select(s => s.Sample).ToList();
+            series.Add(new ChartSeries(charts[c].Viz.Id, ChartSeriesAggregator.Aggregate(windowed)));
+        }
+
+        return series;
+    }
+
+    /// <summary>
+    /// Number of recent runs a chart covers: its <c>historyPoints</c> (clamped), defaulting when
+    /// unset or invalid.
+    /// </summary>
+    private static int GetChartHistoryPoints(string? visualizationConfig)
+    {
+        if (string.IsNullOrWhiteSpace(visualizationConfig)) return DefaultChartHistoryPoints;
+        try
+        {
+            using var doc = JsonDocument.Parse(visualizationConfig);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("historyPoints", out var hp)
+                && hp.ValueKind == JsonValueKind.Number
+                && hp.TryGetInt32(out var parsed)
+                && parsed > 0)
+            {
+                return Math.Min(parsed, MaxChartHistoryPoints);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return DefaultChartHistoryPoints;
     }
 
     // ──────────────────────────────────────────────

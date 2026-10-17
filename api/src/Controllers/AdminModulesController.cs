@@ -287,6 +287,19 @@ public sealed class AdminModulesController : UserApiControllerBase
         return Ok(result);
     }
 
+    [HttpGet("chart-series")]
+    public async Task<ActionResult<List<ModuleChartSeriesItem>>> GetChartSeries(
+        [FromQuery(Name = "device_id")] string? deviceId = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return BadRequest(new ErrorResponse("invalid_request", "device_id is required."));
+        }
+
+        return Ok(await _moduleService.GetDeviceChartSeriesAsync(deviceId, ct));
+    }
+
     [HttpGet("statuses")]
     public async Task<IActionResult> QueryStatuses(
         [FromQuery] int offset = 0,
