@@ -685,7 +685,7 @@ public class ModuleServiceTests : IDisposable
         {
             Id = Guid.NewGuid(),
             DeviceId = deviceId,
-            ApiKey = "test-key",
+            ApiKeyHash = "test-key",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,

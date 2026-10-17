@@ -32,7 +32,7 @@ public class DeviceAdminServiceTests : IDisposable
         {
             Id = Guid.NewGuid(),
             DeviceId = deviceId,
-            ApiKey = "key",
+            ApiKeyHash = "key",
             Platform = "esp32",
             Version = "1.0.0",
             Mode = mode,

@@ -46,6 +46,31 @@ export interface DeviceDetailResponse extends DeviceListItem {
   latest_heartbeat: HeartbeatListItem | null;
 }
 
+export type ProvisionablePlatform = 'esp32' | 'pico';
+
+export interface CreateDeviceRequest {
+  device_id: string;
+  platform: ProvisionablePlatform;
+  api_url: string;
+  wifi_ssid: string;
+  wifi_password: string;
+}
+
+export interface ReprovisionDeviceRequest {
+  platform?: ProvisionablePlatform;
+  api_url: string;
+  wifi_ssid: string;
+  wifi_password: string;
+}
+
+export interface ProvisionDeviceResponse {
+  device_id: string;
+  platform: string;
+  release_version: string;
+  file_name: string;
+  script: string;
+}
+
 export interface HeartbeatListItem {
   uptime_ms: number | null;
   free_memory_bytes: number | null;

@@ -40,7 +40,7 @@ public sealed class ApiDbContext(DbContextOptions<ApiDbContext> options) : DbCon
             entity.ToTable("devices");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.DeviceId).HasMaxLength(128).IsRequired();
-            entity.Property(x => x.ApiKey).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.ApiKeyHash).HasMaxLength(512).IsRequired();
             entity.Property(x => x.Platform).HasMaxLength(32);
             entity.Property(x => x.Version).HasMaxLength(64);
             entity.Property(x => x.Ip).HasMaxLength(128);

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import DevicesPage from '../../pages/DevicesPage';
 import { renderWithProviders } from '../test-utils';
 import { api } from '../../api/client';
@@ -7,6 +8,7 @@ import { api } from '../../api/client';
 vi.mock('../../api/client', () => ({
   api: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -74,5 +76,31 @@ describe('DevicesPage', () => {
     vi.mocked(api.get).mockReturnValue(new Promise(() => {}));
     renderWithProviders(<DevicesPage />);
     expect(screen.getByPlaceholderText('Search device ID…')).toBeInTheDocument();
+  });
+
+  it('shows an "Awaiting first boot" badge for provisioned devices that never connected', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      items: [{ ...mockDevices.items[1], device_id: 'new-dev', version: null, last_heartbeat_at_utc: null }],
+      total: 1,
+      offset: 0,
+      limit: 50,
+    });
+    renderWithProviders(<DevicesPage />);
+
+    expect(await screen.findByText('Awaiting first boot')).toBeInTheDocument();
+  });
+
+  it('opens the add device dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockResolvedValue(mockDevices);
+    renderWithProviders(<DevicesPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Add device' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add device' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Device ID')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

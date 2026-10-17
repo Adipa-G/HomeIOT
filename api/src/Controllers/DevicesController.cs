@@ -47,36 +47,20 @@ public sealed class DevicesController : EdgeApiControllerBase
         }
 
         var requestContext = GetDeviceRequestContext()!;
-        var now = DateTimeOffset.UtcNow;
-        var existing = await _dbContext.Devices.FirstOrDefaultAsync(x => x.DeviceId == requestContext.DeviceId, cancellationToken);
-        var created = existing is null;
-
-        var device = existing ?? new DeviceRecord
+        var device = requestContext.Device;
+        if (device is null)
         {
-            Id = Guid.NewGuid(),
-            DeviceId = requestContext.DeviceId,
-            ApiKey = requestContext.ApiKey,
-            CreatedAtUtc = now,
-            Mode = "production",
-        };
+            return Unauthorized(new ErrorResponse("unauthorized", "Unknown device."));
+        }
 
-        device.ApiKey = requestContext.ApiKey;
         device.Platform = string.IsNullOrWhiteSpace(request.Platform) ? device.Platform : request.Platform;
         device.Version = request.Version;
         device.Ip = request.Ip;
-        device.UpdatedAtUtc = now;
-
-        if (created)
-        {
-            _dbContext.Devices.Add(device);
-        }
+        device.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var response = new RegisterResponse("ok", requestContext.DeviceId);
-        return created
-            ? StatusCode(StatusCodes.Status201Created, response)
-            : Ok(response);
+        return Ok(new RegisterResponse("ok", requestContext.DeviceId));
     }
 
     [HttpPost("heartbeat")]

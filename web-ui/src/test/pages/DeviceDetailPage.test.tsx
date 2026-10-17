@@ -4,14 +4,18 @@ import userEvent from '@testing-library/user-event';
 import DeviceDetailPage from '../../pages/DeviceDetailPage';
 import { renderWithProviders } from '../test-utils';
 import { api } from '../../api/client';
+import { downloadTextFile } from '../../lib/download';
 
 vi.mock('../../api/client', () => ({
   api: {
     get: vi.fn(),
     put: vi.fn(),
+    post: vi.fn(),
     delete: vi.fn(),
   },
 }));
+
+vi.mock('../../lib/download', () => ({ downloadTextFile: vi.fn() }));
 
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
@@ -330,5 +334,27 @@ describe('DeviceDetailPage', () => {
     });
 
     vi.setSystemTime(new Date());
+  });
+
+  it('re-provisions the device with its current platform and downloads main.py', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation(defaultApiGetMock);
+    vi.mocked(api.post).mockResolvedValue({
+      device_id: 'esp32-001', platform: 'esp32', release_version: '1.5.0', file_name: 'main.py', script: 'body',
+    });
+    renderWithProviders(<DeviceDetailPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Re-provision' }));
+    expect(screen.getByText(/A new API key will be generated/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('WiFi SSID'), 'Home');
+    await user.click(screen.getByRole('button', { name: /Rotate key/ }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        '/api/admin/devices/esp32-001/provision',
+        expect.objectContaining({ platform: 'esp32', wifi_ssid: 'Home' }),
+      );
+    });
+    expect(downloadTextFile).toHaveBeenCalledWith('main.py', 'body');
   });
 });

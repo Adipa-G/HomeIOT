@@ -1,0 +1,26 @@
+{
+  "device_id": "simulator-device-1",
+  "api_url": "http://localhost:5228",
+  "api_key": "your-api-key-here",
+  "wifi_ssid": "HomeNetwork",
+  "wifi_password": "your-password-here",
+  "heartbeat_interval_ms": 30000,
+  "dev_poll_interval_ms": 2000,
+  "module_assignment_poll_interval_ms": 60000,
+  "max_boot_attempts": 3,
+  "current_version": "1.0.0",
+  "logging": {
+    "enabled_uplink": true,
+    "buffer_max_bytes": 4096,
+    "flush_interval_ms": 30000,
+    "flush_timeout_s": 10,
+    "min_level": "INFO"
+  },
+  "power": {
+    "enabled": true,
+    "production_sleep_min_ms": 500,
+    "production_sleep_max_ms": 5000,
+    "wifi_power_save_enabled": false,
+    "wifi_power_save_production_mode": "modem"
+  }
+}

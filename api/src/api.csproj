@@ -28,4 +28,9 @@
     <Content Update="Templates/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- First-boot installer sources (not part of device firmware); used to generate main.py for new devices. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\edge\bootstrap\*.py;..\..\edge\bootstrap\bundle.json" LogicalName="bootstrap/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

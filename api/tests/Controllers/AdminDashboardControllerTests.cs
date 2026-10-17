@@ -57,7 +57,7 @@ public class AdminDashboardControllerTests : IDisposable
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "key",
+            ApiKeyHash = "key",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -80,7 +80,7 @@ public class AdminDashboardControllerTests : IDisposable
         {
             Id = Guid.NewGuid(),
             DeviceId = "dev-001",
-            ApiKey = "key",
+            ApiKeyHash = "key",
             Mode = "production",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,

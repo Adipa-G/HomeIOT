@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { api } from '../api/client';
 import type { DeviceListItem, PaginatedResponse } from '../types/api';
 import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatUtc } from '../lib/format';
+import { ProvisionDeviceModal } from '../components/ProvisionDeviceModal';
 
 export default function DevicesPage() {
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState('');
   const [platform, setPlatform] = useState('');
   const [mode, setMode] = useState('');
+  const [adding, setAdding] = useState(false);
+  const qc = useQueryClient();
   const limit = 50;
 
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
@@ -26,7 +29,22 @@ export default function DevicesPage() {
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-semibold text-gray-900">Devices</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">Devices</h2>
+        <button
+          onClick={() => setAdding(true)}
+          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+        >
+          Add device
+        </button>
+      </div>
+
+      {adding && (
+        <ProvisionDeviceModal
+          onClose={() => setAdding(false)}
+          onProvisioned={() => qc.invalidateQueries({ queryKey: ['devices'] })}
+        />
+      )}
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-3">
@@ -84,7 +102,9 @@ export default function DevicesPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{d.platform ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{d.version ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {d.version ?? (d.last_heartbeat_at_utc ? '—' : <StatusBadge text="Awaiting first boot" variant="gray" />)}
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge
                         text={d.mode}

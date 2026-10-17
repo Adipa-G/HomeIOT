@@ -1,5 +1,6 @@
 using HomeIOT.Api.Configuration;
 using HomeIOT.Api.Data;
+using HomeIOT.Api.Infrastructure;
 using HomeIOT.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
@@ -37,7 +38,8 @@ public sealed class DevelopmentSeedServiceTests
 
         var device = await harness.Db.Devices.SingleAsync();
         Assert.Equal(DevelopmentSeedService.DeviceId, device.DeviceId);
-        Assert.Equal(DevelopmentSeedService.DeviceApiKey, device.ApiKey);
+        Assert.Equal(DeviceApiKeyHasher.Hash(DevelopmentSeedService.DeviceApiKey), device.ApiKeyHash);
+        Assert.True(DeviceApiKeyHasher.Verify(DevelopmentSeedService.DeviceApiKey, device.ApiKeyHash));
         Assert.Equal("development", device.Mode);
 
         var assignment = await harness.Db.ModuleAssignments.SingleAsync();
@@ -110,7 +112,7 @@ public sealed class DevelopmentSeedServiceTests
         await harness.SeedService.SeedIfEnabledAsync();
 
         var device = await harness.Db.Devices.SingleAsync();
-        device.ApiKey = "user-customized-key";
+        device.ApiKeyHash = "user-customized-key";
         var assignment = await harness.Db.ModuleAssignments.SingleAsync();
         assignment.IntervalMs = 45000;
         var module = await harness.Db.ModuleDefinitions.SingleAsync();
@@ -123,7 +125,7 @@ public sealed class DevelopmentSeedServiceTests
 
         await harness.SeedService.SeedIfEnabledAsync();
 
-        Assert.Equal("user-customized-key", (await harness.Db.Devices.SingleAsync()).ApiKey);
+        Assert.Equal("user-customized-key", (await harness.Db.Devices.SingleAsync()).ApiKeyHash);
         Assert.Equal(45000, (await harness.Db.ModuleAssignments.SingleAsync()).IntervalMs);
         Assert.Equal("User customized description", (await harness.Db.ModuleDefinitions.SingleAsync()).Description);
         var visualizations = await harness.Db.ModuleVariableVisualizations.ToListAsync();

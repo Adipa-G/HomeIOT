@@ -110,7 +110,7 @@ public class OtaControllerTests
             {
                 Id = Guid.NewGuid(),
                 DeviceId = "dev-001",
-                ApiKey = "api-key",
+                ApiKeyHash = "api-key",
                 Platform = "esp32",
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,

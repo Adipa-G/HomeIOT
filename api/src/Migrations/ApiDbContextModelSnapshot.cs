@@ -15,7 +15,7 @@ namespace api.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("HomeIOT.Api.Data.Entities.DeviceRecord", b =>
                 {
@@ -23,7 +23,7 @@ namespace api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ApiKey")
+                    b.Property<string>("ApiKeyHash")
                         .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("TEXT");
@@ -350,7 +350,6 @@ namespace api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ControlType")
-                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CreatedAtUtc")
@@ -667,6 +666,11 @@ namespace api.Migrations
                     b.Navigation("VariableDefs");
 
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("HomeIOT.Api.Data.Entities.ModuleVariableDefRecord", b =>
+                {
+                    b.Navigation("Visualizations");
                 });
 #pragma warning restore 612, 618
         }
