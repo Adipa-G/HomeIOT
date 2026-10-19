@@ -70,6 +70,12 @@ describe('ModuleVariableVisualizer', () => {
       const height = (c: HTMLElement) => Number(c.querySelector('svg')?.getAttribute('height'));
       expect(height(compact)).toBeLessThan(height(normal));
     });
+
+    it('passes compact through to gauges and tightens padding', () => {
+      const { container } = render(<ModuleVariableVisualizer type="gauge" value={50} displayName="G" compact />);
+      expect(screen.getByTestId('gauge-svg').getAttribute('class')).toContain('max-w-32');
+      expect(container.firstElementChild?.className).toContain('p-2');
+    });
   });
 
   describe('value parsing', () => {

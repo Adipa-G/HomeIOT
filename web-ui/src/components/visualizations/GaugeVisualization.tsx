@@ -1,9 +1,10 @@
 import { formatValue, getThresholdColor, type VisualizationConfig } from '../../lib/visualization';
 
 /**
- * Gauge visualization - circular SVG gauge
+ * Gauge visualization - circular SVG gauge. The dial fills the available width up to a fixed
+ * cap so gauges stay the same size whether their container is narrow or wide.
  */
-export function GaugeVisualization({ value, config }: { value: number; config?: VisualizationConfig }) {
+export function GaugeVisualization({ value, config, compact }: { value: number; config?: VisualizationConfig; compact?: boolean }) {
   const min = config?.min ?? 0;
   const max = config?.max ?? 100;
   const clampedValue = Math.max(min, Math.min(max, value));
@@ -48,8 +49,13 @@ export function GaugeVisualization({ value, config }: { value: number; config?: 
   const color = getThresholdColor(value, config?.thresholds);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <svg width="100%" height="100%" viewBox="0 0 100 100" className="drop-shadow-sm">
+    <div className={`flex flex-col items-center ${compact ? 'gap-1' : 'gap-3'}`}>
+      {/* The arc ends at y≈86, so the viewBox is cropped to avoid dead space below the dial. */}
+      <svg
+        data-testid="gauge-svg"
+        viewBox="0 0 100 90"
+        className={`w-full drop-shadow-sm ${compact ? 'max-w-32' : 'max-w-48'}`}
+      >
         {/* Background arc (full 270 degrees from upper-left through bottom to upper-right) */}
         <path
           d={`M ${startX} ${startY} A ${radius} ${radius} 0 ${largArcFlag} 1 ${fullEndX} ${fullEndY}`}
@@ -71,10 +77,10 @@ export function GaugeVisualization({ value, config }: { value: number; config?: 
         <circle cx={cx} cy={cy} r="3" fill={color} />
       </svg>
       <div className="text-center">
-        <div className="text-lg font-semibold" style={{ color }}>
+        <div className="text-lg font-semibold whitespace-nowrap" style={{ color }}>
           {formatValue(value, config?.decimals, config?.unit)}
         </div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs whitespace-nowrap text-gray-500">
           Range: {min} — {max}
         </div>
       </div>

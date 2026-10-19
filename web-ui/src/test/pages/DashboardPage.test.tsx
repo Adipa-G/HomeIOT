@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import DashboardPage from '../../pages/DashboardPage';
 import { renderWithProviders } from '../test-utils';
@@ -251,7 +251,7 @@ describe('DashboardPage', () => {
     expect(metricsContainer).not.toBeNull();
   });
 
-  it('keeps a lone tile at half width instead of shrinking to a third column', async () => {
+  it('lays tiles out in a wrapping flex row instead of a fixed column grid', async () => {
     const mockModules = [
       {
         assignment_id: 'a1',
@@ -285,9 +285,12 @@ describe('DashboardPage', () => {
       expect(screen.getByText('esp32-001')).toBeInTheDocument();
     });
 
-    const tileGrid = screen.getByText('Temperature').closest('.grid');
-    expect(tileGrid?.className).toContain('grid-cols-2');
-    expect(tileGrid?.className).not.toContain('lg:grid-cols-3');
+    const tileRow = screen.getByTestId('device-tiles');
+    expect(tileRow.className).toContain('flex-wrap');
+    expect(tileRow.className).not.toMatch(/grid-cols/);
+    const tile = screen.getByText('Temperature').closest('.cursor-pointer.rounded');
+    expect(tile?.className).toContain('basis-28');
+    expect(tile?.className).toContain('grow');
   });
 
   it('passes the aggregated chart series to chart tiles', async () => {
@@ -339,11 +342,13 @@ describe('DashboardPage', () => {
 
     // Charts get a full tile row and a wider device card so they stay legible.
     const chartTile = screen.getByText('Power').closest('.cursor-pointer.rounded');
-    expect(chartTile?.className).toContain('col-span-full');
+    // A wider minimum basis and larger grow factor let gauges sit beside the chart at their natural width.
+    expect(chartTile?.className).toContain('basis-72');
+    expect(chartTile?.className).toContain('grow-[4]');
     expect(screen.getByText('esp32-009').parentElement?.className).toContain('col-span-2');
   });
 
-  it('expands the tile grid to 3 columns at lg once there are 3 or more tiles', async () => {
+  it('gives every non-chart tile the same flex sizing regardless of tile count', async () => {
     const mockModules = [
       {
         assignment_id: 'a2',
@@ -379,8 +384,10 @@ describe('DashboardPage', () => {
       expect(screen.getByText('esp32-002')).toBeInTheDocument();
     });
 
-    const tileGrid = screen.getByText('Temperature').closest('.grid');
-    expect(tileGrid?.className).toContain('grid-cols-2');
-    expect(tileGrid?.className).toContain('lg:grid-cols-3');
+    for (const name of ['Temperature', 'Humidity', 'Pressure']) {
+      const tile = screen.getByText(name).closest('.cursor-pointer.rounded');
+      expect(tile?.className).toContain('basis-28');
+      expect(tile?.className).not.toContain('basis-72');
+    }
   });
 });
