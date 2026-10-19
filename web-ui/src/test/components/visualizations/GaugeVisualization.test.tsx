@@ -51,6 +51,19 @@ describe('GaugeVisualization', () => {
     expect(screen.getByText('95.0 C')).toBeInTheDocument();
   });
 
+  it('caps the dial size so it does not scale with a wide container', () => {
+    render(<GaugeVisualization value={50} />);
+    const svg = screen.getByTestId('gauge-svg');
+    expect(svg.getAttribute('class')).toContain('w-full');
+    expect(svg.getAttribute('class')).toContain('max-w-48');
+    expect(svg).not.toHaveAttribute('height');
+  });
+
+  it('uses a smaller size cap in compact mode', () => {
+    render(<GaugeVisualization value={50} compact />);
+    expect(screen.getByTestId('gauge-svg').getAttribute('class')).toContain('max-w-32');
+  });
+
   it('renders the needle and centre point', () => {
     const { container } = render(<GaugeVisualization value={85} config={thresholdConfig} />);
     expect(container.querySelectorAll('svg line').length).toBeGreaterThan(0);

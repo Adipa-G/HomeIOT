@@ -13,7 +13,7 @@ interface ModuleVariableVisualizerProps {
   value: string | number | null;
   series?: ChartSeriesPoint[]; // Chart history (oldest to newest), aggregated by the API
   displayName: string;
-  compact?: boolean; // Smaller chart height for dense layouts such as dashboard tiles
+  compact?: boolean; // Smaller charts/gauges and tighter padding for dense layouts such as dashboard tiles
 }
 
 /**
@@ -45,9 +45,9 @@ export const ModuleVariableVisualizer: React.FC<ModuleVariableVisualizerProps> =
   const visualizationConfig = parseVisualizationConfig(config);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h4 className="mb-3 text-sm font-medium text-gray-700">{displayName}</h4>
-      {type === 'gauge' && <GaugeVisualization value={numValue ?? 0} config={visualizationConfig} />}
+    <div className={`rounded-lg border border-gray-200 bg-gray-50 ${compact ? 'p-2' : 'p-4'}`}>
+      <h4 className={`truncate text-sm font-medium text-gray-700 ${compact ? 'mb-2' : 'mb-3'}`}>{displayName}</h4>
+      {type === 'gauge' && <GaugeVisualization value={numValue ?? 0} config={visualizationConfig} compact={compact} />}
       {type === 'progress_bar' && <ProgressBarVisualization value={numValue ?? 0} config={visualizationConfig} />}
       {type === 'number_display' && <NumberDisplayVisualization value={numValue ?? 0} config={visualizationConfig} />}
       {type === 'text_display' && <TextDisplayVisualization value={value} config={visualizationConfig} />}

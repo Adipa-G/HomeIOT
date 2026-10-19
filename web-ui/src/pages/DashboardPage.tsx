@@ -56,12 +56,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from(modulesByDevice.entries()).map(([deviceId, items]) => {
               const tiles = buildTiles(items);
-              // Only use a 3-column tile grid at lg+ once there are enough tiles to
-              // fill it; otherwise stick to 2 columns so a lone/pair of tiles get
-              // a sensible half-width size instead of shrinking to a third.
-              const tileGridClass = tiles.length >= 3 ? 'grid grid-cols-2 gap-2 lg:grid-cols-3' : 'grid grid-cols-2 gap-2';
-              // Charts need horizontal room to be legible: give them a full row in the
-              // tile grid and let their device card span two dashboard columns.
+              // Charts need horizontal room to be legible, so their device card spans two
+              // dashboard columns.
               const hasChart = tiles.some(isChartTile);
               return (
                 <div
@@ -74,11 +70,14 @@ export default function DashboardPage() {
                   >
                     {deviceId}
                   </h4>
-                  <div className={tileGridClass}>
+                  {/* Tiles wrap based on the card's actual width rather than a fixed column
+                      count. Charts claim most of the spare room so gauges/numbers sit beside
+                      them at their natural width, and wrap onto a full row when space runs out. */}
+                  <div data-testid="device-tiles" className="flex flex-wrap gap-2">
                     {tiles.map((tile) => (
                       <div
                         key={tile.key}
-                        className={`cursor-pointer rounded border border-gray-100 p-2 hover:border-gray-300${isChartTile(tile) ? ' col-span-full' : ''}`}
+                        className={`min-w-0 cursor-pointer rounded border border-gray-100 p-2 hover:border-gray-300 ${isChartTile(tile) ? 'basis-72 grow-[4]' : 'basis-28 grow'}`}
                         onClick={() => navigate(`/devices/${deviceId}`)}
                       >
                         <div className="mb-1 truncate text-[10px] text-gray-400">{tile.moduleId}</div>
