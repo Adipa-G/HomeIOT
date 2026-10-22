@@ -37,6 +37,8 @@ def test_load_valid_config():
     assert config.power.production_sleep_min_ms == 500
     assert config.power.network_retry_base_ms == 5000
     assert config.power.wifi_power_save_enabled is False
+    assert config.power.radio_off_sleep_enabled is False
+    assert config.power.radio_off_sleep_min_ms == 15000
 
 
 def test_load_control_polling_config_with_bounds():
@@ -230,3 +232,25 @@ def test_load_encrypted_secret_with_wrong_unique_id_raises():
 
     with pytest.raises(ValueError):
         Config.load(fs, system=WrongSystem())
+
+
+def test_load_radio_off_sleep_config_with_bounds():
+    fs = MockFileSystem()
+    _write_config(
+        fs,
+        {
+            "device_id": "esp32-001",
+            "api_url": "http://localhost:8000",
+            "api_key": "key",
+            "wifi_ssid": "ssid",
+            "wifi_password": "pass",
+            "heartbeat_interval_ms": 5000,
+            "max_boot_attempts": 3,
+            "power": {"radio_off_sleep_enabled": True, "radio_off_sleep_min_ms": 200},
+        },
+    )
+
+    config = Config.load(fs)
+
+    assert config.power.radio_off_sleep_enabled is True
+    assert config.power.radio_off_sleep_min_ms == 1000

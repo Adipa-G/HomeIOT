@@ -43,10 +43,11 @@ class _StreamFrameReader:
         <SIZE raw bytes of file content>
     """
 
-    def __init__(self, streaming_response):
+    def __init__(self, streaming_response, on_progress=None):
         self._resp = streaming_response
         self._buf = b""
         self._chunk_buf = bytearray(_READ_CHUNK_SIZE)
+        self._on_progress = on_progress
 
     def readline(self) -> str:
         while True:
@@ -78,6 +79,8 @@ class _StreamFrameReader:
             if not n:
                 raise RuntimeError("Unexpected EOF reading OTA file content")
             remaining -= n
+            if self._on_progress is not None:
+                self._on_progress()
             yield mv[:n]
 
 
@@ -99,6 +102,7 @@ class Updater:
         staging_root: str = "app_staging",
         platform: str = "esp32",
         logger=None,
+        watchdog=None,
     ):
         self._fs = fs
         self._http = http
@@ -108,6 +112,7 @@ class Updater:
         self._staging_root = staging_root
         self._platform = platform
         self._logger = logger
+        self._watchdog = watchdog
 
     def check(self):
         url = self._config.api_url + OTA_CHECK_PATH + "?version=" + self._config.current_version
@@ -205,7 +210,7 @@ class Updater:
         _ROOT_FILES = ("boot.py", "main.py")
 
         try:
-            reader = _StreamFrameReader(response)
+            reader = _StreamFrameReader(response, on_progress=self._feed_watchdog)
 
             while True:
                 line = reader.readline()
@@ -307,6 +312,14 @@ class Updater:
         self._log_info("OTA stream complete", {"files": file_count, "bytes": total_bytes, "free_bytes": self._system.free_memory_bytes()})
 
         return config_staged
+
+    def _feed_watchdog(self) -> None:
+        if self._watchdog is None:
+            return
+        try:
+            self._watchdog.feed()
+        except Exception:
+            pass
 
     def _auth_headers(self):
         return {

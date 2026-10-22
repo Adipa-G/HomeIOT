@@ -20,6 +20,13 @@ from edge.platforms.pico.hal.system import PicoSystem
 from edge.platforms.pico.hal.watchdog import PicoWatchdog
 
 
+def _feed_watchdog(watchdog) -> None:
+    try:
+        watchdog.feed()
+    except Exception:
+        pass
+
+
 def run_main() -> None:
     print("[main] main.py start")
     fs = PicoFileSystem()
@@ -52,6 +59,8 @@ def run_main() -> None:
     except Exception as exc:
         logger.warn("WiFi connection failed; continuing in offline mode", {"error": str(exc)})
 
+    _feed_watchdog(watchdog)
+
     boot_manager = BootManager(
         fs=fs,
         system=system,
@@ -68,6 +77,7 @@ def run_main() -> None:
         boot_manager=boot_manager,
         platform="pico",
         logger=logger,
+        watchdog=watchdog,
     )
     device_control = DeviceControlClient(http=http, config=config, fs=fs, logger=logger)
     module_runtime = ModuleRuntime(system=system, device_control=device_control, config=config, fs=fs, logger=logger)
@@ -84,12 +94,14 @@ def run_main() -> None:
         except Exception as exc:
             logger.warn("Device registration threw exception", {"error": str(exc)})
 
+        _feed_watchdog(watchdog)
         logger.info("Checking for OTA updates")
         try:
             update_info = updater.check()
         except Exception as exc:
             logger.warn("OTA check threw exception", {"error": str(exc)})
             update_info = None
+        _feed_watchdog(watchdog)
         if update_info is not None:
             logger.info("OTA update will be applied", {"version": update_info.version})
             try:
@@ -112,6 +124,7 @@ def run_main() -> None:
             logger.warn("Module-status marker flush threw exception", {"error": str(exc)})
 
 
+    _feed_watchdog(watchdog)
     boot_manager.mark_success()
     logger.info("Boot path completed, entering control loop")
     logger.flush("startup")

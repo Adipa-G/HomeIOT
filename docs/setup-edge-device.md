@@ -139,6 +139,22 @@ Development mode enables verbose logging and faster polling for debugging.
 | Log Level | INFO | DEBUG |
 | Module Polling | 60s | 60s |
 | WiFi Power Save | Enabled | Disabled |
+| Radio-off light sleep | Opt-in | Never |
+
+---
+
+## Power Saving
+
+Power settings live in the `power` block of `edge/platforms/<platform>/src/config.json`. They ship to devices with each release. Production mode uses WiFi `powersave` mode by default.
+
+**Radio-off light sleep** is off by default. It uses much less power between polls on ESP32, Pico W and Pico 2 W. To enable it, set `"radio_off_sleep_enabled": true` and publish a release. In production mode, when the next scheduled task is at least `radio_off_sleep_min_ms` away (default 15000), the device:
+
+1. Powers the WiFi radio down and enters `machine.lightsleep()`. RAM is kept, so the control loop continues where it left off.
+2. On waking, reconnects to WiFi and re-applies the power-save mode. The `WiFi connected` log line includes `connect_ms`, so you can measure the reconnect cost on your network.
+
+Development mode never uses it. If `machine.lightsleep()` is missing or keeps returning immediately, the device logs a warning and falls back to regular sleep. USB serial drops while the board sleeps.
+
+**Watchdog:** devices reset if the control loop stops feeding the watchdog for 120 s. The Pico hardware watchdog can't go above about 8 s, so the firmware feeds it from a timer while the app keeps checking in. An interactive REPL session on an installed device therefore resets after about two minutes.
 
 ---
 

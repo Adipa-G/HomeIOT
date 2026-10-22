@@ -2,6 +2,7 @@ class MockSystem:
     def __init__(self):
         self.reset_calls = 0
         self.sleep_calls = []
+        self.light_sleep_calls = []
         self._time_ms = 1000
         self._boot_ms = 1000
 
@@ -29,6 +30,10 @@ class MockSystem:
 
     def sleep_ms(self, milliseconds: int) -> None:
         self.sleep_calls.append(milliseconds)
+
+    def light_sleep_ms(self, milliseconds: int) -> bool:
+        self.light_sleep_calls.append(milliseconds)
+        return True
 
     def sync_time(self) -> bool:
         return True

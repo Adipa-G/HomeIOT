@@ -420,6 +420,18 @@ def test_stream_frame_reader_read_chunks_small_chunk():
         assert len(c) <= 3
 
 
+def test_stream_frame_reader_reports_progress_per_chunk():
+    payload = b"0123456789"
+    resp = MockStreamingResponse(payload + b"END\n")
+    progress = []
+    reader = _StreamFrameReader(resp, on_progress=lambda: progress.append(1))
+
+    chunks = [bytes(c) for c in reader.read_chunks(len(payload), chunk_size=4)]
+
+    assert b"".join(chunks) == payload
+    assert len(progress) == len(chunks)
+
+
 def test_stream_frame_reader_raises_on_eof():
     resp = MockStreamingResponse(b"HASH:abc")  # no newline — truncated
     reader = _StreamFrameReader(resp)
@@ -678,3 +690,34 @@ def test_apply_still_validates_other_files_when_manifest_present():
 
     # Staging should be cleaned up
     assert not fs.exists("app_staging")
+
+
+def test_apply_feeds_watchdog_while_streaming():
+    class _CountingWatchdog:
+        def __init__(self):
+            self.feed_calls = 0
+
+        def feed(self):
+            self.feed_calls += 1
+
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    watchdog = _CountingWatchdog()
+    updater = Updater(
+        fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager, watchdog=watchdog
+    )
+
+    content = b"Y" * 4096
+    http.add_stream_response(_STREAM_URL, _build_ota_stream([("lib/big.py", content)]))
+
+    updater.apply(
+        UpdateInfo(
+            available=True,
+            version="1.1.0",
+            manifest=[{"path": "lib/big.py", "hash": _sha256_hex(content), "size": len(content)}],
+        )
+    )
+
+    assert watchdog.feed_calls >= 4096 // 512

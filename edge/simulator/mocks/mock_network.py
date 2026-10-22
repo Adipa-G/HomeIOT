@@ -21,10 +21,18 @@ class SimulatorNetwork(INetwork):
         """Return simulated IP address."""
         return self._ip
 
-    def set_power_save(self, mode: str) -> None:
+    def get_power_save_modes(self) -> dict:
+        """Return no hardware power modes for the simulator."""
+        return {}
+
+    def set_power_save(self, mode: str) -> bool:
         """No-op for simulator."""
-        pass
+        return True
 
     def interface_active(self, enable: bool) -> None:
         """No-op for simulator."""
         pass
+
+    def suspend(self) -> None:
+        """Simulate powering the radio down; connect() restores it."""
+        self._connected = False

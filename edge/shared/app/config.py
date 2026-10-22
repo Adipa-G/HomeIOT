@@ -38,6 +38,8 @@ class PowerConfig:
         wifi_power_save_enabled=False,
         wifi_power_save_production_mode="modem",
         wifi_power_save_development_mode="none",
+        radio_off_sleep_enabled=False,
+        radio_off_sleep_min_ms=15000,
     ):
         self.enabled = bool(enabled)
         self.production_sleep_min_ms = int(production_sleep_min_ms)
@@ -49,6 +51,8 @@ class PowerConfig:
         self.wifi_power_save_enabled = bool(wifi_power_save_enabled)
         self.wifi_power_save_production_mode = str(wifi_power_save_production_mode)
         self.wifi_power_save_development_mode = str(wifi_power_save_development_mode)
+        self.radio_off_sleep_enabled = bool(radio_off_sleep_enabled)
+        self.radio_off_sleep_min_ms = int(radio_off_sleep_min_ms)
 
 
 class Config:
@@ -158,6 +162,8 @@ class Config:
             wifi_power_save_enabled=bool(payload.get("wifi_power_save_enabled", False)),
             wifi_power_save_production_mode=str(payload.get("wifi_power_save_production_mode", "modem")).lower(),
             wifi_power_save_development_mode=str(payload.get("wifi_power_save_development_mode", "none")).lower(),
+            radio_off_sleep_enabled=bool(payload.get("radio_off_sleep_enabled", False)),
+            radio_off_sleep_min_ms=max(1000, int(payload.get("radio_off_sleep_min_ms", 15000))),
         )
 
     @staticmethod

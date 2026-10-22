@@ -77,12 +77,17 @@ class _FakeNetwork:
 
 
 class _FakePowerNetwork(_FakeNetwork):
-    def __init__(self, connected=True, fail_connect=False):
+    def __init__(self, connected=True, fail_connect=False, power_save_result=True):
         super().__init__(connected=connected, fail_connect=fail_connect)
         self.power_modes = []
+        self.power_save_result = power_save_result
 
     def set_power_save(self, mode):
         self.power_modes.append(mode)
+        return self.power_save_result
+
+    def get_power_save_modes(self):
+        return {"none": 0, "modem": 1}
 
 
 class _FakeWatchdog:
@@ -294,7 +299,9 @@ def test_control_loop_retries_network_and_feeds_watchdog():
     )
 
     assert network.connect_calls >= 1
-    assert watchdog.feed_calls == 3
+    # Each iteration feeds at loop start and before sleeping; the first
+    # iteration also feeds after its heartbeat and module-assignment calls.
+    assert watchdog.feed_calls == 8
     assert presence.calls >= 1
 
 
@@ -618,6 +625,88 @@ def test_requested_network_power_mode_uses_development_override():
 
     assert _requested_network_power_mode(config, "production") == "modem"
     assert _requested_network_power_mode(config, "development") == "none"
+
+
+def test_requested_legacy_light_mode_maps_to_wifi_powersave():
+    config = _config()
+    config.power.wifi_power_save_enabled = True
+    config.power.wifi_power_save_production_mode = "light"
+
+    assert _requested_network_power_mode(config, "production") == "powersave"
+
+
+def test_control_loop_warns_when_wifi_power_mode_is_rejected():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 1000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    network = _FakePowerNetwork(power_save_result=False)
+    config = _config()
+    config.power.wifi_power_save_enabled = True
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        network=network,
+        max_iterations=1,
+    )
+
+    assert logger.warn_calls == 1
+    assert not any(message == "WiFi power mode accepted" for message, _ in logger.info_log)
+
+
+def test_control_loop_does_not_assume_legacy_none_means_power_mode_accepted():
+    system = _FakeSystem()
+    presence = _FakePresence({"mode": "production", "next_heartbeat_ms": 1000})
+    device_control = _FakeDeviceControl(assignment=None)
+    module_runtime = _FakeModuleRuntime()
+    logger = _FakeLogger()
+    network = _FakePowerNetwork(power_save_result=None)
+    config = _config()
+    config.power.wifi_power_save_enabled = True
+
+    run_control_loop(
+        system=system,
+        presence=presence,
+        device_control=device_control,
+        module_runtime=module_runtime,
+        logger=logger,
+        config=config,
+        network=network,
+        max_iterations=1,
+    )
+
+    assert logger.warn_calls == 1
+    assert not any(message == "WiFi power mode accepted" for message, _ in logger.info_log)
+
+
+def test_control_loop_reports_sleep_and_wifi_power_capabilities():
+    class _CapabilitySystem(_FakeSystem):
+        def get_sleep_capabilities(self):
+            return {"lightsleep": True, "deepsleep": False}
+
+    system = _CapabilitySystem()
+    logger = _FakeLogger()
+    network = _FakePowerNetwork()
+
+    run_control_loop(
+        system=system,
+        presence=_FakePresence({"mode": "production"}),
+        device_control=_FakeDeviceControl(),
+        module_runtime=_FakeModuleRuntime(),
+        logger=logger,
+        config=_config(),
+        network=network,
+        max_iterations=0,
+    )
+
+    assert ("CPU sleep capabilities", {"lightsleep": True, "deepsleep": False}) in logger.info_log
+    assert ("WiFi power-save modes", {"modes": ["modem", "none"]}) in logger.info_log
 
 
 def _config_60s():
@@ -1024,3 +1113,254 @@ def test_control_loop_does_not_check_ota_when_network_disconnected():
     # When network is disconnected and stays disconnected, OTA check should not run
     assert updater.check_calls == 0
 
+
+
+# Radio-off light sleep tests
+
+
+class _ClockSystem(_FakeSystem):
+    """Time advances only while sleeping, so sleep durations are exact."""
+
+    def __init__(self, light_sleep_effective=True, early_wake_ms=None):
+        super().__init__()
+        self.light_sleep_calls = []
+        self.light_sleep_effective = light_sleep_effective
+        self.early_wake_ms = early_wake_ms
+
+    def time_ms(self):
+        return self._time_ms
+
+    def sleep_ms(self, milliseconds):
+        self.sleep_calls.append(milliseconds)
+        self._time_ms += milliseconds
+
+    def light_sleep_ms(self, milliseconds):
+        self.light_sleep_calls.append(milliseconds)
+        if self.early_wake_ms is not None:
+            self._time_ms += self.early_wake_ms
+            self.early_wake_ms = None
+        elif self.light_sleep_effective:
+            self._time_ms += milliseconds
+        return True
+
+
+class _SuspendableNetwork(_FakePowerNetwork):
+    def __init__(self, suspend_error=None, **kwargs):
+        super().__init__(**kwargs)
+        self.suspend_calls = 0
+        self.suspend_error = suspend_error
+
+    def suspend(self):
+        self.suspend_calls += 1
+        if self.suspend_error is not None:
+            raise self.suspend_error
+        self.connected = False
+
+
+class _ChunkWatchdog(_FakeWatchdog):
+    def __init__(self, interval_ms):
+        super().__init__()
+        self.interval_ms = interval_ms
+
+    def get_feed_interval_ms(self):
+        return self.interval_ms
+
+
+class _RecordingLogger(_FakeLogger):
+    def __init__(self):
+        super().__init__()
+        self.warn_log = []
+
+    def warn(self, msg, data=None, **_kwargs):
+        self.warn_calls += 1
+        self.warn_log.append((msg, data))
+
+
+def _radio_off_config():
+    cfg = _config_60s()
+    cfg.power.wifi_power_save_production_mode = "powersave"
+    cfg.power.radio_off_sleep_enabled = True
+    cfg.power.radio_off_sleep_min_ms = 15000
+    return cfg
+
+
+def _run_radio_off(system, network, config=None, presence=None, watchdog=None, logger=None, iterations=3, module_runtime=None):
+    logger = logger or _RecordingLogger()
+    run_control_loop(
+        system=system,
+        presence=presence or _FakePresence({"mode": "production", "next_heartbeat_ms": 60000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=module_runtime or _FakeModuleRuntime(),
+        logger=logger,
+        config=config or _radio_off_config(),
+        network=network,
+        watchdog=watchdog,
+        max_iterations=iterations,
+    )
+    return logger
+
+
+def test_radio_off_sleep_is_disabled_by_default():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+
+    _run_radio_off(system, network, config=_config_60s())
+
+    assert network.suspend_calls == 0
+    assert system.light_sleep_calls == []
+    assert system.sleep_calls == [60000, 60000, 60000]
+
+
+def test_radio_off_sleep_suspends_wifi_light_sleeps_and_reconnects():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+
+    logger = _run_radio_off(system, network)
+
+    assert network.suspend_calls == 3
+    assert system.light_sleep_calls == [60000, 60000, 60000]
+    assert system.sleep_calls == []
+    # Reconnects immediately after each wake, without waiting for retry backoff.
+    assert network.connect_calls == 2
+    # Power-save mode is re-applied after every radio power-up.
+    assert network.power_modes == ["powersave", "powersave", "powersave"]
+    connected_logs = [data for message, data in logger.info_log if message == "WiFi connected"]
+    assert len(connected_logs) == 2
+    assert all("connect_ms" in data for data in connected_logs)
+
+
+def test_radio_off_sleep_not_used_in_development_mode():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+    presence = _FakePresence({"mode": "development", "next_heartbeat_ms": 60000, "dev_poll_interval_ms": 2000})
+
+    _run_radio_off(system, network, presence=presence, iterations=5)
+
+    assert network.suspend_calls == 0
+    assert system.light_sleep_calls == []
+    assert all(ms <= 1000 for ms in system.sleep_calls)
+
+
+def test_radio_off_sleep_not_used_below_min_sleep():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+    config = _config()
+    config.power.radio_off_sleep_enabled = True
+    config.power.radio_off_sleep_min_ms = 15000
+
+    _run_radio_off(system, network, config=config, presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}))
+
+    assert network.suspend_calls == 0
+    assert system.light_sleep_calls == []
+    assert all(ms <= 5000 for ms in system.sleep_calls)
+
+
+def test_radio_off_sleep_disabled_when_lightsleep_unavailable():
+    class _NoLightSleepSystem(_ClockSystem):
+        def get_sleep_capabilities(self):
+            return {"lightsleep": False, "deepsleep": False}
+
+    system = _NoLightSleepSystem()
+    network = _SuspendableNetwork()
+
+    logger = _run_radio_off(system, network, iterations=2)
+
+    assert network.suspend_calls == 0
+    assert system.sleep_calls == [60000, 60000]
+    assert any("no machine.lightsleep" in message for message, _ in logger.warn_log)
+
+
+def test_radio_off_sleep_disabled_when_network_has_no_suspend():
+    system = _ClockSystem()
+    network = _FakePowerNetwork()
+
+    logger = _run_radio_off(system, network, iterations=2)
+
+    assert system.light_sleep_calls == []
+    assert system.sleep_calls == [60000, 60000]
+    assert any("unsupported by HAL" in message for message, _ in logger.warn_log)
+
+
+def test_radio_off_sleep_disabled_after_suspend_failure():
+    system = _ClockSystem()
+    network = _SuspendableNetwork(suspend_error=RuntimeError("wlan busy"))
+
+    logger = _run_radio_off(system, network, iterations=3)
+
+    assert network.suspend_calls == 1
+    assert system.light_sleep_calls == []
+    assert system.sleep_calls == [60000, 60000, 60000]
+    assert any(message.startswith("WiFi suspend failed") for message, _ in logger.warn_log)
+
+
+def test_radio_off_sleep_disabled_after_repeated_ineffective_light_sleep():
+    system = _ClockSystem(light_sleep_effective=False)
+    network = _SuspendableNetwork()
+
+    logger = _run_radio_off(system, network, iterations=5)
+
+    # Three failed cycles fall back to regular sleep, then the feature turns off.
+    assert network.suspend_calls == 3
+    assert system.light_sleep_calls == [60000, 60000, 60000]
+    assert system.sleep_calls == [60000] * 5
+    assert any(message.startswith("Light sleep is not sleeping") for message, _ in logger.warn_log)
+
+
+def test_radio_off_light_sleep_resumes_after_early_wake():
+    system = _ClockSystem(early_wake_ms=1000)
+    network = _SuspendableNetwork()
+
+    _run_radio_off(system, network, iterations=1)
+
+    assert system.light_sleep_calls == [60000, 59000]
+    assert system.sleep_calls == []
+
+
+def test_radio_off_light_sleep_is_chunked_by_watchdog_feed_interval():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+    watchdog = _ChunkWatchdog(4000)
+
+    _run_radio_off(system, network, watchdog=watchdog, iterations=1)
+
+    assert system.light_sleep_calls == [4000] * 15
+    # Loop start, heartbeat, module poll, pre-sleep, then one per light-sleep step.
+    assert watchdog.feed_calls == 4 + 15
+
+
+def test_regular_sleep_is_chunked_by_watchdog_feed_interval():
+    system = _ClockSystem()
+    watchdog = _ChunkWatchdog(4000)
+
+    _run_radio_off(system, None, config=_config_60s(), watchdog=watchdog, iterations=1)
+
+    assert system.sleep_calls == [4000] * 15
+    # Loop start, heartbeat, module poll, pre-sleep, then between the 15 chunks.
+    assert watchdog.feed_calls == 4 + 14
+
+
+def test_regular_sleep_is_not_chunked_without_feed_interval():
+    system = _ClockSystem()
+
+    _run_radio_off(system, None, config=_config_60s(), watchdog=_ChunkWatchdog(None), iterations=1)
+
+    assert system.sleep_calls == [60000]
+
+
+def test_sleep_wakes_for_next_module_due_time():
+    class _RuntimeWithDueModule(_FakeModuleRuntime):
+        def get_next_due_ms(self):
+            return 2000
+
+    system = _ClockSystem()
+
+    _run_radio_off(
+        system,
+        None,
+        config=_config(),
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
+        module_runtime=_RuntimeWithDueModule(),
+        iterations=1,
+    )
+
+    assert system.sleep_calls == [2000]

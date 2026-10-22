@@ -350,6 +350,13 @@ class ModuleRuntime:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         return '"' + escaped + '"'
 
+    def get_next_due_ms(self):
+        next_due = None
+        for schedule in self._modules.values():
+            if next_due is None or self._system.ticks_diff(schedule.next_due_ms, next_due) < 0:
+                next_due = schedule.next_due_ms
+        return next_due
+
     def get_upcoming_modules(self, next_wake_ms):
         result = []
         for schedule in self._modules.values():

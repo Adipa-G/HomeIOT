@@ -21,6 +21,8 @@
     "production_sleep_min_ms": 500,
     "production_sleep_max_ms": 5000,
     "wifi_power_save_enabled": false,
-    "wifi_power_save_production_mode": "modem"
+    "wifi_power_save_production_mode": "modem",
+    "radio_off_sleep_enabled": false,
+    "radio_off_sleep_min_ms": 15000
   }
 }

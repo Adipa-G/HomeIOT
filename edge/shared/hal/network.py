@@ -2,6 +2,12 @@ from edge.shared.hal.interfaces import INetwork
 
 
 class MicroPythonNetwork(INetwork):
+    _POWER_SAVE_CONSTANTS = {
+        "none": "PM_NONE",
+        "modem": "PM_PERFORMANCE",
+        "powersave": "PM_POWERSAVE",
+    }
+
     def __init__(self):
         self._wlan = None
 
@@ -48,24 +54,48 @@ class MicroPythonNetwork(INetwork):
     def get_ip(self) -> str:
         return self._get_wlan().ifconfig()[0]
 
-    def set_power_save(self, mode: str) -> None:
+    def get_power_save_modes(self) -> dict:
+        wlan = self._get_wlan()
+        if not callable(getattr(wlan, "config", None)):
+            return {}
+
+        modes = {}
+        for mode, constant_name in self._POWER_SAVE_CONSTANTS.items():
+            if hasattr(wlan, constant_name):
+                modes[mode] = getattr(wlan, constant_name)
+        return modes
+
+    def set_power_save(self, mode: str) -> bool:
         wlan = self._get_wlan()
         normalized = str(mode or "none").lower()
-        pm_value = {
-            "none": 0,
-            "modem": 1,
-            "light": 2,
-        }.get(normalized, 0)
+        if normalized == "light":
+            normalized = "powersave"
+        pm_modes = self.get_power_save_modes()
+        if normalized not in pm_modes:
+            return False
 
-        if hasattr(wlan, "config"):
-            try:
-                wlan.config(pm=pm_value)
-            except Exception:
-                # Not all MicroPython ports expose pm config.
-                pass
+        try:
+            self._set_power_save_value(wlan, pm_modes[normalized])
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _set_power_save_value(wlan, pm_value):
+        wlan.config(pm=pm_value)
 
     def interface_active(self, enable: bool) -> None:
         self._get_wlan().active(bool(enable))
+
+    def suspend(self) -> None:
+        wlan = self._get_wlan()
+        try:
+            wlan.disconnect()
+        except Exception:
+            pass
+        # On the Pico W this also shuts the CYW43 chip down; lightsleep()
+        # returns immediately while it has pending work.
+        wlan.active(False)
 
     @staticmethod
     def _ticks_ms(time_mod):

@@ -663,3 +663,26 @@ def test_prefetch_server_code_calls_api():
     assert len(prefetch_calls) == 1
     body = prefetch_calls[0][2]
     assert body["modules"][0]["module_id"] == "m1"
+
+
+def test_get_next_due_ms_returns_earliest_schedule():
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=MockHttpClient(), config=config, fs=MockFileSystem())
+    runtime = ModuleRuntime(system=system, device_control=client, config=config)
+
+    assert runtime.get_next_due_ms() is None
+
+    runtime.update_assignment(
+        {
+            "modules": [
+                {"module_id": "m-slow", "version": "1.0.0", "interval_ms": 600000, "timeout_ms": 5000},
+                {"module_id": "m-fast", "version": "1.0.0", "interval_ms": 60000, "timeout_ms": 5000},
+            ]
+        },
+        now_ms=1000,
+    )
+    runtime._modules["m-slow"].next_due_ms = 9000
+    runtime._modules["m-fast"].next_due_ms = 4000
+
+    assert runtime.get_next_due_ms() == 4000

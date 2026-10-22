@@ -49,6 +49,10 @@ class TestSimulatorSystem:
         # Sleep for 10ms, should complete without error
         system.sleep_ms(10)
 
+    def test_light_sleep_ms_completes(self):
+        system = SimulatorSystem()
+        assert system.light_sleep_ms(10) is True
+
     def test_sync_time_returns_true(self):
         system = SimulatorSystem()
         result = system.sync_time()
@@ -77,14 +81,24 @@ class TestSimulatorNetwork:
 
     def test_set_power_save_noops(self):
         network = SimulatorNetwork()
-        # Should not raise
-        network.set_power_save("modem")
+        assert network.set_power_save("modem") is True
+
+    def test_get_power_save_modes_is_empty(self):
+        network = SimulatorNetwork()
+        assert network.get_power_save_modes() == {}
 
     def test_interface_active_noops(self):
         network = SimulatorNetwork()
         # Should not raise
         network.interface_active(True)
         network.interface_active(False)
+
+    def test_suspend_disconnects_until_connect(self):
+        network = SimulatorNetwork()
+        network.suspend()
+        assert network.is_connected() is False
+        network.connect("TestSSID", "password")
+        assert network.is_connected() is True
 
 
 class TestSimulatorWatchdog:
@@ -100,6 +114,10 @@ class TestSimulatorWatchdog:
         assert watchdog._feed_count == 1
         watchdog.feed()
         assert watchdog._feed_count == 2
+
+    def test_get_feed_interval_ms_is_unlimited(self):
+        watchdog = SimulatorWatchdog()
+        assert watchdog.get_feed_interval_ms() is None
 
 
 class TestSimulatorFileSystem:

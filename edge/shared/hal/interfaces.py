@@ -50,10 +50,17 @@ class INetwork:
     def get_ip(self) -> str:
         raise NotImplementedError()
 
-    def set_power_save(self, mode: str) -> None:
+    def get_power_save_modes(self) -> dict:
+        raise NotImplementedError()
+
+    def set_power_save(self, mode: str) -> bool:
         raise NotImplementedError()
 
     def interface_active(self, enable: bool) -> None:
+        raise NotImplementedError()
+
+    def suspend(self) -> None:
+        """Disconnect and power down the radio. connect() brings it back up."""
         raise NotImplementedError()
 
 
@@ -114,6 +121,10 @@ class ISystem:
     def sleep_ms(self, milliseconds: int) -> None:
         raise NotImplementedError()
 
+    def light_sleep_ms(self, milliseconds: int) -> bool:
+        """Enter CPU light sleep, preserving RAM. Returns False if it fell back to sleep_ms()."""
+        raise NotImplementedError()
+
     def sync_time(self) -> bool:
         raise NotImplementedError()
 
@@ -123,4 +134,8 @@ class IWatchdog:
         raise NotImplementedError()
 
     def feed(self) -> None:
+        raise NotImplementedError()
+
+    def get_feed_interval_ms(self):
+        """Longest safe gap between feeds while sleeping, or None if no limit applies."""
         raise NotImplementedError()
