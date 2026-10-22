@@ -2,30 +2,35 @@ from edge.shared.hal.network import MicroPythonNetwork as _SharedMicroPythonNetw
 
 
 class MicroPythonNetwork(_SharedMicroPythonNetwork):
-	_PM_BY_MODE = {
+	_LEGACY_PM_BY_MODE = {
 		"none": 0,
 		"modem": 1,
-		"light": 2,
+		"powersave": 2,
 	}
 
-	def set_power_save(self, mode: str) -> None:
+	def get_power_save_modes(self) -> dict:
 		wlan = self._get_wlan()
-		normalized = str(mode or "none").lower()
-		pm_value = self._PM_BY_MODE.get(normalized, self._PM_BY_MODE["none"])
+		modes = super().get_power_save_modes()
+		if callable(getattr(wlan, "config", None)) or callable(getattr(wlan, "powersave", None)):
+			for mode, value in self._LEGACY_PM_BY_MODE.items():
+				modes.setdefault(mode, value)
+		return modes
 
-		if hasattr(wlan, "config"):
+	@staticmethod
+	def _set_power_save_value(wlan, pm_value):
+		config = getattr(wlan, "config", None)
+		if callable(config):
 			try:
-				wlan.config(pm=pm_value)
+				config(pm=pm_value)
 				return
 			except Exception:
 				pass
 
 		# Fallback for ports exposing powersave as a method.
-		if hasattr(wlan, "powersave"):
-			try:
-				wlan.powersave(pm_value)
-			except Exception:
-				pass
+		powersave = getattr(wlan, "powersave", None)
+		if not callable(powersave):
+			raise RuntimeError("Wi-Fi power-save configuration is unsupported")
+		powersave(pm_value)
 
 
 __all__ = ["MicroPythonNetwork"]

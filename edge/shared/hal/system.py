@@ -61,6 +61,51 @@ class MicroPythonSystem(ISystem):
         else:
             self._time.sleep(milliseconds / 1000)
 
+    def light_sleep_ms(self, milliseconds: int) -> bool:
+        lightsleep = None
+        try:
+            import machine
+            lightsleep = getattr(machine, "lightsleep", None)
+        except ImportError:  # pragma: no cover - desktop fallback
+            pass
+
+        milliseconds = int(milliseconds)
+        if callable(lightsleep) and milliseconds > 0:
+            lightsleep(milliseconds)
+            return True
+        self.sleep_ms(milliseconds)
+        return False
+
+    def get_sleep_capabilities(self) -> dict:
+        capabilities = {"lightsleep": False, "deepsleep": False}
+        try:
+            import machine
+            capabilities["lightsleep"] = callable(getattr(machine, "lightsleep", None))
+            capabilities["deepsleep"] = callable(getattr(machine, "deepsleep", None))
+        except ImportError:  # pragma: no cover - desktop fallback
+            pass
+
+        try:
+            import sys
+            implementation = sys.implementation
+            capabilities["runtime"] = str(getattr(implementation, "name", "unknown"))
+            version = getattr(implementation, "version", None)
+            if version:
+                capabilities["runtime_version"] = ".".join(str(part) for part in version[:3])
+        except Exception:
+            pass
+
+        try:
+            import os
+            platform = os.uname()
+            capabilities["platform"] = str(platform.sysname)
+            capabilities["platform_release"] = str(platform.release)
+            capabilities["machine"] = str(platform.machine)
+        except (AttributeError, OSError):
+            pass
+
+        return capabilities
+
     def sync_time(self) -> bool:
         try:
             import ntptime

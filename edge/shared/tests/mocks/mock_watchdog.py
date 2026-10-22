@@ -8,3 +8,6 @@ class MockWatchdog:
 
     def feed(self) -> None:
         self.feed_calls += 1
+
+    def get_feed_interval_ms(self):
+        return None

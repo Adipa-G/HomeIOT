@@ -16,3 +16,7 @@ class SimulatorWatchdog(IWatchdog):
     def feed(self) -> None:
         """Feed watchdog (no-op for simulator)."""
         self._feed_count += 1
+
+    def get_feed_interval_ms(self):
+        """No hardware limit in the simulator."""
+        return None

@@ -47,6 +47,11 @@ class SimulatorSystem(ISystem):
         """Sleep for specified milliseconds."""
         time.sleep(milliseconds / 1000.0)
 
+    def light_sleep_ms(self, milliseconds: int) -> bool:
+        """Simulate light sleep with a regular sleep."""
+        time.sleep(milliseconds / 1000.0)
+        return True
+
     def sync_time(self) -> bool:
         """Simulate time sync (always succeeds for simulator)."""
         return True
