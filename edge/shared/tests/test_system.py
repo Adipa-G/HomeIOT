@@ -45,3 +45,29 @@ def test_light_sleep_ms_falls_back_to_regular_sleep(monkeypatch):
 
     assert system.light_sleep_ms(20) is False
     assert sleeps == [20]
+
+
+def test_reset_cause_maps_machine_constants(monkeypatch):
+    machine = types.ModuleType("machine")
+    machine.PWRON_RESET = 1
+    machine.HARD_RESET = 2
+    machine.WDT_RESET = 3
+    machine.reset_cause = lambda: 3
+    monkeypatch.setitem(sys.modules, "machine", machine)
+
+    assert MicroPythonSystem().reset_cause() == "wdt_reset"
+
+
+def test_reset_cause_reports_unmapped_value(monkeypatch):
+    machine = types.ModuleType("machine")
+    machine.PWRON_RESET = 1
+    machine.reset_cause = lambda: 0
+    monkeypatch.setitem(sys.modules, "machine", machine)
+
+    assert MicroPythonSystem().reset_cause() == "unknown(0)"
+
+
+def test_reset_cause_unknown_when_unavailable(monkeypatch):
+    monkeypatch.setitem(sys.modules, "machine", types.ModuleType("machine"))
+
+    assert MicroPythonSystem().reset_cause() == "unknown"

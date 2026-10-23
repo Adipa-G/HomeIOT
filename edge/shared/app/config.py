@@ -8,6 +8,19 @@ CONFIG_PATH = "config.json"
 CONFIG_PREV_PATH = "config_prev.json"
 CONFIG_STAGING_PATH = "config_staging.json"
 
+DEFAULT_WIFI_COUNTRY = "AU"
+PLACEHOLDER_PREFIX = "replace-with-"
+
+
+def normalize_wifi_country(value) -> str:
+    """Return a two-letter country code, or DEFAULT_WIFI_COUNTRY when unset or a placeholder."""
+    if not isinstance(value, str):
+        return DEFAULT_WIFI_COUNTRY
+    code = value.strip().upper()
+    if len(code) != 2 or code.lower().startswith(PLACEHOLDER_PREFIX):
+        return DEFAULT_WIFI_COUNTRY
+    return code
+
 
 class LoggingConfig:
     def __init__(
@@ -71,6 +84,7 @@ class Config:
         current_version="0.0.0",
         logging=None,
         power=None,
+        wifi_country=None,
     ):
         self.device_id = str(device_id)
         self.api_url = str(api_url)
@@ -85,6 +99,7 @@ class Config:
         self.current_version = str(current_version)
         self.logging = logging or LoggingConfig()
         self.power = power or PowerConfig()
+        self.wifi_country = normalize_wifi_country(wifi_country)
 
     @classmethod
     def load(cls, fs: IFileSystem, path: str = CONFIG_PATH, system=None):
@@ -119,6 +134,7 @@ class Config:
             current_version=data.get("current_version", "0.0.0"),
             logging=cls._load_logging_config(data.get("logging")),
             power=cls._load_power_config(data.get("power")),
+            wifi_country=data.get("wifi_country"),
         )
 
     @staticmethod

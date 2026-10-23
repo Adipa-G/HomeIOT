@@ -1267,7 +1267,7 @@ def test_radio_off_sleep_disabled_when_lightsleep_unavailable():
 
     assert network.suspend_calls == 0
     assert system.sleep_calls == [60000, 60000]
-    assert any("no machine.lightsleep" in message for message, _ in logger.warn_log)
+    assert any("light sleep unavailable" in message for message, _ in logger.warn_log)
 
 
 def test_radio_off_sleep_disabled_when_network_has_no_suspend():
@@ -1364,3 +1364,62 @@ def test_sleep_wakes_for_next_module_due_time():
     )
 
     assert system.sleep_calls == [2000]
+
+
+def test_radio_off_sleep_logs_how_much_was_light_sleep():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+
+    logger = _run_radio_off(system, network, watchdog=_ChunkWatchdog(4000), iterations=1)
+
+    assert ("Radio-off sleep finished", {
+        "sleep_ms": 60000,
+        "light_slept_ms": 60000,
+        "light_sleep_steps": 15,
+        "steps": 15,
+    }) in logger.info_log
+
+
+def test_radio_off_sleep_log_reports_zero_light_sleep_when_ineffective():
+    system = _ClockSystem(light_sleep_effective=False)
+    network = _SuspendableNetwork()
+
+    logger = _run_radio_off(system, network, watchdog=_ChunkWatchdog(4000), iterations=1)
+
+    assert ("Radio-off sleep finished", {
+        "sleep_ms": 60000,
+        "light_slept_ms": 0,
+        "light_sleep_steps": 0,
+        "steps": 3,
+    }) in logger.info_log
+
+
+class _FlushRecordingLogger(_RecordingLogger):
+    def __init__(self, network):
+        super().__init__()
+        self.network = network
+        self.flushes = []
+
+    def flush(self, reason="manual"):
+        self.flushes.append((reason, self.network.connected))
+        return True
+
+
+def test_radio_off_sleep_flushes_logs_before_powering_radio_down():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+    logger = _FlushRecordingLogger(network)
+
+    _run_radio_off(system, network, logger=logger, iterations=2)
+
+    assert logger.flushes == [("pre_sleep", True), ("pre_sleep", True)]
+
+
+def test_regular_sleep_does_not_flush_logs_early():
+    system = _ClockSystem()
+    network = _SuspendableNetwork()
+    logger = _FlushRecordingLogger(network)
+
+    _run_radio_off(system, network, config=_config_60s(), logger=logger, iterations=2)
+
+    assert logger.flushes == []

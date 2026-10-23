@@ -385,3 +385,60 @@ def test_connect_wifi_gives_up_after_attempts():
         connect_wifi(network, system, _loaded_config(), _SilentLogger())
 
     assert len(network.connect_calls) == 3
+
+
+def test_connect_wifi_sets_country_before_connecting():
+    class _CountryNetwork(MockNetwork):
+        def __init__(self):
+            super().__init__()
+            self.events = []
+
+        def set_country(self, country):
+            self.events.append(("country", country))
+            return True
+
+        def connect(self, ssid, password, timeout_ms=15000):
+            self.events.append(("connect", ssid))
+            super().connect(ssid, password, timeout_ms)
+
+    config = _loaded_config()
+    config.wifi_country = "AU"
+    network = _CountryNetwork()
+
+    connect_wifi(network, MockSystem(), config, _SilentLogger())
+
+    assert network.events[:2] == [("country", "AU"), ("connect", config.wifi_ssid)]
+
+
+def test_connect_wifi_skips_country_when_not_configured():
+    config = _loaded_config()
+    config.wifi_country = None
+    network = MockNetwork()
+
+    connect_wifi(network, MockSystem(), config, _SilentLogger())
+
+    assert network.country is None
+
+
+def test_build_device_config_defaults_wifi_country_to_au():
+    template = dict(TEMPLATE, wifi_country="replace-with-wifi-country")
+
+    config = build_device_config(template, "dev-1", API_URL, "k", "s", "p")
+
+    assert config["wifi_country"] == "AU"
+
+
+def test_build_device_config_uses_provisioned_wifi_country():
+    template = dict(TEMPLATE, wifi_country="replace-with-wifi-country")
+
+    config = build_device_config(template, "dev-1", API_URL, "k", "s", "p", wifi_country="nz")
+
+    assert config["wifi_country"] == "NZ"
+
+
+def test_write_config_passes_provisioned_wifi_country():
+    fs = MockFileSystem()
+
+    write_config(fs, _provision(wifi_country="GB"), TEMPLATE)
+
+    assert json.loads(fs.read_text("config.json"))["wifi_country"] == "GB"

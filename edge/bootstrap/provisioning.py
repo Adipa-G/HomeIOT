@@ -1,3 +1,4 @@
+from edge.shared.app.config import normalize_wifi_country
 from edge.shared.app.secret_crypto import SCHEME, encrypt_secret
 
 
@@ -19,6 +20,7 @@ def build_device_config(
     current_version="0.0.0",
     heartbeat_interval_ms=None,
     max_boot_attempts=None,
+    wifi_country=None,
 ):
     """Return a device config dict built from a platform config template.
 
@@ -33,6 +35,10 @@ def build_device_config(
     config["api_key_enc"] = encrypt_secret(str(api_key), config["device_id"], "api_key")
     config["wifi_ssid"] = str(wifi_ssid)
     config["wifi_password_enc"] = encrypt_secret(str(wifi_password), config["device_id"], "wifi_password")
+    # Written explicitly so OTA merges keep it as a per-device value.
+    config["wifi_country"] = normalize_wifi_country(
+        wifi_country if wifi_country else config.get("wifi_country")
+    )
     if heartbeat_interval_ms is not None:
         config["heartbeat_interval_ms"] = int(heartbeat_interval_ms)
     if max_boot_attempts is not None:

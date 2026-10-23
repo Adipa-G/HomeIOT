@@ -254,3 +254,24 @@ def test_load_radio_off_sleep_config_with_bounds():
 
     assert config.power.radio_off_sleep_enabled is True
     assert config.power.radio_off_sleep_min_ms == 1000
+
+
+def test_load_wifi_country_defaults_to_au_and_is_normalized():
+    base = {
+        "device_id": "esp32-001",
+        "api_url": "http://localhost:8000",
+        "api_key": "key",
+        "wifi_ssid": "ssid",
+        "wifi_password": "pass",
+        "heartbeat_interval_ms": 5000,
+        "max_boot_attempts": 3,
+    }
+    fs = MockFileSystem()
+    _write_config(fs, base)
+    assert Config.load(fs).wifi_country == "AU"
+
+    _write_config(fs, dict(base, wifi_country="replace-with-wifi-country"))
+    assert Config.load(fs).wifi_country == "AU"
+
+    _write_config(fs, dict(base, wifi_country=" nz "))
+    assert Config.load(fs).wifi_country == "NZ"

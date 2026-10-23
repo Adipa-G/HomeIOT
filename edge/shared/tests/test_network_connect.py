@@ -198,3 +198,96 @@ def test_connect_after_suspend_reactivates_radio():
 
     assert wlan.active_calls == [False, True]
     assert wlan.connect_calls == [("ssid", "pass")]
+
+
+class _NeverConnectsWlan(_FakeWlan):
+    def isconnected(self):
+        return False
+
+    def status(self):
+        return -2
+
+
+def _no_wait(net):
+    net._sleep_ms = lambda _time_mod, _ms: None
+
+
+def test_connect_timeout_powers_radio_down_and_reports_status():
+    wlan = _NeverConnectsWlan()
+    net = _make_network(wlan)
+    _no_wait(net)
+
+    try:
+        net.connect("ssid", "pass", timeout_ms=0)
+        raise AssertionError("expected timeout")
+    except RuntimeError as exc:
+        assert "status=-2" in str(exc)
+
+    assert wlan.active_calls[-1] is False
+    # Pre-connect disconnect plus the one from powering down.
+    assert wlan.disconnect_calls == 2
+
+
+def test_connect_timeout_without_status_method():
+    class _NoStatusWlan(_NeverConnectsWlan):
+        status = None
+
+    wlan = _NoStatusWlan()
+    net = _make_network(wlan)
+    _no_wait(net)
+
+    try:
+        net.connect("ssid", "pass", timeout_ms=0)
+        raise AssertionError("expected timeout")
+    except RuntimeError as exc:
+        assert "status=None" in str(exc)
+
+
+def _install_network_module(monkeypatch, country=None, rp2_country=None):
+    import sys
+    import types
+
+    network_mod = types.ModuleType("network")
+    if country is not None:
+        network_mod.country = country
+    monkeypatch.setitem(sys.modules, "network", network_mod)
+    if rp2_country is not None:
+        rp2_mod = types.ModuleType("rp2")
+        rp2_mod.country = rp2_country
+        monkeypatch.setitem(sys.modules, "rp2", rp2_mod)
+    else:
+        monkeypatch.delitem(sys.modules, "rp2", raising=False)
+
+
+def test_set_country_uses_network_country(monkeypatch):
+    calls = []
+    _install_network_module(monkeypatch, country=calls.append)
+
+    assert MicroPythonNetwork().set_country(" au ") is True
+    assert calls == ["AU"]
+
+
+def test_set_country_falls_back_to_rp2_country(monkeypatch):
+    calls = []
+    _install_network_module(monkeypatch, rp2_country=calls.append)
+
+    assert MicroPythonNetwork().set_country("AU") is True
+    assert calls == ["AU"]
+
+
+def test_set_country_rejects_invalid_code(monkeypatch):
+    calls = []
+    _install_network_module(monkeypatch, country=calls.append)
+
+    assert MicroPythonNetwork().set_country("AUS") is False
+    assert MicroPythonNetwork().set_country("") is False
+    assert calls == []
+
+
+def test_set_country_returns_false_when_setter_fails(monkeypatch):
+    def _fail(_code):
+        raise ValueError("bad country")
+
+    _install_network_module(monkeypatch, country=_fail)
+
+    assert MicroPythonNetwork().set_country("AU") is False

@@ -150,9 +150,15 @@ Power settings live in the `power` block of `edge/platforms/<platform>/src/confi
 **Radio-off light sleep** is off by default. It uses much less power between polls on ESP32, Pico W and Pico 2 W. To enable it, set `"radio_off_sleep_enabled": true` and publish a release. In production mode, when the next scheduled task is at least `radio_off_sleep_min_ms` away (default 15000), the device:
 
 1. Powers the WiFi radio down and enters `machine.lightsleep()`. RAM is kept, so the control loop continues where it left off.
-2. On waking, reconnects to WiFi and re-applies the power-save mode. The `WiFi connected` log line includes `connect_ms`, so you can measure the reconnect cost on your network.
+2. On waking, reconnects to WiFi and re-applies the power-save mode. The `WiFi connected` log line includes `connect_ms`, so you can measure the reconnect cost on your network. A `Radio-off sleep finished` line shows how much of each sleep was real light sleep (`light_slept_ms`). If it is `0`, the board fell back to regular sleep.
+
+On Pico W and Pico 2 W the WiFi chip is fully powered off (`WLAN.deinit()`) before sleeping, so each wake also reloads its firmware.
+
+`wifi_country` is a per-device setting like `wifi_ssid`. Each device uses the two-letter country code in its own `config.json`, which updates never overwrite. If none is set, it defaults to `AU`. The release `config.json` ships the placeholder `"replace-with-wifi-country"`. The country matters because with the worldwide default the radio only listens passively on channels 12–13, which makes cold reconnects slow or unreliable. If a join times out, the radio is powered down and the error includes the WiFi status code (e.g. `WiFi connection timed out (status=-2)`).
 
 Development mode never uses it. If `machine.lightsleep()` is missing or keeps returning immediately, the device logs a warning and falls back to regular sleep. USB serial drops while the board sleeps.
+
+**ESP32-C6:** from MicroPython 1.27, `machine.lightsleep()` hangs on the C6 until its low-power watchdog resets the chip ([micropython#19396](https://github.com/micropython/micropython/issues/19396)). The firmware detects this, logs `Radio-off sleep unsupported … reason=micropython#19396`, and keeps WiFi connected with regular sleep instead. Radio-off sleep works on the C6 only with MicroPython 1.26.1 or earlier.
 
 **Watchdog:** devices reset if the control loop stops feeding the watchdog for 120 s. The Pico hardware watchdog can't go above about 8 s, so the firmware feeds it from a timer while the app keeps checking in. An interactive REPL session on an installed device therefore resets after about two minutes.
 

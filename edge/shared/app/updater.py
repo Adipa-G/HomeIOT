@@ -386,7 +386,7 @@ class Updater:
 
         active = json.loads(self._fs.read_text(CONFIG_PATH))
 
-        # Non-secret identity/connection fields: preserve from active when staged is a
+        # Per-device identity/connection fields: preserve from active when staged is a
         # placeholder or absent.
         non_secret_keys = ["device_id", "api_url", "wifi_ssid"]
         for key in non_secret_keys:
@@ -398,6 +398,16 @@ class Updater:
                     staged[key] = active[key]
                 elif is_placeholder:
                     del staged[key]
+
+        # Wi-Fi country is a per-device setting: a value already on the device always
+        # wins over the release; Config falls back to the default when none is set.
+        active_country = active.get("wifi_country")
+        if isinstance(active_country, str) and not active_country.lower().startswith("replace-with-"):
+            staged["wifi_country"] = active_country
+        else:
+            staged_country = staged.get("wifi_country")
+            if isinstance(staged_country, str) and staged_country.lower().startswith("replace-with-"):
+                del staged["wifi_country"]
 
         # Secret pairs (api_key / wifi_password):
         # - Placeholder or absent  → copy credential from active as-is (enc object preferred)

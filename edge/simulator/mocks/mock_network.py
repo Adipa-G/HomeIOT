@@ -33,6 +33,10 @@ class SimulatorNetwork(INetwork):
         """No-op for simulator."""
         pass
 
+    def set_country(self, country: str) -> bool:
+        """Accept any country code; the simulator has no radio."""
+        return True
+
     def suspend(self) -> None:
         """Simulate powering the radio down; connect() restores it."""
         self._connected = False

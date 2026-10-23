@@ -76,6 +76,29 @@ class MicroPythonSystem(ISystem):
         self.sleep_ms(milliseconds)
         return False
 
+    _RESET_CAUSE_NAMES = (
+        "PWRON_RESET",
+        "HARD_RESET",
+        "WDT_RESET",
+        "DEEPSLEEP_RESET",
+        "SOFT_RESET",
+        "LOCKUP_RESET",
+    )
+
+    def reset_cause(self) -> str:
+        try:
+            import machine
+        except ImportError:  # pragma: no cover - desktop fallback
+            return "unknown"
+        try:
+            cause = machine.reset_cause()
+        except Exception:
+            return "unknown"
+        for name in self._RESET_CAUSE_NAMES:
+            if getattr(machine, name, None) == cause:
+                return name.lower()
+        return "unknown(" + str(cause) + ")"
+
     def get_sleep_capabilities(self) -> dict:
         capabilities = {"lightsleep": False, "deepsleep": False}
         try:

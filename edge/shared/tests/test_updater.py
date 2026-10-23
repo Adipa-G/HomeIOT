@@ -721,3 +721,60 @@ def test_apply_feeds_watchdog_while_streaming():
     )
 
     assert watchdog.feed_calls >= 4096 // 512
+
+
+def _merge_with_active(active_extra, staged_extra):
+    fs = MockFileSystem()
+    system = MockSystem()
+    active = {
+        "device_id": "esp32-001",
+        "api_url": "http://localhost:8000",
+        "api_key": "old-secret",
+        "wifi_ssid": "ssid",
+        "wifi_password": "old-pass",
+        "heartbeat_interval_ms": 1000,
+        "max_boot_attempts": 3,
+        "current_version": "1.0.0",
+    }
+    active.update(active_extra)
+    fs.write_text("config.json", json.dumps(active))
+    updater = Updater(
+        fs=fs, http=MockHttpClient(), system=system, config=_config(),
+        boot_manager=BootManager(fs=fs, system=system, max_attempts=3),
+    )
+    staged = {
+        "device_id": "replace-with-device-id",
+        "api_url": "replace-with-api-url",
+        "api_key": "replace-with-device-api-key",
+        "wifi_ssid": "replace-with-ssid",
+        "wifi_password": "replace-with-password",
+        "wifi_country": "replace-with-wifi-country",
+        "heartbeat_interval_ms": 2000,
+        "max_boot_attempts": 3,
+    }
+    staged.update(staged_extra)
+    return json.loads(updater._merge_config_payload(json.dumps(staged).encode("utf-8"), "1.1.0"))
+
+
+def test_merge_retains_device_wifi_country():
+    merged = _merge_with_active({"wifi_country": "NZ"}, {})
+
+    assert merged["wifi_country"] == "NZ"
+
+
+def test_merge_retains_device_wifi_country_over_release_value():
+    merged = _merge_with_active({"wifi_country": "NZ"}, {"wifi_country": "AU"})
+
+    assert merged["wifi_country"] == "NZ"
+
+
+def test_merge_drops_wifi_country_placeholder_when_device_has_none():
+    merged = _merge_with_active({}, {})
+
+    assert "wifi_country" not in merged
+
+
+def test_merge_uses_release_wifi_country_when_device_has_none():
+    merged = _merge_with_active({}, {"wifi_country": "NZ"})
+
+    assert merged["wifi_country"] == "NZ"

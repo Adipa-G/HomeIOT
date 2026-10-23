@@ -4,6 +4,7 @@
   "api_key": "replace-with-device-api-key",
   "wifi_ssid": "replace-with-ssid",
   "wifi_password": "replace-with-password",
+  "wifi_country": "replace-with-wifi-country",
   "heartbeat_interval_ms": 60000,
   "max_boot_attempts": 3,
   "current_version": "0.0.0",
@@ -24,7 +25,7 @@
     "wifi_power_save_enabled": true,
     "wifi_power_save_production_mode": "powersave",
     "wifi_power_save_development_mode": "none",
-    "radio_off_sleep_enabled": false,
+    "radio_off_sleep_enabled": true,
     "radio_off_sleep_min_ms": 15000
   }
 }

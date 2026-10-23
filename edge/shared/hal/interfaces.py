@@ -59,6 +59,10 @@ class INetwork:
     def interface_active(self, enable: bool) -> None:
         raise NotImplementedError()
 
+    def set_country(self, country: str) -> bool:
+        """Set the Wi-Fi regulatory country (ISO 3166 alpha-2). Returns False if unsupported."""
+        raise NotImplementedError()
+
     def suspend(self) -> None:
         """Disconnect and power down the radio. connect() brings it back up."""
         raise NotImplementedError()
@@ -123,6 +127,10 @@ class ISystem:
 
     def light_sleep_ms(self, milliseconds: int) -> bool:
         """Enter CPU light sleep, preserving RAM. Returns False if it fell back to sleep_ms()."""
+        raise NotImplementedError()
+
+    def reset_cause(self) -> str:
+        """Return why the device last started, e.g. 'pwron_reset' or 'wdt_reset'."""
         raise NotImplementedError()
 
     def sync_time(self) -> bool:
