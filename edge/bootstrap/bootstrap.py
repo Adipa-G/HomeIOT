@@ -57,11 +57,15 @@ def write_config(fs, provision, template):
         api_key=provision["api_key"],
         wifi_ssid=provision["wifi_ssid"],
         wifi_password=provision["wifi_password"],
+        wifi_country=provision.get("wifi_country"),
     )
     atomic_write_text(fs, CONFIG_PATH, json.dumps(config))
 
 
 def connect_wifi(network, system, config, logger, attempts=WIFI_CONNECT_ATTEMPTS):
+    country = getattr(config, "wifi_country", None)
+    if country and hasattr(network, "set_country") and not network.set_country(country):
+        logger.warn("WiFi country not applied", {"country": country})
     last_error = None
     for attempt in range(1, attempts + 1):
         logger.info("Connecting to WiFi", {"ssid": config.wifi_ssid, "attempt": attempt})

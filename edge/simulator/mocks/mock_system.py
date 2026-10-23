@@ -52,6 +52,10 @@ class SimulatorSystem(ISystem):
         time.sleep(milliseconds / 1000.0)
         return True
 
+    def reset_cause(self) -> str:
+        """The simulator always starts fresh."""
+        return "pwron_reset"
+
     def sync_time(self) -> bool:
         """Simulate time sync (always succeeds for simulator)."""
         return True

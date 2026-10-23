@@ -45,8 +45,14 @@ def run_main() -> None:
         logging_config=config.logging,
     )
 
-    logger.info("Main startup")
+    logger.info("Main startup", {"reset_cause": system.reset_cause()})
     logger.info("Configuration loaded", {"device_id": config.device_id})
+
+    if config.wifi_country:
+        if network.set_country(config.wifi_country):
+            logger.info("WiFi country set", {"country": config.wifi_country})
+        else:
+            logger.warn("WiFi country not applied", {"country": config.wifi_country})
 
     logger.info("Attempting WiFi connection", {"ssid": config.wifi_ssid})
     try:

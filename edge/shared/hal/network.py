@@ -45,8 +45,49 @@ class MicroPythonNetwork(INetwork):
         started = self._ticks_ms(_time)
         while not wlan.isconnected():
             if self._ticks_diff(self._ticks_ms(_time), started) > timeout_ms:
-                raise RuntimeError("WiFi connection timed out")
+                status = self._read_status(wlan)
+                # Left alone, the driver keeps scanning/joining at full radio
+                # power in the background; power it down until the next attempt.
+                try:
+                    self.suspend()
+                except Exception:
+                    pass
+                raise RuntimeError("WiFi connection timed out (status=" + str(status) + ")")
             self._sleep_ms(_time, 200)
+
+    def set_country(self, country: str) -> bool:
+        code = str(country or "").strip().upper()
+        if len(code) != 2:
+            return False
+        try:
+            import network
+        except ImportError:  # pragma: no cover - desktop fallback
+            return False
+        # Must run before the radio powers up; the country is kept across deinit().
+        setter = getattr(network, "country", None)
+        if not callable(setter):
+            try:
+                import rp2
+                setter = getattr(rp2, "country", None)
+            except ImportError:
+                setter = None
+        if not callable(setter):
+            return False
+        try:
+            setter(code)
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _read_status(wlan):
+        status = getattr(wlan, "status", None)
+        if not callable(status):
+            return None
+        try:
+            return status()
+        except Exception:
+            return None
 
     def is_connected(self) -> bool:
         return self._get_wlan().isconnected()

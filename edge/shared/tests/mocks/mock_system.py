@@ -35,5 +35,8 @@ class MockSystem:
         self.light_sleep_calls.append(milliseconds)
         return True
 
+    def reset_cause(self) -> str:
+        return "pwron_reset"
+
     def sync_time(self) -> bool:
         return True

@@ -49,6 +49,9 @@ class TestSimulatorSystem:
         # Sleep for 10ms, should complete without error
         system.sleep_ms(10)
 
+    def test_reset_cause_is_power_on(self):
+        assert SimulatorSystem().reset_cause() == "pwron_reset"
+
     def test_light_sleep_ms_completes(self):
         system = SimulatorSystem()
         assert system.light_sleep_ms(10) is True
@@ -92,6 +95,9 @@ class TestSimulatorNetwork:
         # Should not raise
         network.interface_active(True)
         network.interface_active(False)
+
+    def test_set_country_accepts_code(self):
+        assert SimulatorNetwork().set_country("AU") is True
 
     def test_suspend_disconnects_until_connect(self):
         network = SimulatorNetwork()

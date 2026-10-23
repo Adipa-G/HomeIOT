@@ -253,8 +253,22 @@ def run_control_loop(
 
         if radio_off_sleep_enabled and mode != "development" and sleep_ms >= radio_off_sleep_min_ms:
             was_connected = network_ready["connected"]
+            if was_connected:
+                # Buffered logs can't be sent while the radio is off, and are lost
+                # if the device resets before the next wake.
+                _flush_logs(logger, "pre_sleep")
             if _suspend_network(network, logger):
-                if _light_sleep(system, watchdog, logger, sleep_ms, sleep_chunk_ms) > 0:
+                sleep_stats = _light_sleep(system, watchdog, logger, sleep_ms, sleep_chunk_ms)
+                logger.info(
+                    "Radio-off sleep finished",
+                    {
+                        "sleep_ms": sleep_ms,
+                        "light_slept_ms": sleep_stats["light_slept_ms"],
+                        "light_sleep_steps": sleep_stats["effective_steps"],
+                        "steps": sleep_stats["steps"],
+                    },
+                )
+                if sleep_stats["effective_steps"] > 0:
                     light_sleep_failures = 0
                 else:
                     light_sleep_failures += 1
@@ -375,6 +389,15 @@ def _feed_watchdog(watchdog, logger):
         _safe_watchdog_feed(watchdog, logger)
 
 
+def _flush_logs(logger, reason):
+    if not hasattr(logger, "flush"):
+        return
+    try:
+        logger.flush(reason)
+    except Exception:
+        pass
+
+
 def _watchdog_feed_interval_ms(watchdog, logger):
     if watchdog is None or not hasattr(watchdog, "get_feed_interval_ms"):
         return None
@@ -395,7 +418,10 @@ def _radio_off_sleep_available(power_cfg, system, network, sleep_capabilities, m
         logger.warn("Radio-off sleep unsupported by HAL; using regular sleep")
         return False
     if isinstance(sleep_capabilities, dict) and sleep_capabilities.get("lightsleep") is False:
-        logger.warn("Radio-off sleep unsupported: no machine.lightsleep; using regular sleep")
+        logger.warn(
+            "Radio-off sleep unsupported: light sleep unavailable; using regular sleep",
+            {"reason": sleep_capabilities.get("lightsleep_disabled", "no machine.lightsleep")},
+        )
         return False
     logger.info("Radio-off light sleep enabled", {"min_sleep_ms": min_sleep_ms})
     return True
@@ -437,15 +463,16 @@ def _sleep(system, watchdog, logger, duration_ms, chunk_ms):
 def _light_sleep(system, watchdog, logger, duration_ms, chunk_ms):
     """Light-sleep for duration_ms in watchdog-safe chunks.
 
-    Returns how many light sleeps actually slept. Steps that return
-    immediately are covered with regular sleep so the loop cadence holds.
+    Returns step stats; light_slept_ms only counts time spent in steps that
+    actually slept. Steps that return immediately are covered with regular
+    sleep so the loop cadence holds.
     """
     step_limit_ms = chunk_ms or duration_ms
     # Timer interrupts can end a light sleep early, so loop on the deadline
     # but cap iterations in case the tick counter misbehaves.
     max_steps = 4 * (duration_ms // max(1, step_limit_ms) + 1) + 8
     started_ms = system.time_ms()
-    effective_steps = 0
+    stats = {"steps": 0, "effective_steps": 0, "light_slept_ms": 0}
     consecutive_ineffective = 0
 
     for _ in range(max_steps):
@@ -457,6 +484,7 @@ def _light_sleep(system, watchdog, logger, duration_ms, chunk_ms):
         before_ms = system.time_ms()
         system.light_sleep_ms(step_ms)
         slept_ms = system.ticks_diff(system.time_ms(), before_ms)
+        stats["steps"] += 1
 
         if step_ms > LIGHT_SLEEP_INEFFECTIVE_MS and slept_ms < LIGHT_SLEEP_INEFFECTIVE_MS:
             consecutive_ineffective += 1
@@ -468,8 +496,9 @@ def _light_sleep(system, watchdog, logger, duration_ms, chunk_ms):
             system.sleep_ms(step_ms)
         else:
             consecutive_ineffective = 0
-            effective_steps += 1
+            stats["effective_steps"] += 1
+            stats["light_slept_ms"] += slept_ms
 
         _feed_watchdog(watchdog, logger)
 
-    return effective_steps
+    return stats
