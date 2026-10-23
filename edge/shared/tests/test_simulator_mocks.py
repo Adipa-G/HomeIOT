@@ -49,6 +49,12 @@ class TestSimulatorSystem:
         # Sleep for 10ms, should complete without error
         system.sleep_ms(10)
 
+    def test_clock_is_set(self):
+        assert SimulatorSystem().clock_is_set() is True
+
+    def test_wall_time_s_is_positive(self):
+        assert SimulatorSystem().wall_time_s() > 0
+
     def test_reset_cause_is_power_on(self):
         assert SimulatorSystem().reset_cause() == "pwron_reset"
 

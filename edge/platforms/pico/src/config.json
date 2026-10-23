@@ -23,7 +23,7 @@
     "network_retry_base_ms": 5000,
     "network_retry_max_ms": 60000,
     "wifi_power_save_enabled": true,
-    "wifi_power_save_production_mode": "powersave",
+    "wifi_power_save_production_mode": "modem",
     "wifi_power_save_development_mode": "none",
     "radio_off_sleep_enabled": true,
     "radio_off_sleep_min_ms": 15000

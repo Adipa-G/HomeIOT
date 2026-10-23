@@ -71,3 +71,30 @@ def test_reset_cause_unknown_when_unavailable(monkeypatch):
     monkeypatch.setitem(sys.modules, "machine", types.ModuleType("machine"))
 
     assert MicroPythonSystem().reset_cause() == "unknown"
+
+
+def _system_with_year(monkeypatch, year):
+    system = MicroPythonSystem()
+    fake_time = types.SimpleNamespace(gmtime=lambda: (year, 1, 1, 0, 0, 0, 0, 1))
+    monkeypatch.setattr(system, "_time", fake_time)
+    return system
+
+
+def test_clock_is_set_false_for_default_rp2_date(monkeypatch):
+    assert _system_with_year(monkeypatch, 2021).clock_is_set() is False
+
+
+def test_clock_is_set_true_after_sync(monkeypatch):
+    assert _system_with_year(monkeypatch, 2026).clock_is_set() is True
+
+
+def test_clock_is_set_true_when_gmtime_unavailable(monkeypatch):
+    system = MicroPythonSystem()
+    monkeypatch.setattr(system, "_time", types.SimpleNamespace())
+    assert system.clock_is_set() is True
+
+
+def test_wall_time_s_uses_time_module(monkeypatch):
+    system = MicroPythonSystem()
+    monkeypatch.setattr(system, "_time", types.SimpleNamespace(time=lambda: 1234.9))
+    assert system.wall_time_s() == 1234

@@ -159,6 +159,74 @@ public class ModuleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordResult_UnsyncedDeviceClock_UsesReceiveTime()
+    {
+        var before = DateTimeOffset.UtcNow;
+        var request = new ModuleResultRequest
+        {
+            DeviceId = "dev-001",
+            ModuleId = "sensor-reader",
+            ModuleVersion = "1.0.0",
+            RunId = "sensor-reader:1.0.0:1000:1",
+            StartedAtUtc = "2021-01-01T00:05:00Z",
+            FinishedAtUtc = "2021-01-01T00:05:02Z",
+            ElapsedMs = 2000,
+            Status = "success",
+        };
+
+        await _service.RecordResultAsync(request);
+
+        var stored = await _db.ModuleResults.SingleAsync();
+        Assert.Equal(stored.ReceivedAtUtc, stored.FinishedAtUtc);
+        Assert.Equal(stored.ReceivedAtUtc - TimeSpan.FromMilliseconds(2000), stored.StartedAtUtc);
+        Assert.True(stored.ReceivedAtUtc >= before);
+    }
+
+    [Fact]
+    public async Task RecordResult_DeviceClockFarAhead_UsesReceiveTime()
+    {
+        var request = new ModuleResultRequest
+        {
+            DeviceId = "dev-001",
+            ModuleId = "sensor-reader",
+            ModuleVersion = "1.0.0",
+            RunId = "sensor-reader:1.0.0:1000:1",
+            StartedAtUtc = DateTimeOffset.UtcNow.AddDays(3).ToString("O"),
+            FinishedAtUtc = DateTimeOffset.UtcNow.AddDays(3).ToString("O"),
+            ElapsedMs = 0,
+            Status = "success",
+        };
+
+        await _service.RecordResultAsync(request);
+
+        var stored = await _db.ModuleResults.SingleAsync();
+        Assert.Equal(stored.ReceivedAtUtc, stored.FinishedAtUtc);
+        Assert.Equal(stored.ReceivedAtUtc, stored.StartedAtUtc);
+    }
+
+    [Fact]
+    public async Task RecordResult_SyncedDeviceClock_KeepsDeviceTimes()
+    {
+        var request = new ModuleResultRequest
+        {
+            DeviceId = "dev-001",
+            ModuleId = "sensor-reader",
+            ModuleVersion = "1.0.0",
+            RunId = "sensor-reader:1.0.0:1000:1",
+            StartedAtUtc = "2026-05-30T10:00:00Z",
+            FinishedAtUtc = "2026-05-30T10:00:01Z",
+            ElapsedMs = 1000,
+            Status = "success",
+        };
+
+        await _service.RecordResultAsync(request);
+
+        var stored = await _db.ModuleResults.SingleAsync();
+        Assert.Equal(new DateTimeOffset(2026, 5, 30, 10, 0, 0, TimeSpan.Zero), stored.StartedAtUtc);
+        Assert.Equal(new DateTimeOffset(2026, 5, 30, 10, 0, 1, TimeSpan.Zero), stored.FinishedAtUtc);
+    }
+
+    [Fact]
     public async Task RecordStatus_StoresInDatabase()
     {
         var request = new ModuleStatusRequest

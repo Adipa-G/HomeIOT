@@ -59,3 +59,11 @@ class SimulatorSystem(ISystem):
     def sync_time(self) -> bool:
         """Simulate time sync (always succeeds for simulator)."""
         return True
+
+    def clock_is_set(self) -> bool:
+        """The host clock is always set."""
+        return True
+
+    def wall_time_s(self) -> int:
+        """Host wall-clock seconds."""
+        return int(time.time())

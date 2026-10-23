@@ -40,7 +40,7 @@ api/artifacts/esp32/1.0.0/
 Important:
 
 - Must be re-run after every edit to edge source files — the artifact is a snapshot and stale hashes cause OTA hash mismatch failures on the device.
-- `config.json` in the artifact should use placeholder values (`"replace-with-device-id"`, `"replace-with-api-url"`, `"replace-with-wifi-country"`) so device-specific values are preserved during OTA merge. A device's existing `wifi_country` is always kept; devices without one default to `AU`.
+- `config.json` in the artifact should use placeholder values (`"replace-with-device-id"`, `"replace-with-api-url"`, `"replace-with-wifi-country"`) so device-specific values are preserved during OTA merge. A device's existing `wifi_country` is always kept; devices without one default to `AU`. A device's existing `power.radio_off_sleep_enabled` is also kept; the release value only seeds devices that don't have one.
 - The **Add device** installer is built from the latest release of the selected platform, so at least one release must exist before a device can be added.
 
 Publishing a release:

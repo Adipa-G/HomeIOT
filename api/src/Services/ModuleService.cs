@@ -20,6 +20,11 @@ public sealed class ModuleService : IModuleService
         WriteIndented = false,
     };
 
+    // Device clocks start at a fixed past date (2021-01-01 on rp2) until NTP succeeds.
+    // Matches the cutoff used by the FixUnsyncedModuleResultTimestamps migration.
+    private static readonly DateTimeOffset MinPlausibleDeviceTimeUtc = new(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private static readonly TimeSpan MaxDeviceClockAhead = TimeSpan.FromDays(1);
+
     private readonly ApiDbContext _db;
     private readonly string _packageRoot;
     private readonly ILogger<ModuleService> _logger;
@@ -107,6 +112,13 @@ public sealed class ModuleService : IModuleService
 
     public async Task RecordResultAsync(ModuleResultRequest request, CancellationToken ct = default)
     {
+        var receivedAtUtc = DateTimeOffset.UtcNow;
+        var (startedAtUtc, finishedAtUtc) = ResolveRunTimestamps(
+            ParseUtc(request.StartedAtUtc),
+            ParseUtc(request.FinishedAtUtc),
+            request.ElapsedMs,
+            receivedAtUtc);
+
         var record = new ModuleResultRecord
         {
             Id = Guid.NewGuid(),
@@ -114,14 +126,14 @@ public sealed class ModuleService : IModuleService
             ModuleId = request.ModuleId!,
             ModuleVersion = request.ModuleVersion!,
             RunId = request.RunId!,
-            StartedAtUtc = ParseUtc(request.StartedAtUtc),
-            FinishedAtUtc = ParseUtc(request.FinishedAtUtc),
+            StartedAtUtc = startedAtUtc,
+            FinishedAtUtc = finishedAtUtc,
             ElapsedMs = request.ElapsedMs,
             Status = request.Status!,
             Output = request.Output is not null ? JsonSerializer.Serialize(request.Output) : null,
             VariableValues = request.VariableValues is not null ? JsonSerializer.Serialize(request.VariableValues) : null,
             ErrorMessage = request.ErrorMessage,
-            ReceivedAtUtc = DateTimeOffset.UtcNow,
+            ReceivedAtUtc = receivedAtUtc,
         };
 
         _db.ModuleResults.Add(record);
@@ -826,6 +838,29 @@ public sealed class ModuleService : IModuleService
         return DateTimeOffset.TryParse(value, out var result)
             ? result.ToUniversalTime()
             : DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Returns the device-reported run times, or times derived from the server receive time
+    /// when the device clock is clearly unsynced (before 2024 or more than a day ahead).
+    /// </summary>
+    private static (DateTimeOffset StartedAtUtc, DateTimeOffset FinishedAtUtc) ResolveRunTimestamps(
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset finishedAtUtc,
+        int elapsedMs,
+        DateTimeOffset receivedAtUtc)
+    {
+        if (IsPlausibleDeviceTime(startedAtUtc, receivedAtUtc) && IsPlausibleDeviceTime(finishedAtUtc, receivedAtUtc))
+        {
+            return (startedAtUtc, finishedAtUtc);
+        }
+
+        return (receivedAtUtc - TimeSpan.FromMilliseconds(Math.Max(0, elapsedMs)), receivedAtUtc);
+    }
+
+    private static bool IsPlausibleDeviceTime(DateTimeOffset value, DateTimeOffset receivedAtUtc)
+    {
+        return value >= MinPlausibleDeviceTimeUtc && value <= receivedAtUtc + MaxDeviceClockAhead;
     }
 
     private static bool IsSafeToken(string value)

@@ -778,3 +778,35 @@ def test_merge_uses_release_wifi_country_when_device_has_none():
     merged = _merge_with_active({}, {"wifi_country": "NZ"})
 
     assert merged["wifi_country"] == "NZ"
+
+
+def test_merge_retains_device_radio_off_sleep_enabled_over_release():
+    merged = _merge_with_active(
+        {"power": {"radio_off_sleep_enabled": False, "production_sleep_max_ms": 1000}},
+        {"power": {"radio_off_sleep_enabled": True, "production_sleep_max_ms": 60000}},
+    )
+
+    assert merged["power"]["radio_off_sleep_enabled"] is False
+    # Other power settings still come from the release.
+    assert merged["power"]["production_sleep_max_ms"] == 60000
+
+
+def test_merge_retains_device_radio_off_sleep_enabled_true():
+    merged = _merge_with_active(
+        {"power": {"radio_off_sleep_enabled": True}},
+        {"power": {"radio_off_sleep_enabled": False}},
+    )
+
+    assert merged["power"]["radio_off_sleep_enabled"] is True
+
+
+def test_merge_uses_release_radio_off_sleep_enabled_when_device_has_none():
+    merged = _merge_with_active({"power": {"production_sleep_max_ms": 1000}}, {"power": {"radio_off_sleep_enabled": True}})
+
+    assert merged["power"]["radio_off_sleep_enabled"] is True
+
+
+def test_merge_keeps_device_radio_off_sleep_when_release_has_no_power_block():
+    merged = _merge_with_active({"power": {"radio_off_sleep_enabled": True}}, {})
+
+    assert merged["power"] == {"radio_off_sleep_enabled": True}

@@ -1,6 +1,7 @@
 from edge.shared.app.config import Config
 from edge.shared.app.device_control import DeviceControlClient
 from edge.shared.app.module_runtime import ModuleRuntime
+from edge.shared.app.utc_time import iso_to_epoch
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 from edge.shared.tests.mocks.mock_system import MockSystem
@@ -686,3 +687,141 @@ def test_get_next_due_ms_returns_earliest_schedule():
     runtime._modules["m-fast"].next_due_ms = 4000
 
     assert runtime.get_next_due_ms() == 4000
+
+
+class _ScriptedDeviceControl:
+    """Fails result uploads with a network error until `online` is set."""
+
+    def __init__(self):
+        self.online = False
+        self.reject = False
+        self.uploaded = []
+
+    def get_cached_module_package(self, module_id, version):
+        return b"def run(context):\n    return {'v': 1}\n"
+
+    def report_module_result(self, payload):
+        if not self.online:
+            raise OSError("[Errno 113] EHOSTUNREACH")
+        if self.reject:
+            return False
+        self.uploaded.append(payload["run_id"])
+        return True
+
+
+def _queue_runtime(device_control, **kwargs):
+    runtime = ModuleRuntime(
+        system=MockSystem(),
+        device_control=device_control,
+        config=_config(),
+        utc_now_iso=lambda: "2026-05-28T14:30:00Z",
+        **kwargs,
+    )
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 1000, "timeout_ms": 5000}]},
+        now_ms=0,
+    )
+    return runtime
+
+
+def _run_ticks(runtime, count):
+    for i in range(count):
+        runtime.tick(now_ms=i * 1000)
+
+
+def test_results_queued_on_network_error_and_flushed_later():
+    device_control = _ScriptedDeviceControl()
+    runtime = _queue_runtime(device_control)
+
+    _run_ticks(runtime, 3)
+    assert device_control.uploaded == []
+
+    device_control.online = True
+    assert runtime.flush_pending_results() == 3
+    assert len(device_control.uploaded) == 3
+    assert runtime.flush_pending_results() == 0
+
+
+def test_result_queue_is_bounded_and_drops_oldest():
+    device_control = _ScriptedDeviceControl()
+    runtime = _queue_runtime(device_control, pending_results_max=2)
+
+    _run_ticks(runtime, 4)
+    device_control.online = True
+    runtime.flush_pending_results()
+
+    assert len(device_control.uploaded) == 2
+    assert device_control.uploaded[0].endswith(":3")
+    assert device_control.uploaded[1].endswith(":4")
+
+
+def test_flush_stops_on_network_error_and_keeps_results():
+    device_control = _ScriptedDeviceControl()
+    runtime = _queue_runtime(device_control)
+    _run_ticks(runtime, 2)
+
+    assert runtime.flush_pending_results() == 0
+    device_control.online = True
+    assert runtime.flush_pending_results() == 2
+
+
+def test_rejected_queued_result_is_dropped_not_retried():
+    device_control = _ScriptedDeviceControl()
+    runtime = _queue_runtime(device_control)
+    _run_ticks(runtime, 1)
+
+    device_control.online = True
+    device_control.reject = True
+    assert runtime.flush_pending_results() == 0
+    device_control.reject = False
+    assert runtime.flush_pending_results() == 0
+    assert device_control.uploaded == []
+
+
+def test_result_rejected_by_server_is_not_queued():
+    device_control = _ScriptedDeviceControl()
+    device_control.online = True
+    device_control.reject = True
+    runtime = _queue_runtime(device_control)
+    _run_ticks(runtime, 1)
+
+    device_control.reject = False
+    assert runtime.flush_pending_results() == 0
+
+
+def test_apply_clock_offset_restores_real_times_of_queued_results():
+    device_control = _ScriptedDeviceControl()
+    clock = ["2021-01-01T00:01:00Z"]
+    runtime = ModuleRuntime(
+        system=MockSystem(),
+        device_control=device_control,
+        config=_config(),
+        utc_now_iso=lambda: clock[0],
+    )
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 1000, "timeout_ms": 5000}]},
+        now_ms=0,
+    )
+    runtime.tick(now_ms=0)
+    clock[0] = "2021-01-01T00:02:00Z"
+    runtime.tick(now_ms=1000)
+
+    real_boot = iso_to_epoch("2026-10-22T00:00:00Z")
+    unsynced_boot = iso_to_epoch("2021-01-01T00:00:00Z")
+    assert runtime.apply_clock_offset(real_boot - unsynced_boot) == 2
+
+    sent = []
+    device_control.online = True
+    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    runtime.flush_pending_results()
+
+    assert [p["started_at_utc"] for p in sent] == ["2026-10-22T00:01:00Z", "2026-10-22T00:02:00Z"]
+    assert [p["finished_at_utc"] for p in sent] == ["2026-10-22T00:01:00Z", "2026-10-22T00:02:00Z"]
+
+
+def test_apply_clock_offset_leaves_synced_timestamps_alone():
+    device_control = _ScriptedDeviceControl()
+    runtime = _queue_runtime(device_control)
+    _run_ticks(runtime, 1)
+
+    assert runtime.apply_clock_offset(3600) == 0

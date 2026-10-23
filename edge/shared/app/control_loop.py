@@ -15,6 +15,9 @@ RADIO_OFF_SLEEP_MIN_MS = 15000
 LIGHT_SLEEP_INEFFECTIVE_MS = 10
 LIGHT_SLEEP_MAX_INEFFECTIVE = 3
 
+TIME_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000
+TIME_SYNC_RETRY_MS = 5 * 60 * 1000
+
 
 def run_control_loop(
     system,
@@ -74,6 +77,7 @@ def run_control_loop(
     )
     sleep_chunk_ms = _watchdog_feed_interval_ms(watchdog, logger)
     light_sleep_failures = 0
+    next_time_sync_ms = None
 
     while True:
         if max_iterations is not None and iterations >= max_iterations:
@@ -102,6 +106,9 @@ def run_control_loop(
             network_retry_interval_ms = network_retry_base_ms
 
         if network is None or network_ready["connected"]:
+            if network is not None:
+                next_time_sync_ms = _maybe_sync_time(system, logger, now, next_time_sync_ms, module_runtime)
+
             if hasattr(module_runtime, "flush_pending_timeout_result"):
                 try:
                     module_runtime.flush_pending_timeout_result()
@@ -114,6 +121,11 @@ def run_control_loop(
                 except Exception as exc:
                     logger.warn("Pending module-status flush failed", {"error": str(exc)})
 
+            if hasattr(module_runtime, "flush_pending_results"):
+                try:
+                    module_runtime.flush_pending_results()
+                except Exception as exc:
+                    logger.warn("Pending module result flush failed", {"error": str(exc)})
 
             if system.ticks_diff(now, next_heartbeat_ms) >= 0:
                 try:
@@ -396,6 +408,65 @@ def _flush_logs(logger, reason):
         logger.flush(reason)
     except Exception:
         pass
+
+
+def _maybe_sync_time(system, logger, now_ms, next_sync_ms, module_runtime=None):
+    """Sync the wall clock over NTP while connected; returns the next sync deadline.
+
+    Syncs immediately if the clock was never set (e.g. the device booted while
+    offline, so module results would carry a 2021 date), then once a day.
+    """
+    if not hasattr(system, "sync_time"):
+        return next_sync_ms
+    if next_sync_ms is not None and system.ticks_diff(now_ms, next_sync_ms) < 0:
+        return next_sync_ms
+
+    clock_set = _clock_is_set(system)
+    if next_sync_ms is None and clock_set:
+        # Already synced at boot.
+        return system.ticks_add(now_ms, TIME_SYNC_INTERVAL_MS)
+
+    before_s = None if clock_set else _wall_time_s(system)
+    try:
+        synced = system.sync_time()
+    except Exception:
+        synced = False
+    if not synced:
+        logger.warn("NTP time sync failed", {"clock_was_set": clock_set})
+        return system.ticks_add(now_ms, TIME_SYNC_RETRY_MS)
+
+    context = {"clock_was_set": clock_set}
+    after_s = None if before_s is None else _wall_time_s(system)
+    if before_s is not None and after_s is not None:
+        # The unsynced clock kept running since boot, so this jump converts its
+        # timestamps on results queued while offline into real times.
+        offset_s = after_s - before_s
+        context["offset_s"] = offset_s
+        if hasattr(module_runtime, "apply_clock_offset"):
+            try:
+                context["corrected_results"] = module_runtime.apply_clock_offset(offset_s)
+            except Exception as exc:
+                logger.warn("Queued result time correction failed", {"error": str(exc)})
+    logger.info("NTP time synced", context)
+    return system.ticks_add(now_ms, TIME_SYNC_INTERVAL_MS)
+
+
+def _wall_time_s(system):
+    if not hasattr(system, "wall_time_s"):
+        return None
+    try:
+        return int(system.wall_time_s())
+    except Exception:
+        return None
+
+
+def _clock_is_set(system):
+    if not hasattr(system, "clock_is_set"):
+        return True
+    try:
+        return bool(system.clock_is_set())
+    except Exception:
+        return True
 
 
 def _watchdog_feed_interval_ms(watchdog, logger):
