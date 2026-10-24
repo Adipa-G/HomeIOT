@@ -79,7 +79,11 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
             return new OtaCheckResponse(false);
         }
 
-        return new OtaCheckResponse(true, latest.Version, latest.Manifest);
+        // Devices verify each file against the hash in the OTA stream and never read this
+        // list, but must parse the whole response body: a full manifest (~4 KB) can exceed the
+        // largest free heap block on a Pico W. Older firmware calls list() on the value, so it
+        // must stay an empty list rather than null.
+        return new OtaCheckResponse(true, latest.Version, Array.Empty<OtaManifestItem>());
     }
 
     public async Task StreamReleaseAsync(string platform, string version, Stream output, CancellationToken ct = default)
