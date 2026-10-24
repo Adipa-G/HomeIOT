@@ -33,9 +33,20 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
 
         Assert.True(response.Available);
         Assert.Equal("1.2.0", response.Version);
+        // Kept small for devices; they verify files from the OTA stream instead.
         Assert.NotNull(response.Manifest);
-        Assert.Single(response.Manifest!);
-        Assert.Equal("main.py", response.Manifest![0].Path);
+        Assert.Empty(response.Manifest!);
+    }
+
+    [Fact]
+    public void CheckForUpdate_ManifestSerializesAsEmptyArray()
+    {
+        CreateRelease("esp32", "1.2.0", new[] { ("main.py", "hash-120") });
+
+        var response = CreateService().CheckForUpdate("esp32", "1.0.0");
+        var json = System.Text.Json.JsonSerializer.Serialize(response);
+
+        Assert.Contains("\"Manifest\":[]", json);
     }
 
     [Fact]
