@@ -145,12 +145,22 @@ Development mode enables verbose logging and faster polling for debugging.
 
 ## Power Saving
 
-Power settings live in the `power` block of `edge/platforms/<platform>/src/config.json`. They ship to devices with each release. Production mode uses WiFi `powersave` mode by default.
+Power settings live in the `power` block of `edge/platforms/<platform>/src/config.json`. They ship to devices with each release, except `radio_off_sleep_enabled`, which is per device (see below). Production mode uses WiFi `modem` power-save (the driver default). `powersave` saves a little more while connected but can drop multicast DNS replies, so `.local` server names may fail to resolve.
 
-**Radio-off light sleep** is off by default. It uses much less power between polls on ESP32, Pico W and Pico 2 W. To enable it, set `"radio_off_sleep_enabled": true` and publish a release. In production mode, when the next scheduled task is at least `radio_off_sleep_min_ms` away (default 15000), the device:
+**Radio-off light sleep** uses much less power between polls on ESP32, Pico W and Pico 2 W. `radio_off_sleep_enabled` is a per-device setting, like `wifi_ssid`:
+
+- A device keeps its own value through every update.
+- The release value only applies to devices that don't have one yet, including new installs.
+- To change it on one device, edit `power.radio_off_sleep_enabled` in that device's `config.json` (for example with `mpremote` or a dev command) and reset it.
+
+In production mode, when the next scheduled task is at least `radio_off_sleep_min_ms` away (default 15000), the device:
 
 1. Powers the WiFi radio down and enters `machine.lightsleep()`. RAM is kept, so the control loop continues where it left off.
 2. On waking, reconnects to WiFi and re-applies the power-save mode. The `WiFi connected` log line includes `connect_ms`, so you can measure the reconnect cost on your network. A `Radio-off sleep finished` line shows how much of each sleep was real light sleep (`light_slept_ms`). If it is `0`, the board fell back to regular sleep.
+
+If a reconnect fails, module results that could not be uploaded are kept in memory (up to 30) and sent after the next successful reconnect. They are lost if the device resets. If the device booted without WiFi, its clock is unset (Pico boards start at 2021-01-01, ESP32 at 2000-01-01). It syncs over NTP as soon as WiFi connects, and then once a day. Because the unset clock kept running from boot, the jump made by that first sync is added to queued results dated before 2024, which restores their real run times. The server also replaces any remaining clearly wrong device dates with the time it received the result.
+
+Light sleep on Pico boards pauses PWM output and wakes early on pin interrupts. Modules that drive PWM (e.g. a fan) hold their last output level during each sleep, and a pin IRQ left enabled after `run()` returns will wake the board repeatedly.
 
 On Pico W and Pico 2 W the WiFi chip is fully powered off (`WLAN.deinit()`) before sleeping, so each wake also reloads its firmware.
 

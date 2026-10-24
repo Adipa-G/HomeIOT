@@ -40,3 +40,9 @@ class MockSystem:
 
     def sync_time(self) -> bool:
         return True
+
+    def clock_is_set(self) -> bool:
+        return True
+
+    def wall_time_s(self) -> int:
+        return self._time_ms // 1000

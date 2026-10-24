@@ -1,6 +1,7 @@
 import json
 
 from edge.shared.app.safe_io import atomic_write_text
+from edge.shared.app.utc_time import epoch_to_iso, is_unsynced_iso, iso_to_epoch
 
 
 class ModuleSchedule:
@@ -38,6 +39,7 @@ class ModuleRuntime:
         pending_module_status_path="module_status_pending.json",
         quarantine_root="modules_cache",
         quarantine_threshold=3,
+        pending_results_max=30,
     ):
         self._system = system
         self._device_control = device_control
@@ -50,6 +52,10 @@ class ModuleRuntime:
         self._quarantine_root = quarantine_root
         self._quarantine_threshold = quarantine_threshold
         self._modules = {}
+        # Results that failed to upload because the network was down. Kept in RAM
+        # only (no flash wear); lost on reset.
+        self._pending_results = []
+        self._pending_results_max = max(1, int(pending_results_max))
 
     def flush_pending_timeout_result(self):
         payload = self._load_timeout_marker()
@@ -294,7 +300,7 @@ class ModuleRuntime:
             self._log_warn("Module timeout exceeded; resetting device", payload)
             self._system.reset()
         else:
-            self._report_result(payload)
+            self._report_result(payload, queue_on_error=True)
 
         if status == "error":
             self._log_warn("Module execution failed", payload)
@@ -408,7 +414,7 @@ class ModuleRuntime:
             details = details[:2000] + "..."
         return details
 
-    def _report_result(self, payload):
+    def _report_result(self, payload, queue_on_error=False):
         try:
             ok = self._device_control.report_module_result(payload)
             if not ok:
@@ -424,16 +430,70 @@ class ModuleRuntime:
                 return False
             return True
         except Exception as exc:
-            self._log_warn(
-                "Module result upload threw exception",
-                {
-                    "module_id": payload.get("module_id"),
-                    "module_version": payload.get("module_version"),
-                    "run_id": payload.get("run_id"),
-                    "error": str(exc),
-                },
-            )
+            context = {
+                "module_id": payload.get("module_id"),
+                "module_version": payload.get("module_version"),
+                "run_id": payload.get("run_id"),
+                "error": str(exc),
+            }
+            if queue_on_error:
+                self._queue_result(payload)
+                context["queued"] = len(self._pending_results)
+            self._log_warn("Module result upload threw exception", context)
             return False
+
+    def _queue_result(self, payload):
+        self._pending_results.append(payload)
+        if len(self._pending_results) > self._pending_results_max:
+            dropped = self._pending_results.pop(0)
+            self._log_warn(
+                "Module result queue full; dropped oldest",
+                {"run_id": dropped.get("run_id"), "max": self._pending_results_max},
+            )
+
+    def apply_clock_offset(self, offset_s):
+        """Shift queued results stamped before the clock was synced by offset_s seconds.
+
+        The unsynced clock still ran from boot, so its timestamp plus the jump the
+        NTP sync made gives the real time. Returns how many results were corrected.
+        """
+        corrected = 0
+        for payload in self._pending_results:
+            changed = False
+            for key in ("started_at_utc", "finished_at_utc"):
+                value = payload.get(key)
+                if is_unsynced_iso(value):
+                    payload[key] = epoch_to_iso(iso_to_epoch(value) + offset_s)
+                    changed = True
+            if changed:
+                corrected += 1
+        return corrected
+
+    def flush_pending_results(self):
+        """Upload results queued while offline, oldest first. Returns how many were stored."""
+        uploaded = 0
+        while self._pending_results:
+            payload = self._pending_results[0]
+            try:
+                ok = self._device_control.report_module_result(payload)
+            except Exception as exc:
+                self._log_warn(
+                    "Queued module result upload threw exception",
+                    {"run_id": payload.get("run_id"), "error": str(exc), "remaining": len(self._pending_results)},
+                )
+                break
+            self._pending_results.pop(0)
+            if ok:
+                uploaded += 1
+            else:
+                # The server answered but refused it; retrying would not help.
+                self._log_warn("Queued module result rejected", {"run_id": payload.get("run_id")})
+        if uploaded:
+            self._log_info(
+                "Queued module results uploaded",
+                {"count": uploaded, "remaining": len(self._pending_results)},
+            )
+        return uploaded
 
     def _ack_module_reenabled(self, module_id, version):
         payload = {

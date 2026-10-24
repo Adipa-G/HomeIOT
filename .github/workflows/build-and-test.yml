@@ -77,7 +77,7 @@ jobs:
   # Build Docker image and run E2E tests
   build-and-test:
     name: Build Docker & E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Use Ubuntu 24.04 because Playwright does not support the ubuntu-latest
     needs: [python-tests, dotnet-tests, react-tests]
     steps:
       - uses: actions/checkout@v4

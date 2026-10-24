@@ -136,3 +136,18 @@ class MicroPythonSystem(ISystem):
             return True
         except Exception:  # pragma: no cover - desktop fallback
             return False
+
+    # Boards without a battery-backed RTC start at a fixed past date (rp2: 2021-01-01).
+    _MIN_SYNCED_YEAR = 2024
+
+    def clock_is_set(self) -> bool:
+        gmtime = getattr(self._time, "gmtime", None)
+        if not callable(gmtime):
+            return True
+        try:
+            return gmtime()[0] >= self._MIN_SYNCED_YEAR
+        except Exception:
+            return True
+
+    def wall_time_s(self) -> int:
+        return int(self._time.time())

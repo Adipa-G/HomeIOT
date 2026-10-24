@@ -1,4 +1,5 @@
 from edge.shared.app.config import Config
+from edge.shared.app.utc_time import iso_to_epoch
 from edge.shared.app.control_loop import (
     _ensure_network_connected,
     _requested_network_power_mode,
@@ -1423,3 +1424,148 @@ def test_regular_sleep_does_not_flush_logs_early():
     _run_radio_off(system, network, config=_config_60s(), logger=logger, iterations=2)
 
     assert logger.flushes == []
+
+
+# Clock sync and queued result tests
+
+
+class _SyncSystem(_ClockSystem):
+    def __init__(self, clock_set=False, sync_ok=True):
+        super().__init__()
+        self.clock_set = clock_set
+        self.sync_ok = sync_ok
+        self.sync_calls = 0
+
+    def clock_is_set(self):
+        return self.clock_set
+
+    def sync_time(self):
+        self.sync_calls += 1
+        if self.sync_ok:
+            self.clock_set = True
+        return self.sync_ok
+
+
+def _run_sync(system, network, iterations, logger=None, module_runtime=None):
+    logger = logger or _RecordingLogger()
+    run_control_loop(
+        system=system,
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 60000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=module_runtime or _FakeModuleRuntime(),
+        logger=logger,
+        config=_config_60s(),
+        network=network,
+        max_iterations=iterations,
+    )
+    return logger
+
+
+def test_unset_clock_is_synced_once_connected():
+    system = _SyncSystem(clock_set=False)
+
+    logger = _run_sync(system, _FakeNetwork(connected=True), iterations=3)
+
+    assert system.sync_calls == 1
+    assert ("NTP time synced", {"clock_was_set": False}) in logger.info_log
+
+
+def test_unset_clock_not_synced_while_offline():
+    system = _SyncSystem(clock_set=False)
+
+    _run_sync(system, _FakeNetwork(connected=False, fail_connect=True), iterations=3)
+
+    assert system.sync_calls == 0
+
+
+def test_clock_set_at_boot_is_resynced_daily():
+    system = _SyncSystem(clock_set=True)
+
+    # 60 s per iteration: 1441 iterations cover just over 24 hours.
+    _run_sync(system, _FakeNetwork(connected=True), iterations=1442)
+
+    assert system.sync_calls == 1
+
+
+def test_failed_clock_sync_retries_after_backoff():
+    system = _SyncSystem(clock_set=False, sync_ok=False)
+
+    # 60 s per iteration: syncs at 0 and 5 minutes within 7 iterations.
+    logger = _run_sync(system, _FakeNetwork(connected=True), iterations=7)
+
+    assert system.sync_calls == 2
+    assert ("NTP time sync failed", {"clock_was_set": False}) in logger.warn_log
+
+
+def test_queued_results_flushed_only_when_connected():
+    class _RuntimeWithQueue(_FakeModuleRuntime):
+        def __init__(self):
+            super().__init__()
+            self.flush_calls = 0
+
+        def flush_pending_results(self):
+            self.flush_calls += 1
+            return 0
+
+    online = _RuntimeWithQueue()
+    _run_sync(_SyncSystem(clock_set=True), _FakeNetwork(connected=True), iterations=2, module_runtime=online)
+    offline = _RuntimeWithQueue()
+    _run_sync(
+        _SyncSystem(clock_set=True),
+        _FakeNetwork(connected=False, fail_connect=True),
+        iterations=2,
+        module_runtime=offline,
+    )
+
+    assert online.flush_calls == 2
+    assert offline.flush_calls == 0
+
+
+class _JumpingClockSystem(_SyncSystem):
+    """Wall clock reads boot-relative 2021 time until NTP moves it forward."""
+
+    UNSYNCED_BOOT_S = iso_to_epoch("2021-01-01T00:00:00Z")
+    REAL_BOOT_S = iso_to_epoch("2026-10-22T00:00:00Z")
+
+    def wall_time_s(self):
+        base = self.REAL_BOOT_S if self.clock_set else self.UNSYNCED_BOOT_S
+        return base + self._time_ms // 1000
+
+
+def test_clock_sync_applies_offset_to_queued_results():
+    class _RuntimeRecordingOffset(_FakeModuleRuntime):
+        def __init__(self):
+            super().__init__()
+            self.offsets = []
+
+        def apply_clock_offset(self, offset_s):
+            self.offsets.append(offset_s)
+            return 4
+
+    system = _JumpingClockSystem(clock_set=False)
+    runtime = _RuntimeRecordingOffset()
+
+    logger = _run_sync(system, _FakeNetwork(connected=True), iterations=2, module_runtime=runtime)
+
+    offset = _JumpingClockSystem.REAL_BOOT_S - _JumpingClockSystem.UNSYNCED_BOOT_S
+    assert runtime.offsets == [offset]
+    assert ("NTP time synced", {"clock_was_set": False, "offset_s": offset, "corrected_results": 4}) in logger.info_log
+
+
+def test_daily_resync_does_not_shift_queued_results():
+    class _RuntimeRecordingOffset(_FakeModuleRuntime):
+        def __init__(self):
+            super().__init__()
+            self.offsets = []
+
+        def apply_clock_offset(self, offset_s):
+            self.offsets.append(offset_s)
+            return 0
+
+    system = _JumpingClockSystem(clock_set=True)
+    runtime = _RuntimeRecordingOffset()
+
+    _run_sync(system, _FakeNetwork(connected=True), iterations=1442, module_runtime=runtime)
+
+    assert system.sync_calls == 1
+    assert runtime.offsets == []

@@ -136,6 +136,14 @@ class ISystem:
     def sync_time(self) -> bool:
         raise NotImplementedError()
 
+    def clock_is_set(self) -> bool:
+        """True once the wall clock holds a real date (i.e. it has been synced)."""
+        raise NotImplementedError()
+
+    def wall_time_s(self) -> int:
+        """Wall-clock seconds; only differences are meaningful (the epoch varies by port)."""
+        raise NotImplementedError()
+
 
 class IWatchdog:
     def init(self, timeout_ms: int) -> None:

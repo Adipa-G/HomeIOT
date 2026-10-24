@@ -7,6 +7,9 @@ from edge.shared.app.safe_io import atomic_write_bytes
 from edge.shared.app.secret_crypto import encrypt_secret
 from edge.shared.hal.interfaces import IFileSystem, IHttpClient, ISystem
 
+# Keys in the config "power" block that belong to the device, not the release.
+DEVICE_LOCAL_POWER_KEYS = ("radio_off_sleep_enabled",)
+
 
 class _HashingChunkReader:
     """Iterates chunks from a _StreamFrameReader while computing a rolling SHA256.
@@ -408,6 +411,18 @@ class Updater:
             staged_country = staged.get("wifi_country")
             if isinstance(staged_country, str) and staged_country.lower().startswith("replace-with-"):
                 del staged["wifi_country"]
+
+        # Per-device power settings: a value already on the device always wins; the
+        # release value only seeds devices that do not have one yet.
+        active_power = active.get("power")
+        if isinstance(active_power, dict):
+            for key in DEVICE_LOCAL_POWER_KEYS:
+                if isinstance(active_power.get(key), bool):
+                    staged_power = staged.get("power")
+                    if not isinstance(staged_power, dict):
+                        staged_power = {}
+                        staged["power"] = staged_power
+                    staged_power[key] = active_power[key]
 
         # Secret pairs (api_key / wifi_password):
         # - Placeholder or absent  → copy credential from active as-is (enc object preferred)
