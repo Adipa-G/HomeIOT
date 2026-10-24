@@ -64,6 +64,10 @@ class SimulatorSystem(ISystem):
         """The host clock is always set."""
         return True
 
-    def wall_time_s(self) -> int:
-        """Host wall-clock seconds."""
-        return int(time.time())
+    def utc_datetime(self) -> tuple:
+        """Host UTC time."""
+        return tuple(time.gmtime()[:6])
+
+    def set_utc_datetime(self, parts) -> None:
+        """The host clock is not changed by the simulator."""
+        pass

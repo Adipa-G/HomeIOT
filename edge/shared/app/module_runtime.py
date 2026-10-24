@@ -1,7 +1,6 @@
 import json
 
 from edge.shared.app.safe_io import atomic_write_text
-from edge.shared.app.utc_time import epoch_to_iso, is_unsynced_iso, iso_to_epoch
 
 
 class ModuleSchedule:
@@ -40,20 +39,23 @@ class ModuleRuntime:
         quarantine_root="modules_cache",
         quarantine_threshold=3,
         pending_results_max=30,
+        clock=None,
     ):
         self._system = system
         self._device_control = device_control
         self._config = config
         self._fs = fs
         self._logger = logger
-        self._utc_now_iso = utc_now_iso or self._default_utc_now_iso
+        self._clock = clock
+        self._utc_now_iso = utc_now_iso or self._clock_now_iso
         self._timeout_marker_path = timeout_marker_path
         self._pending_module_status_path = pending_module_status_path
         self._quarantine_root = quarantine_root
         self._quarantine_threshold = quarantine_threshold
         self._modules = {}
         # Results that failed to upload because the network was down. Kept in RAM
-        # only (no flash wear); lost on reset.
+        # only (no flash wear); lost on reset. Each entry keeps the run's tick
+        # readings so results stamped before the first NTP sync can be re-dated.
         self._pending_results = []
         self._pending_results_max = max(1, int(pending_results_max))
 
@@ -300,7 +302,14 @@ class ModuleRuntime:
             self._log_warn("Module timeout exceeded; resetting device", payload)
             self._system.reset()
         else:
-            self._report_result(payload, queue_on_error=True)
+            self._report_result(
+                payload,
+                queue_entry={
+                    "started_ticks": start_ms,
+                    "finished_ticks": finish_ms,
+                    "clock_synced": self._clock_synced(),
+                },
+            )
 
         if status == "error":
             self._log_warn("Module execution failed", payload)
@@ -392,6 +401,16 @@ class ModuleRuntime:
             return [assignment_payload]
         return []
 
+    def _clock_now_iso(self):
+        if self._clock is not None:
+            now = self._clock.now_iso()
+            if now is not None:
+                return now
+        return self._default_utc_now_iso()
+
+    def _clock_synced(self):
+        return self._clock is not None and self._clock.is_synced()
+
     @staticmethod
     def _default_utc_now_iso():
         try:
@@ -414,7 +433,7 @@ class ModuleRuntime:
             details = details[:2000] + "..."
         return details
 
-    def _report_result(self, payload, queue_on_error=False):
+    def _report_result(self, payload, queue_entry=None):
         try:
             ok = self._device_control.report_module_result(payload)
             if not ok:
@@ -436,44 +455,38 @@ class ModuleRuntime:
                 "run_id": payload.get("run_id"),
                 "error": str(exc),
             }
-            if queue_on_error:
-                self._queue_result(payload)
+            if queue_entry is not None:
+                queue_entry["payload"] = payload
+                self._queue_result(queue_entry)
                 context["queued"] = len(self._pending_results)
             self._log_warn("Module result upload threw exception", context)
             return False
 
-    def _queue_result(self, payload):
-        self._pending_results.append(payload)
+    def _queue_result(self, entry):
+        self._pending_results.append(entry)
         if len(self._pending_results) > self._pending_results_max:
             dropped = self._pending_results.pop(0)
             self._log_warn(
                 "Module result queue full; dropped oldest",
-                {"run_id": dropped.get("run_id"), "max": self._pending_results_max},
+                {"run_id": dropped["payload"].get("run_id"), "max": self._pending_results_max},
             )
 
-    def apply_clock_offset(self, offset_s):
-        """Shift queued results stamped before the clock was synced by offset_s seconds.
-
-        The unsynced clock still ran from boot, so its timestamp plus the jump the
-        NTP sync made gives the real time. Returns how many results were corrected.
-        """
-        corrected = 0
-        for payload in self._pending_results:
-            changed = False
-            for key in ("started_at_utc", "finished_at_utc"):
-                value = payload.get(key)
-                if is_unsynced_iso(value):
-                    payload[key] = epoch_to_iso(iso_to_epoch(value) + offset_s)
-                    changed = True
-            if changed:
-                corrected += 1
-        return corrected
+    def _redate_if_needed(self, entry):
+        """Replace pre-sync timestamps with times derived from the run's tick readings."""
+        if entry.get("clock_synced") or not self._clock_synced():
+            return
+        payload = entry["payload"]
+        payload["started_at_utc"] = self._clock.iso_at_ticks(entry["started_ticks"])
+        payload["finished_at_utc"] = self._clock.iso_at_ticks(entry["finished_ticks"])
+        entry["clock_synced"] = True
 
     def flush_pending_results(self):
         """Upload results queued while offline, oldest first. Returns how many were stored."""
         uploaded = 0
         while self._pending_results:
-            payload = self._pending_results[0]
+            entry = self._pending_results[0]
+            self._redate_if_needed(entry)
+            payload = entry["payload"]
             try:
                 ok = self._device_control.report_module_result(payload)
             except Exception as exc:

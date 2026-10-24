@@ -44,5 +44,8 @@ class MockSystem:
     def clock_is_set(self) -> bool:
         return True
 
-    def wall_time_s(self) -> int:
-        return self._time_ms // 1000
+    def utc_datetime(self) -> tuple:
+        return (2026, 10, 24, 0, 0, self._time_ms // 1000 % 60)
+
+    def set_utc_datetime(self, parts) -> None:
+        self.rtc_writes = getattr(self, "rtc_writes", []) + [parts]

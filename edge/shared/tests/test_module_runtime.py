@@ -1,7 +1,8 @@
 from edge.shared.app.config import Config
 from edge.shared.app.device_control import DeviceControlClient
 from edge.shared.app.module_runtime import ModuleRuntime
-from edge.shared.app.utc_time import iso_to_epoch
+from edge.shared.app.utc_time import epoch_to_datetime, iso_to_epoch
+from edge.shared.app.wall_clock import WallClock
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 from edge.shared.tests.mocks.mock_system import MockSystem
@@ -789,26 +790,62 @@ def test_result_rejected_by_server_is_not_queued():
     assert runtime.flush_pending_results() == 0
 
 
-def test_apply_clock_offset_restores_real_times_of_queued_results():
-    device_control = _ScriptedDeviceControl()
-    clock = ["2021-01-01T00:01:00Z"]
-    runtime = ModuleRuntime(
-        system=MockSystem(),
-        device_control=device_control,
-        config=_config(),
-        utc_now_iso=lambda: clock[0],
-    )
+class _TickSystem:
+    """Tick counter advanced by the test; the hardware clock reads 2021 until NTP."""
+
+    REAL_BOOT_S = iso_to_epoch("2026-10-22T00:00:00Z")
+
+    def __init__(self, clock_set=False):
+        self.ticks = 0
+        self.clock_set = clock_set
+
+    def time_ms(self):
+        return self.ticks
+
+    def ticks_diff(self, a, b):
+        return a - b
+
+    def ticks_add(self, ticks, delta):
+        return ticks + delta
+
+    def clock_is_set(self):
+        return self.clock_set
+
+    def sync_time(self):
+        self.clock_set = True
+        return True
+
+    def utc_datetime(self):
+        if not self.clock_set:
+            return (2021, 1, 1, 0, 0, 0)
+        return epoch_to_datetime(self.REAL_BOOT_S + self.ticks // 1000)[:6]
+
+    def reset(self):
+        pass
+
+
+def _clock_runtime(system, device_control, clock):
+    runtime = ModuleRuntime(system=system, device_control=device_control, config=_config(), clock=clock)
     runtime.update_assignment(
-        {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 1000, "timeout_ms": 5000}]},
+        {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 60000, "timeout_ms": 5000}]},
         now_ms=0,
     )
-    runtime.tick(now_ms=0)
-    clock[0] = "2021-01-01T00:02:00Z"
-    runtime.tick(now_ms=1000)
+    return runtime
 
-    real_boot = iso_to_epoch("2026-10-22T00:00:00Z")
-    unsynced_boot = iso_to_epoch("2021-01-01T00:00:00Z")
-    assert runtime.apply_clock_offset(real_boot - unsynced_boot) == 2
+
+def test_results_queued_before_sync_are_redated_from_ticks():
+    system = _TickSystem(clock_set=False)
+    clock = WallClock(system)
+    device_control = _ScriptedDeviceControl()
+    runtime = _clock_runtime(system, device_control, clock)
+
+    system.ticks = 60000
+    runtime.tick(now_ms=60000)
+    system.ticks = 120000
+    runtime.tick(now_ms=120000)
+
+    system.ticks = 300000
+    assert clock.sync() is True
 
     sent = []
     device_control.online = True
@@ -819,9 +856,52 @@ def test_apply_clock_offset_restores_real_times_of_queued_results():
     assert [p["finished_at_utc"] for p in sent] == ["2026-10-22T00:01:00Z", "2026-10-22T00:02:00Z"]
 
 
-def test_apply_clock_offset_leaves_synced_timestamps_alone():
+def test_results_queued_after_sync_keep_their_timestamps():
+    system = _TickSystem(clock_set=True)
+    clock = WallClock(system)
     device_control = _ScriptedDeviceControl()
-    runtime = _queue_runtime(device_control)
-    _run_ticks(runtime, 1)
+    runtime = _clock_runtime(system, device_control, clock)
 
-    assert runtime.apply_clock_offset(3600) == 0
+    system.ticks = 60000
+    runtime.tick(now_ms=60000)
+    system.ticks = 600000
+
+    sent = []
+    device_control.online = True
+    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    runtime.flush_pending_results()
+
+    assert sent[0]["started_at_utc"] == "2026-10-22T00:01:00Z"
+
+
+def test_results_queued_before_sync_unchanged_while_still_unsynced(monkeypatch):
+    monkeypatch.setattr(ModuleRuntime, "_default_utc_now_iso", staticmethod(lambda: "2021-01-01T00:01:00Z"))
+    system = _TickSystem(clock_set=False)
+    device_control = _ScriptedDeviceControl()
+    runtime = _clock_runtime(system, device_control, WallClock(system))
+
+    system.ticks = 60000
+    runtime.tick(now_ms=60000)
+
+    sent = []
+    device_control.online = True
+    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    runtime.flush_pending_results()
+
+    assert sent[0]["started_at_utc"] == "2021-01-01T00:01:00Z"
+    assert sent[0]["finished_at_utc"] == "2021-01-01T00:01:00Z"
+
+
+def test_runtime_stamps_results_from_clock_not_gmtime():
+    system = _TickSystem(clock_set=True)
+    clock = WallClock(system)
+    device_control = _ScriptedDeviceControl()
+    device_control.online = True
+    runtime = _clock_runtime(system, device_control, clock)
+    sent = []
+    device_control.report_module_result = lambda payload: sent.append(payload) or True
+
+    system.ticks = 3600000
+    runtime.tick(now_ms=3600000)
+
+    assert sent[0]["finished_at_utc"] == "2026-10-22T01:00:00Z"

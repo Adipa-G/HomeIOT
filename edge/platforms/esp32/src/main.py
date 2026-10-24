@@ -13,6 +13,7 @@ from edge.shared.app.logger import EdgeLogger
 from edge.shared.app.module_runtime import ModuleRuntime
 from edge.shared.app.presence import PresenceService
 from edge.shared.app.updater import Updater
+from edge.shared.app.wall_clock import WallClock
 from edge.platforms.esp32.hal.filesystem import MicroPythonFileSystem
 from edge.platforms.esp32.hal.http_client import MicroPythonHttpClient
 from edge.platforms.esp32.hal.network import MicroPythonNetwork
@@ -34,6 +35,8 @@ def run_main() -> None:
     http = MicroPythonHttpClient()
     network = MicroPythonNetwork()
     watchdog = MicroPythonWatchdog()
+
+    clock = WallClock(system)
 
     config = Config.load(fs, system=system)
     logger = EdgeLogger(
@@ -58,7 +61,7 @@ def run_main() -> None:
     try:
         network.connect(config.wifi_ssid, config.wifi_password)
         logger.info("WiFi connected", {"ip": network.get_ip()})
-        if system.sync_time():
+        if clock.sync():
             logger.info("NTP time synced")
         else:
             logger.warn("NTP time sync failed; timestamps may be inaccurate")
@@ -86,7 +89,7 @@ def run_main() -> None:
         watchdog=watchdog,
     )
     device_control = DeviceControlClient(http=http, config=config, fs=fs, logger=logger)
-    module_runtime = ModuleRuntime(system=system, device_control=device_control, config=config, fs=fs, logger=logger)
+    module_runtime = ModuleRuntime(system=system, device_control=device_control, config=config, fs=fs, logger=logger, clock=clock)
 
     state = boot_manager.get_state()
 
@@ -145,6 +148,7 @@ def run_main() -> None:
         network=network,
         watchdog=watchdog,
         updater=updater,
+        clock=clock,
     )
 
 

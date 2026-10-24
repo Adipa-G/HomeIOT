@@ -149,5 +149,10 @@ class MicroPythonSystem(ISystem):
         except Exception:
             return True
 
-    def wall_time_s(self) -> int:
-        return int(self._time.time())
+    def utc_datetime(self) -> tuple:
+        return tuple(self._time.gmtime()[:6])
+
+    def set_utc_datetime(self, parts) -> None:
+        import machine
+        year, month, day, hour, minute, second, weekday = parts
+        machine.RTC().datetime((year, month, day, weekday, hour, minute, second, 0))
