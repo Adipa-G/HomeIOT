@@ -140,8 +140,12 @@ class ISystem:
         """True once the wall clock holds a real date (i.e. it has been synced)."""
         raise NotImplementedError()
 
-    def wall_time_s(self) -> int:
-        """Wall-clock seconds; only differences are meaningful (the epoch varies by port)."""
+    def utc_datetime(self) -> tuple:
+        """Current hardware clock as (year, month, day, hour, minute, second) in UTC."""
+        raise NotImplementedError()
+
+    def set_utc_datetime(self, parts) -> None:
+        """Set the hardware clock from (year, month, day, hour, minute, second, weekday) in UTC."""
         raise NotImplementedError()
 
 

@@ -32,6 +32,22 @@ def _civil_from_days(days):
     return year, month, day
 
 
+def datetime_to_epoch(parts):
+    """(year, month, day, hour, minute, second, ...) in UTC to Unix seconds."""
+    year, month, day, hour, minute, second = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+    return _days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second
+
+
+def epoch_to_datetime(seconds):
+    """Unix seconds to (year, month, day, hour, minute, second, weekday) in UTC; Monday is 0."""
+    seconds = int(seconds)
+    days = seconds // 86400
+    remainder = seconds - days * 86400
+    year, month, day = _civil_from_days(days)
+    # 1970-01-01 was a Thursday (weekday 3).
+    return (year, month, day, remainder // 3600, (remainder % 3600) // 60, remainder % 60, (days + 3) % 7)
+
+
 def iso_to_epoch(value):
     """Parse 'YYYY-MM-DDTHH:MM:SSZ' to Unix seconds, or None if malformed."""
     if not isinstance(value, str) or len(value) < 19:
@@ -56,9 +72,3 @@ def epoch_to_iso(seconds):
     return "%04d-%02d-%02dT%02d:%02d:%02dZ" % (
         year, month, day, remainder // 3600, (remainder % 3600) // 60, remainder % 60,
     )
-
-
-def is_unsynced_iso(value):
-    """True if an ISO timestamp predates any plausible NTP-synced time."""
-    epoch = iso_to_epoch(value)
-    return epoch is not None and int(value[0:4]) < MIN_SYNCED_YEAR

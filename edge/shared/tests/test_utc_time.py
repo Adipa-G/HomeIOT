@@ -3,7 +3,12 @@ import datetime
 
 import pytest
 
-from edge.shared.app.utc_time import epoch_to_iso, is_unsynced_iso, iso_to_epoch
+from edge.shared.app.utc_time import (
+    datetime_to_epoch,
+    epoch_to_datetime,
+    epoch_to_iso,
+    iso_to_epoch,
+)
 
 
 @pytest.mark.parametrize(
@@ -36,8 +41,22 @@ def test_iso_to_epoch_rejects_malformed(value):
     assert iso_to_epoch(value) is None
 
 
-def test_is_unsynced_iso():
-    assert is_unsynced_iso("2021-01-01T00:05:00Z") is True
-    assert is_unsynced_iso("2000-01-01T00:00:10Z") is True
-    assert is_unsynced_iso("2026-10-23T12:39:23Z") is False
-    assert is_unsynced_iso("not-a-date") is False
+def test_epoch_to_datetime_matches_gmtime_including_weekday():
+    import time
+
+    for seconds in (0, 951782400, 1609459200, 1792630800, 4102444800):
+        expected = time.gmtime(seconds)
+        assert epoch_to_datetime(seconds) == (
+            expected.tm_year,
+            expected.tm_mon,
+            expected.tm_mday,
+            expected.tm_hour,
+            expected.tm_min,
+            expected.tm_sec,
+            expected.tm_wday,
+        )
+
+
+def test_datetime_to_epoch_round_trips():
+    for seconds in (0, 1609459200, 1792630815):
+        assert datetime_to_epoch(epoch_to_datetime(seconds)) == seconds

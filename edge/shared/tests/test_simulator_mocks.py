@@ -52,8 +52,8 @@ class TestSimulatorSystem:
     def test_clock_is_set(self):
         assert SimulatorSystem().clock_is_set() is True
 
-    def test_wall_time_s_is_positive(self):
-        assert SimulatorSystem().wall_time_s() > 0
+    def test_utc_datetime_is_current(self):
+        assert SimulatorSystem().utc_datetime()[0] >= 2024
 
     def test_reset_cause_is_power_on(self):
         assert SimulatorSystem().reset_cause() == "pwron_reset"

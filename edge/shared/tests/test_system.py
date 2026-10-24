@@ -94,7 +94,23 @@ def test_clock_is_set_true_when_gmtime_unavailable(monkeypatch):
     assert system.clock_is_set() is True
 
 
-def test_wall_time_s_uses_time_module(monkeypatch):
+def test_utc_datetime_reads_gmtime(monkeypatch):
     system = MicroPythonSystem()
-    monkeypatch.setattr(system, "_time", types.SimpleNamespace(time=lambda: 1234.9))
-    assert system.wall_time_s() == 1234
+    monkeypatch.setattr(system, "_time", types.SimpleNamespace(gmtime=lambda: (2026, 10, 24, 9, 30, 15, 5, 297)))
+    assert system.utc_datetime() == (2026, 10, 24, 9, 30, 15)
+
+
+def test_set_utc_datetime_writes_rtc_in_machine_order(monkeypatch):
+    writes = []
+
+    class _Rtc:
+        def datetime(self, value):
+            writes.append(value)
+
+    machine = types.ModuleType("machine")
+    machine.RTC = _Rtc
+    monkeypatch.setitem(sys.modules, "machine", machine)
+
+    MicroPythonSystem().set_utc_datetime((2026, 10, 24, 9, 30, 15, 5))
+
+    assert writes == [(2026, 10, 24, 5, 9, 30, 15, 0)]
