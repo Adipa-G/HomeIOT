@@ -7,10 +7,18 @@ def _caps(machine, version):
     return {"lightsleep": True, "deepsleep": True, "machine": machine, "runtime_version": version}
 
 
-def test_lightsleep_broken_on_esp32c6_from_1_27():
+def test_lightsleep_broken_on_esp32c6_from_1_27_to_1_29():
     assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "1.27.0")) is True
     assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "1.28.0")) is True
     assert lightsleep_known_broken(_caps("ESP32-C6 module", "1.29.0")) is True
+    assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "1.29.1")) is True
+
+
+def test_lightsleep_not_broken_on_fixed_c6_versions():
+    assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "1.30.0")) is False
+    assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "1.30.0-preview")) is False
+    assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "1.31.2")) is False
+    assert lightsleep_known_broken(_caps("ESP32C6 module with ESP32C6", "2.0.0")) is False
 
 
 def test_lightsleep_not_broken_on_older_c6_or_other_chips():
@@ -48,6 +56,18 @@ def test_light_sleep_falls_back_to_regular_sleep_on_affected_c6(monkeypatch):
     assert system.light_sleep_ms(15000) is False
     assert sleeps == [15000]
     assert light_sleep_calls == []
+
+
+def test_light_sleep_used_on_fixed_c6(monkeypatch):
+    light_sleep_calls = []
+    _patch_shared(monkeypatch, _caps("ESP32C6 module with ESP32C6", "1.30.0"), light_sleep_calls)
+    system = MicroPythonSystem()
+
+    assert system.light_sleep_ms(15000) is True
+    assert light_sleep_calls == [15000]
+    caps = system.get_sleep_capabilities()
+    assert caps["lightsleep"] is True
+    assert "lightsleep_disabled" not in caps
 
 
 def test_light_sleep_used_on_unaffected_chip(monkeypatch):
