@@ -172,7 +172,7 @@ On Pico W and Pico 2 W the WiFi chip is fully powered off (`WLAN.deinit()`) befo
 
 Development mode never uses it. If `machine.lightsleep()` is missing or keeps returning immediately, the device logs a warning and falls back to regular sleep. USB serial drops while the board sleeps.
 
-**ESP32-C6:** from MicroPython 1.27, `machine.lightsleep()` hangs on the C6 until its low-power watchdog resets the chip ([micropython#19396](https://github.com/micropython/micropython/issues/19396)). The firmware detects this, logs `Radio-off sleep unsupported … reason=micropython#19396`, and keeps WiFi connected with regular sleep instead. Radio-off sleep works on the C6 only with MicroPython 1.26.1 or earlier.
+**ESP32-C6:** in MicroPython 1.27 through 1.29, `machine.lightsleep()` hangs on the C6 until its low-power watchdog resets the chip ([micropython#19396](https://github.com/micropython/micropython/issues/19396)). The firmware detects these versions, logs `Radio-off sleep unsupported … reason=micropython#19396`, and keeps WiFi connected with regular sleep instead. Radio-off sleep works on the C6 with MicroPython 1.26.1 or earlier, or 1.30 and later (built with ESP-IDF v5.5.5). A `1.30.0-preview` build made before 2026-08-26 still has the bug but is treated as fixed, so use a release build.
 
 **Watchdog:** devices reset if the control loop stops feeding the watchdog for 120 s. The Pico hardware watchdog can't go above about 8 s, so the firmware feeds it from a timer while the app keeps checking in. An interactive REPL session on an installed device therefore resets after about two minutes.
 
