@@ -321,6 +321,367 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Connector_Generic:Conn_01x09"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J"
+				(at 0 12.7 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Conn_01x09"
+				(at 0 -12.7 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Generic connector, single row, 01x09, script generated (kicad-library-utils/schlib/autogen/connector/)"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Conn_01x09_1_1"
+				(rectangle
+					(start -1.27 11.43)
+					(end 1.27 -11.43)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(rectangle
+					(start -1.27 10.287)
+					(end 0 10.033)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 7.747)
+					(end 0 7.493)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 5.207)
+					(end 0 4.953)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 2.667)
+					(end 0 2.413)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 0.127)
+					(end 0 -0.127)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -2.413)
+					(end 0 -2.667)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -4.953)
+					(end 0 -5.207)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -7.493)
+					(end 0 -7.747)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -10.033)
+					(end 0 -10.287)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 10.16 0)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 7.62 0)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 5.08 0)
+					(length 3.81)
+					(name "Pin_3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 2.54 0)
+					(length 3.81)
+					(name "Pin_4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 3.81)
+					(name "Pin_5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -2.54 0)
+					(length 3.81)
+					(name "Pin_6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -5.08 0)
+					(length 3.81)
+					(name "Pin_7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -7.62 0)
+					(length 3.81)
+					(name "Pin_8"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "8"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -10.16 0)
+					(length 3.81)
+					(name "Pin_9"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "9"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector_Generic:Conn_02x09_Odd_Even"
 			(pin_names
 				(offset 1.016)
@@ -3746,6 +4107,12 @@
 		(uuid "044f5f72-a321-4499-a28f-e822900698cd")
 	)
 	(junction
+		(at 93.98 143.51)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "16264150-e259-4a0d-8ec3-f067e357af1b")
+	)
+	(junction
 		(at 119.38 218.44)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3776,6 +4143,12 @@
 		(uuid "254e1028-6d27-4582-a22c-e609fadc024e")
 	)
 	(junction
+		(at 93.98 128.27)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "2a8771ad-6446-4a45-b405-feb7f6740231")
+	)
+	(junction
 		(at 119.38 189.23)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3792,6 +4165,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "36a79e85-d3a8-4860-9633-ce4003fd07b1")
+	)
+	(junction
+		(at 93.98 138.43)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "386625a3-23ca-40fe-8190-9936aab9583d")
 	)
 	(junction
 		(at 35.56 91.44)
@@ -3836,6 +4215,12 @@
 		(uuid "6b15b82d-f579-4b31-a8cf-068c9f9a91b9")
 	)
 	(junction
+		(at 93.98 133.35)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "6ec0b659-86eb-4adc-bf2e-67a9361ae29a")
+	)
+	(junction
 		(at 110.49 146.05)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3854,10 +4239,22 @@
 		(uuid "732ade01-b82b-4b36-ae08-4f9d4fbbe99e")
 	)
 	(junction
+		(at 93.98 130.81)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "751eaf0c-cf41-4f13-a8b3-1d72c96c5ed4")
+	)
+	(junction
 		(at 66.04 55.88)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "7c1759e2-4939-40bc-a9b7-cd65af41fbf1")
+	)
+	(junction
+		(at 93.98 146.05)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "7ee42826-ab51-488e-9182-3cd730d1d04c")
 	)
 	(junction
 		(at 59.69 91.44)
@@ -3902,6 +4299,12 @@
 		(uuid "cde9cab7-3ea0-413c-93ab-fff986ac274e")
 	)
 	(junction
+		(at 93.98 135.89)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d55bffc4-db9e-49ed-8946-d39e49b8a1f6")
+	)
+	(junction
 		(at 110.49 133.35)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3920,10 +4323,22 @@
 		(uuid "f2e78dc1-410c-496a-a6bb-37911d59776a")
 	)
 	(junction
+		(at 207.01 111.76)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f559b093-342b-4456-b77c-0c09b69cb297")
+	)
+	(junction
 		(at 207.01 140.97)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "ff87468d-dc41-4565-99fc-b214bda26db6")
+	)
+	(junction
+		(at 93.98 140.97)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ffe1f81f-d43c-4908-a0da-61222614df79")
 	)
 	(no_connect
 		(at 191.77 133.35)
@@ -4035,6 +4450,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 138.43) (xy 93.98 140.97)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "09570b50-513c-4b52-a760-fd83e40a8cb8")
+	)
+	(wire
+		(pts
 			(xy 191.77 156.21) (xy 214.63 156.21)
 		)
 		(stroke
@@ -4092,6 +4517,16 @@
 			(type default)
 		)
 		(uuid "1590b797-ac62-40fd-b534-3bd9219e4d1c")
+	)
+	(wire
+		(pts
+			(xy 78.74 91.44) (xy 59.69 91.44)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1881b619-018f-4781-bffb-42b870f618b2")
 	)
 	(wire
 		(pts
@@ -4195,6 +4630,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 146.05) (xy 93.98 148.59)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "310deac9-4565-4f02-9323-15c59fe5ab10")
+	)
+	(wire
+		(pts
 			(xy 59.69 91.44) (xy 35.56 91.44)
 		)
 		(stroke
@@ -4202,6 +4647,16 @@
 			(type default)
 		)
 		(uuid "314cd481-9ee8-4bde-b56c-99e44097fc1c")
+	)
+	(wire
+		(pts
+			(xy 93.98 135.89) (xy 93.98 138.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "315ea581-1e2b-47d5-9661-98049ed80fba")
 	)
 	(wire
 		(pts
@@ -4275,7 +4730,7 @@
 	)
 	(wire
 		(pts
-			(xy 157.48 71.12) (xy 127 71.12)
+			(xy 157.48 71.12) (xy 124.46 71.12)
 		)
 		(stroke
 			(width 0)
@@ -4355,6 +4810,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 133.35) (xy 93.98 135.89)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4bd59550-a5df-4e20-bdee-35297d01759a")
+	)
+	(wire
+		(pts
 			(xy 71.12 121.92) (xy 72.39 121.92)
 		)
 		(stroke
@@ -4372,6 +4837,16 @@
 			(type default)
 		)
 		(uuid "50ef6e76-ac49-421f-a784-3812a536ff77")
+	)
+	(wire
+		(pts
+			(xy 93.98 140.97) (xy 93.98 143.51)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "52187b5d-6859-4ecb-a01d-639e0da5da84")
 	)
 	(wire
 		(pts
@@ -4402,6 +4877,16 @@
 			(type default)
 		)
 		(uuid "5b6b9407-c602-460b-a559-a9324e586219")
+	)
+	(wire
+		(pts
+			(xy 93.98 111.76) (xy 207.01 111.76)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5e275d9c-c3ae-456c-9fd9-d43f7dc03a1b")
 	)
 	(wire
 		(pts
@@ -4495,7 +4980,7 @@
 	)
 	(wire
 		(pts
-			(xy 80.01 91.44) (xy 59.69 91.44)
+			(xy 77.47 83.82) (xy 78.74 83.82)
 		)
 		(stroke
 			(width 0)
@@ -4575,16 +5060,6 @@
 	)
 	(wire
 		(pts
-			(xy 80.01 105.41) (xy 77.47 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "881eaaf8-3666-4d26-a96a-55a0587fafec")
-	)
-	(wire
-		(pts
 			(xy 125.73 125.73) (xy 125.73 130.81)
 		)
 		(stroke
@@ -4615,7 +5090,7 @@
 	)
 	(wire
 		(pts
-			(xy 127 105.41) (xy 127 109.22)
+			(xy 124.46 97.79) (xy 124.46 101.6)
 		)
 		(stroke
 			(width 0)
@@ -4645,7 +5120,7 @@
 	)
 	(wire
 		(pts
-			(xy 77.47 105.41) (xy 77.47 109.22)
+			(xy 77.47 97.79) (xy 77.47 109.22)
 		)
 		(stroke
 			(width 0)
@@ -4662,6 +5137,16 @@
 			(type default)
 		)
 		(uuid "958cf8d7-e329-440f-a0e2-2ea779823abd")
+	)
+	(wire
+		(pts
+			(xy 93.98 128.27) (xy 93.98 130.81)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9603645f-9015-450d-a52c-627ab30ffc33")
 	)
 	(wire
 		(pts
@@ -4742,6 +5227,16 @@
 			(type default)
 		)
 		(uuid "a4c65e62-e092-412e-92da-ba2d4e3e240a")
+	)
+	(wire
+		(pts
+			(xy 207.01 111.76) (xy 207.01 39.37)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a519fee6-e144-49e4-8cab-41b7008ca213")
 	)
 	(wire
 		(pts
@@ -4855,7 +5350,7 @@
 	)
 	(wire
 		(pts
-			(xy 207.01 120.65) (xy 207.01 39.37)
+			(xy 207.01 120.65) (xy 207.01 111.76)
 		)
 		(stroke
 			(width 0)
@@ -4905,6 +5400,16 @@
 	)
 	(wire
 		(pts
+			(xy 78.74 83.82) (xy 78.74 91.44)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b95364d8-1230-4a4e-9508-d760ca883b8f")
+	)
+	(wire
+		(pts
 			(xy 195.58 231.14) (xy 233.68 231.14)
 		)
 		(stroke
@@ -4922,6 +5427,16 @@
 			(type default)
 		)
 		(uuid "bd170416-ced2-445f-8db5-d103770ba3ed")
+	)
+	(wire
+		(pts
+			(xy 93.98 111.76) (xy 93.98 128.27)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c0146057-e33e-4554-8475-e16639f072ff")
 	)
 	(wire
 		(pts
@@ -5055,6 +5570,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 143.51) (xy 93.98 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d6d42a94-78df-4389-837a-dc73b60dbc12")
+	)
+	(wire
+		(pts
 			(xy 156.21 125.73) (xy 125.73 125.73)
 		)
 		(stroke
@@ -5115,7 +5640,7 @@
 	)
 	(wire
 		(pts
-			(xy 127 71.12) (xy 127 91.44)
+			(xy 124.46 71.12) (xy 124.46 83.82)
 		)
 		(stroke
 			(width 0)
@@ -5295,6 +5820,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 130.81) (xy 93.98 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fcc7e615-df51-44a6-8adf-02adce30a822")
+	)
+	(wire
+		(pts
 			(xy 248.92 180.34) (xy 248.92 170.18)
 		)
 		(stroke
@@ -5315,7 +5850,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "05af68db-6c5b-4361-b285-0af2959bf4ea")
-		(property "Reference" "D5"
+		(property "Reference" "D4"
 			(at 121.6025 201.93 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5388,7 +5923,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D5")
+					(reference "D4")
 					(unit 1)
 				)
 			)
@@ -5406,7 +5941,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "0765b7a0-30b1-43da-8cef-15fb5b79e615")
-		(property "Reference" "#PWR08"
+		(property "Reference" "#PWR01"
 			(at 35.56 135.89 0)
 			(hide yes)
 			(show_name no)
@@ -5466,7 +6001,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR08")
+					(reference "#PWR01")
 					(unit 1)
 				)
 			)
@@ -5484,7 +6019,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "07c3f566-4ef1-4128-9a40-fdf75ea9f8ba")
-		(property "Reference" "R4"
+		(property "Reference" "R7"
 			(at 130.81 172.72 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5546,7 +6081,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R4")
+					(reference "R7")
 					(unit 1)
 				)
 			)
@@ -5563,7 +6098,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "09556612-6cdf-4795-b630-25077cd32c5e")
-		(property "Reference" "#PWR02"
+		(property "Reference" "#PWR04"
 			(at 66.04 59.69 0)
 			(hide yes)
 			(show_name no)
@@ -5623,7 +6158,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR02")
+					(reference "#PWR04")
 					(unit 1)
 				)
 			)
@@ -5641,7 +6176,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "0cb68c87-80a5-4f89-ac51-0973fb3125e8")
-		(property "Reference" "#PWR017"
+		(property "Reference" "#PWR03"
 			(at 59.69 95.25 0)
 			(hide yes)
 			(show_name no)
@@ -5701,7 +6236,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR017")
+					(reference "#PWR03")
 					(unit 1)
 				)
 			)
@@ -5719,7 +6254,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "1ae2cf4b-019e-49d8-a10d-a4fe9780b0b7")
-		(property "Reference" "#PWR03"
+		(property "Reference" "#PWR02"
 			(at 54.61 45.72 0)
 			(hide yes)
 			(show_name no)
@@ -5779,7 +6314,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR03")
+					(reference "#PWR02")
 					(unit 1)
 				)
 			)
@@ -5797,7 +6332,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "250d861c-564a-437f-b68b-ff09fa77664c")
-		(property "Reference" "R2"
+		(property "Reference" "R1"
 			(at 209.55 143.5099 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5861,7 +6396,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R2")
+					(reference "R1")
 					(unit 1)
 				)
 			)
@@ -5879,7 +6414,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "2b618e8b-ab3b-4269-8407-f5450538375f")
-		(property "Reference" "D10"
+		(property "Reference" "D13"
 			(at 246.6975 195.58 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5952,7 +6487,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D10")
+					(reference "D13")
 					(unit 1)
 				)
 			)
@@ -5970,7 +6505,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "2cffc3fa-e6a8-4bd8-aebc-e97a46cd8d0f")
-		(property "Reference" "D12"
+		(property "Reference" "D15"
 			(at 246.6975 176.53 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6043,7 +6578,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D12")
+					(reference "D15")
 					(unit 1)
 				)
 			)
@@ -6061,7 +6596,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "2d0b5a7d-af89-47cf-91ff-d051686dd559")
-		(property "Reference" "J2"
+		(property "Reference" "J1"
 			(at 21.59 137.16 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6123,7 +6658,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "J2")
+					(reference "J1")
 					(unit 1)
 				)
 			)
@@ -6141,7 +6676,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "2df420ee-dee4-4846-996a-e1f83b5a3712")
-		(property "Reference" "R9"
+		(property "Reference" "R10"
 			(at 237.49 226.06 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6203,7 +6738,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R9")
+					(reference "R10")
 					(unit 1)
 				)
 			)
@@ -6221,7 +6756,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "2ed4d487-638b-4716-b6d5-93327c0f0dc1")
-		(property "Reference" "#PWR014"
+		(property "Reference" "#PWR011"
 			(at 116.84 57.15 0)
 			(hide yes)
 			(show_name no)
@@ -6281,7 +6816,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR014")
+					(reference "#PWR011")
 					(unit 1)
 				)
 			)
@@ -6299,7 +6834,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "3704ad25-9981-44c0-adb9-20193fcfabc8")
-		(property "Reference" "#PWR018"
+		(property "Reference" "#PWR012"
 			(at 119.38 231.14 0)
 			(hide yes)
 			(show_name no)
@@ -6359,7 +6894,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR018")
+					(reference "#PWR012")
 					(unit 1)
 				)
 			)
@@ -6377,7 +6912,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "406fbaa3-b343-4eb2-b154-e55839cedff2")
-		(property "Reference" "#PWR04"
+		(property "Reference" "#PWR010"
 			(at 110.49 162.56 0)
 			(hide yes)
 			(show_name no)
@@ -6437,7 +6972,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR04")
+					(reference "#PWR010")
 					(unit 1)
 				)
 			)
@@ -6455,7 +6990,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "436945ab-d055-4cf8-bcd6-63a1766477a2")
-		(property "Reference" "J4"
+		(property "Reference" "J5"
 			(at 219.456 33.274 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6517,7 +7052,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "J4")
+					(reference "J5")
 					(unit 1)
 				)
 			)
@@ -6535,7 +7070,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "444cc39a-d315-439b-8d28-8945e9f1e6cf")
-		(property "Reference" "R11"
+		(property "Reference" "R12"
 			(at 237.49 205.74 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6597,7 +7132,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R11")
+					(reference "R12")
 					(unit 1)
 				)
 			)
@@ -6615,7 +7150,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "44cd5b0e-7906-43a1-83cc-dd4033519375")
-		(property "Reference" "R3"
+		(property "Reference" "R8"
 			(at 130.81 162.56 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6677,7 +7212,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R3")
+					(reference "R8")
 					(unit 1)
 				)
 			)
@@ -6695,7 +7230,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "48e4bd78-aa67-4edc-bb53-2592cf5a5b43")
-		(property "Reference" "#FLG01"
+		(property "Reference" "#FLG02"
 			(at 58.42 53.975 0)
 			(hide yes)
 			(show_name no)
@@ -6755,7 +7290,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#FLG01")
+					(reference "#FLG02")
 					(unit 1)
 				)
 			)
@@ -6975,7 +7510,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "4ac2b33e-295f-494d-8cc1-08eee995978d")
-		(property "Reference" "R7"
+		(property "Reference" "R4"
 			(at 130.81 201.93 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7037,7 +7572,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R7")
+					(reference "R4")
 					(unit 1)
 				)
 			)
@@ -7055,8 +7590,8 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "542794a4-d70e-4566-ad69-f77bab8dc5db")
-		(property "Reference" "MOD_1"
-			(at 86.1656 29.21 0)
+		(property "Reference" "BUCK1"
+			(at 86.36 29.21 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7123,7 +7658,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "MOD_1")
+					(reference "BUCK1")
 					(unit 1)
 				)
 			)
@@ -7140,7 +7675,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "5e16a043-6506-4ee7-8230-6099ff72ad61")
-		(property "Reference" "#PWR011"
+		(property "Reference" "#PWR09"
 			(at 109.22 55.88 0)
 			(hide yes)
 			(show_name no)
@@ -7200,7 +7735,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR011")
+					(reference "#PWR09")
 					(unit 1)
 				)
 			)
@@ -7218,7 +7753,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "5f076912-c448-4023-9d1d-276831473abe")
-		(property "Reference" "R1"
+		(property "Reference" "R2"
 			(at 209.55 129.5399 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7282,7 +7817,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R1")
+					(reference "R2")
 					(unit 1)
 				)
 			)
@@ -7300,7 +7835,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "612e79e0-9ed3-4109-9f28-13c035b718a9")
-		(property "Reference" "#PWR01"
+		(property "Reference" "#PWR016"
 			(at 207.01 167.64 0)
 			(hide yes)
 			(show_name no)
@@ -7360,7 +7895,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR01")
+					(reference "#PWR016")
 					(unit 1)
 				)
 			)
@@ -7377,8 +7912,8 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "630fe99c-cd2e-45bd-a27f-1240fe4e10dc")
-		(property "Reference" "MOD_2"
-			(at 134.62 36.322 0)
+		(property "Reference" "BAT_CHG1"
+			(at 137.414 36.068 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7446,7 +7981,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "MOD_2")
+					(reference "BAT_CHG1")
 					(unit 1)
 				)
 			)
@@ -7464,8 +7999,8 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "6388bf4f-e6f2-4256-b02d-aec388c40057")
-		(property "Reference" "MOD_4"
-			(at 53.975 109.22 0)
+		(property "Reference" "OPTO1"
+			(at 53.34 110.49 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7535,7 +8070,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "MOD_4")
+					(reference "OPTO1")
 					(unit 1)
 				)
 			)
@@ -7553,7 +8088,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "659767e1-6d29-47f5-97b5-0b3232c7beaf")
-		(property "Reference" "R5"
+		(property "Reference" "R6"
 			(at 130.81 182.88 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7615,7 +8150,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R5")
+					(reference "R6")
 					(unit 1)
 				)
 			)
@@ -7633,7 +8168,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "6e648e02-2b22-4997-be8a-69dc490cae84")
-		(property "Reference" "R13"
+		(property "Reference" "R14"
 			(at 237.49 186.69 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7695,7 +8230,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R13")
+					(reference "R14")
 					(unit 1)
 				)
 			)
@@ -7703,7 +8238,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 127 109.22 0)
+		(at 124.46 101.6 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7713,8 +8248,8 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "7138274b-9c91-4250-bbb5-f1e0d2309a04")
-		(property "Reference" "#PWR05"
-			(at 127 115.57 0)
+		(property "Reference" "#PWR013"
+			(at 124.46 107.95 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7725,7 +8260,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 127 114.3 0)
+			(at 124.46 106.68 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7735,7 +8270,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 127 109.22 0)
+			(at 124.46 101.6 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7746,7 +8281,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 127 109.22 0)
+			(at 124.46 101.6 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7757,7 +8292,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 127 109.22 0)
+			(at 124.46 101.6 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7773,7 +8308,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR05")
+					(reference "#PWR013")
 					(unit 1)
 				)
 			)
@@ -7791,7 +8326,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "73d4e43c-5e02-4a8a-9056-45f09b6d378b")
-		(property "Reference" "R14"
+		(property "Reference" "R15"
 			(at 237.49 176.53 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7853,7 +8388,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R14")
+					(reference "R15")
 					(unit 1)
 				)
 			)
@@ -7871,7 +8406,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "7e40dee7-1117-494a-939c-7be6c07d9331")
-		(property "Reference" "R15"
+		(property "Reference" "R9"
 			(at 237.49 237.49 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7933,7 +8468,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R15")
+					(reference "R9")
 					(unit 1)
 				)
 			)
@@ -7951,7 +8486,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "83c2bf99-9846-4627-912f-8941412ffc3e")
-		(property "Reference" "#FLG02"
+		(property "Reference" "#FLG01"
 			(at 53.34 36.195 0)
 			(hide yes)
 			(show_name no)
@@ -8011,7 +8546,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#FLG02")
+					(reference "#FLG01")
 					(unit 1)
 				)
 			)
@@ -8029,7 +8564,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "846a63be-90ff-4200-a556-e3f562251334")
-		(property "Reference" "D7"
+		(property "Reference" "D10"
 			(at 246.6975 226.06 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8102,7 +8637,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D7")
+					(reference "D10")
 					(unit 1)
 				)
 			)
@@ -8120,7 +8655,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "85248e41-2423-461f-9f43-d28625269625")
-		(property "Reference" "D8"
+		(property "Reference" "D11"
 			(at 246.6975 215.9 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8193,7 +8728,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D8")
+					(reference "D11")
 					(unit 1)
 				)
 			)
@@ -8211,7 +8746,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "8a7691d2-b779-4c2b-9ef2-368ac459c33c")
-		(property "Reference" "D11"
+		(property "Reference" "D14"
 			(at 246.6975 186.69 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8284,7 +8819,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D11")
+					(reference "D14")
 					(unit 1)
 				)
 			)
@@ -8302,7 +8837,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "91cce32e-e5b1-446a-bda1-975635e07996")
-		(property "Reference" "R6"
+		(property "Reference" "R5"
 			(at 130.81 193.04 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8364,7 +8899,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R6")
+					(reference "R5")
 					(unit 1)
 				)
 			)
@@ -8382,7 +8917,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "9464b121-5ae1-4bb0-9289-a1058966120d")
-		(property "Reference" "D13"
+		(property "Reference" "D9"
 			(at 246.6975 237.49 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8455,7 +8990,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D13")
+					(reference "D9")
 					(unit 1)
 				)
 			)
@@ -8473,7 +9008,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "9cd7d832-eb41-43eb-a3ba-6c9dda9a97c0")
-		(property "Reference" "D6"
+		(property "Reference" "D3"
 			(at 121.6025 212.09 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8546,7 +9081,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D6")
+					(reference "D3")
 					(unit 1)
 				)
 			)
@@ -8564,7 +9099,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "9d7e8808-3d9b-4d5b-80e7-956a75d870df")
-		(property "Reference" "#PWR06"
+		(property "Reference" "#PWR05"
 			(at 69.85 45.72 0)
 			(hide yes)
 			(show_name no)
@@ -8624,7 +9159,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR06")
+					(reference "#PWR05")
 					(unit 1)
 				)
 			)
@@ -8642,7 +9177,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "9efb5e3f-2a0d-404e-ba1e-d419cd782ede")
-		(property "Reference" "R12"
+		(property "Reference" "R13"
 			(at 237.49 195.58 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8704,7 +9239,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R12")
+					(reference "R13")
 					(unit 1)
 				)
 			)
@@ -8712,7 +9247,7 @@
 	)
 	(symbol
 		(lib_id "Custom_Modules:BOOST_1")
-		(at 104.14 97.79 180)
+		(at 101.6 90.17 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8722,8 +9257,8 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "a063af36-c9bf-4144-aa63-82021b0726ef")
-		(property "Reference" "MOD_3"
-			(at 104.14 86.36 0)
+		(property "Reference" "BOOST1"
+			(at 100.965 78.74 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8733,7 +9268,7 @@
 			)
 		)
 		(property "Value" ""
-			(at 104.14 97.79 0)
+			(at 101.6 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8744,7 +9279,7 @@
 			)
 		)
 		(property "Footprint" "Custom_Modules:BOOST_1"
-			(at 104.14 97.79 0)
+			(at 101.6 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8755,7 +9290,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 104.14 97.79 0)
+			(at 101.6 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8766,7 +9301,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 104.14 97.79 0)
+			(at 101.6 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8791,7 +9326,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "MOD_3")
+					(reference "BOOST1")
 					(unit 1)
 				)
 			)
@@ -8809,7 +9344,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "a143703b-ac51-47a3-beda-550e961ac3ec")
-		(property "Reference" "D2"
+		(property "Reference" "D7"
 			(at 121.6025 172.72 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8882,7 +9417,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D2")
+					(reference "D7")
 					(unit 1)
 				)
 			)
@@ -8982,7 +9517,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "a5843bd1-58bf-455c-8133-17879d529191")
-		(property "Reference" "#PWR013"
+		(property "Reference" "#PWR014"
 			(at 153.67 57.15 0)
 			(hide yes)
 			(show_name no)
@@ -9042,7 +9577,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR013")
+					(reference "#PWR014")
 					(unit 1)
 				)
 			)
@@ -9060,7 +9595,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "b4a19b45-3330-44b5-b338-54070aaf8094")
-		(property "Reference" "#PWR010"
+		(property "Reference" "#PWR08"
 			(at 101.6 45.72 0)
 			(hide yes)
 			(show_name no)
@@ -9120,7 +9655,109 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR010")
+					(reference "#PWR08")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x09")
+		(at 99.06 138.43 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "bb92f1fc-73fb-4057-ba67-aebe17fcbdbe")
+		(property "Reference" "J3"
+			(at 98.044 121.92 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Conn_01x09"
+			(at 92.456 124.206 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x09_P2.54mm_Vertical"
+			(at 99.06 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 99.06 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x09, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 99.06 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a6a60abe-e4d4-4011-85c0-c9c0f146d0a9")
+		)
+		(pin "3"
+			(uuid "31c40a2c-68f6-4490-96a9-54aea2e6bd57")
+		)
+		(pin "8"
+			(uuid "2e096ac7-c0a8-484e-93e6-040519bbf997")
+		)
+		(pin "2"
+			(uuid "f6fe52a4-e953-48db-827c-6d5fb90b3992")
+		)
+		(pin "5"
+			(uuid "bc8d5e9c-149e-440b-9e44-607309889176")
+		)
+		(pin "7"
+			(uuid "d50d19ae-f76a-46ed-a0b8-df67dd675fc2")
+		)
+		(pin "6"
+			(uuid "16fd1282-32b2-4f62-81e9-73fbac07b7b0")
+		)
+		(pin "9"
+			(uuid "8be6ecf2-52a5-4b0d-aae6-85ff991c3c18")
+		)
+		(pin "4"
+			(uuid "ed9b8a25-f3e9-432c-a770-951c961b2528")
+		)
+		(instances
+			(project "tap_timer"
+				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
+					(reference "J3")
 					(unit 1)
 				)
 			)
@@ -9138,7 +9775,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "bd5ea730-0cef-4d0f-af87-960d9bfecf8c")
-		(property "Reference" "#PWR016"
+		(property "Reference" "#PWR018"
 			(at 223.52 154.94 0)
 			(hide yes)
 			(show_name no)
@@ -9198,7 +9835,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR016")
+					(reference "#PWR018")
 					(unit 1)
 				)
 			)
@@ -9294,7 +9931,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "c3f95b5f-28a7-457b-9825-363a95f344fb")
-		(property "Reference" "D3"
+		(property "Reference" "D6"
 			(at 121.6025 182.88 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9367,7 +10004,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D3")
+					(reference "D6")
 					(unit 1)
 				)
 			)
@@ -9385,7 +10022,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "c7136e9b-1219-457a-b189-51e1f0a800a8")
-		(property "Reference" "#PWR015"
+		(property "Reference" "#PWR017"
 			(at 214.63 48.26 0)
 			(hide yes)
 			(show_name no)
@@ -9445,7 +10082,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR015")
+					(reference "#PWR017")
 					(unit 1)
 				)
 			)
@@ -9541,7 +10178,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d314b6b0-4054-4693-a919-a884252189db")
-		(property "Reference" "D1"
+		(property "Reference" "D8"
 			(at 121.6025 162.56 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9614,7 +10251,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D1")
+					(reference "D8")
 					(unit 1)
 				)
 			)
@@ -9632,7 +10269,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d4edc333-5c55-4a45-a849-569f5de08871")
-		(property "Reference" "R8"
+		(property "Reference" "R3"
 			(at 130.81 212.09 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9694,7 +10331,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R8")
+					(reference "R3")
 					(unit 1)
 				)
 			)
@@ -9712,7 +10349,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d74d9761-9d3b-46df-9d8c-3e17421450da")
-		(property "Reference" "D9"
+		(property "Reference" "D12"
 			(at 246.6975 205.74 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9785,7 +10422,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D9")
+					(reference "D12")
 					(unit 1)
 				)
 			)
@@ -9803,7 +10440,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "df513c7f-606b-4cfc-8729-c9304568e9c8")
-		(property "Reference" "J3"
+		(property "Reference" "J4"
 			(at 116.84 121.92 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9913,7 +10550,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "J3")
+					(reference "J4")
 					(unit 1)
 				)
 			)
@@ -9931,7 +10568,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "e5f55a3c-db8d-4ae3-b3f8-a47a64fd69ea")
-		(property "Reference" "R10"
+		(property "Reference" "R11"
 			(at 237.49 215.9 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9993,7 +10630,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "R10")
+					(reference "R11")
 					(unit 1)
 				)
 			)
@@ -10011,7 +10648,7 @@
 		(in_pos_files yes)
 		(dnp no)
 		(uuid "ee11035a-1bdc-4c9e-b288-579263705448")
-		(property "Reference" "J1"
+		(property "Reference" "J2"
 			(at 45.72 38.1 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10073,7 +10710,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "J1")
+					(reference "J2")
 					(unit 1)
 				)
 			)
@@ -10091,7 +10728,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "f0289c94-ed93-46f8-8f53-f5f0a0e8a786")
-		(property "Reference" "#PWR012"
+		(property "Reference" "#PWR015"
 			(at 158.75 43.18 0)
 			(hide yes)
 			(show_name no)
@@ -10151,7 +10788,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR012")
+					(reference "#PWR015")
 					(unit 1)
 				)
 			)
@@ -10169,7 +10806,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "f7e55c01-d14b-4077-aa0b-d84625a6b4d4")
-		(property "Reference" "#PWR09"
+		(property "Reference" "#PWR06"
 			(at 72.39 132.08 0)
 			(hide yes)
 			(show_name no)
@@ -10229,7 +10866,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "#PWR09")
+					(reference "#PWR06")
 					(unit 1)
 				)
 			)
@@ -10247,7 +10884,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "f9082c21-7e9f-4d6d-8da6-3ccb9d3f7c27")
-		(property "Reference" "D4"
+		(property "Reference" "D5"
 			(at 121.6025 193.04 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10320,7 +10957,7 @@
 		(instances
 			(project "tap_timer"
 				(path "/c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
-					(reference "D4")
+					(reference "D5")
 					(unit 1)
 				)
 			)

@@ -696,7 +696,7 @@
         "uuid": "c006826f-e3dc-4ff5-8da7-c42a0a9fadb3"
       }
     ],
-    "used_designators": "D1-13,BT1,#PWR1-19,R1-15,#FLG1-2,J1-4,MOD_1-4,C1",
+    "used_designators": "D1-13,BT1,#PWR1-19,#FLG1-2,R1-15,J1-5,MOD_1-4,C1,BAT_CHG1,BOOST1,BUCK1,OPTO1,U1",
     "variants": []
   },
   "sheets": [
