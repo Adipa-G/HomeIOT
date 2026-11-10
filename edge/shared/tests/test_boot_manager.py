@@ -373,3 +373,108 @@ def test_rollback_keeps_current_config_when_config_backup_missing():
     assert state["boot_count"] == 0
     assert state["pending_app_changed"] is False
     assert state["pending_config_changed"] is False
+
+
+def test_discard_app_backup_removes_backup_of_confirmed_app():
+    fs = MockFileSystem()
+    manager = BootManager(fs=fs, system=MockSystem(), max_attempts=3)
+    fs.write_bytes("app_prev/edge/main.py", b"old")
+    manager.mark_success()
+
+    assert manager.discard_app_backup() is True
+    assert not fs.exists("app_prev")
+
+
+def test_discard_app_backup_keeps_backup_while_new_app_is_unconfirmed():
+    fs = MockFileSystem()
+    manager = BootManager(fs=fs, system=MockSystem(), max_attempts=3)
+    fs.write_bytes("app_prev/edge/main.py", b"old")
+    fs.write_text("boot_state.json", json.dumps({"pending_app_changed": True}))
+
+    assert manager.discard_app_backup() is False
+    assert fs.read_bytes("app_prev/edge/main.py") == b"old"
+
+
+def test_discard_app_backup_is_noop_without_backup():
+    manager = BootManager(fs=MockFileSystem(), system=MockSystem(), max_attempts=3)
+
+    assert manager.discard_app_backup() is False
+
+# ---------------------------------------------------------------- root entry points (boot.py/main.py)
+
+
+def _pending_app_state():
+    return json.dumps(
+        {
+            "boot_count": 0,
+            "current_version": "2.0.0",
+            "previous_version": "1.0.0",
+            "pending_app_changed": True,
+            "pending_config_changed": False,
+        }
+    )
+
+
+def test_set_new_version_installs_staged_entry_points_and_backs_up_outgoing_ones():
+    fs = MockFileSystem()
+    manager = BootManager(fs=fs, system=MockSystem(), max_attempts=3)
+    fs.write_bytes("main.py", b"main-v1")
+    fs.write_bytes("boot.py", b"boot-v1")
+    fs.write_bytes("app/edge/x.py", b"app-v1")
+    fs.write_bytes("app_staging/edge/x.py", b"app-v2")
+    fs.write_bytes("app_staging/_root/main.py", b"main-v2")
+    fs.write_bytes("app_staging/_root/boot.py", b"boot-v2")
+
+    manager.set_new_version("2.0.0")
+
+    assert fs.read_bytes("main.py") == b"main-v2"
+    assert fs.read_bytes("boot.py") == b"boot-v2"
+    assert fs.read_bytes("app/_root/main.py") == b"main-v2"
+    assert fs.read_bytes("app_prev/_root/main.py") == b"main-v1"
+    assert fs.read_bytes("app_prev/_root/boot.py") == b"boot-v1"
+
+
+def test_set_new_version_on_fresh_install_installs_entry_points_without_backup():
+    fs = MockFileSystem()
+    manager = BootManager(fs=fs, system=MockSystem(), max_attempts=3)
+    fs.write_bytes("main.py", b"installer")
+    fs.write_bytes("app_staging/edge/x.py", b"app-v1")
+    fs.write_bytes("app_staging/_root/main.py", b"main-v1")
+
+    manager.set_new_version("1.0.0")
+
+    assert fs.read_bytes("main.py") == b"main-v1"
+    assert not fs.exists("app_prev")
+
+
+def test_rollback_restores_entry_points_saved_with_previous_app():
+    fs = MockFileSystem()
+    system = MockSystem()
+    manager = BootManager(fs=fs, system=system, max_attempts=3)
+    fs.write_bytes("main.py", b"main-v2")
+    fs.write_bytes("boot.py", b"boot-v2")
+    fs.write_bytes("app/_root/main.py", b"main-v2")
+    fs.write_bytes("app_prev/edge/x.py", b"app-v1")
+    fs.write_bytes("app_prev/_root/main.py", b"main-v1")
+    fs.write_bytes("app_prev/_root/boot.py", b"boot-v1")
+    fs.write_text("boot_state.json", _pending_app_state())
+
+    manager.rollback()
+
+    assert fs.read_bytes("main.py") == b"main-v1"
+    assert fs.read_bytes("boot.py") == b"boot-v1"
+    assert fs.read_bytes("app/edge/x.py") == b"app-v1"
+    assert system.reset_calls == 1
+
+
+def test_rollback_keeps_entry_points_when_previous_app_has_no_backup():
+    fs = MockFileSystem()
+    manager = BootManager(fs=fs, system=MockSystem(), max_attempts=3)
+    fs.write_bytes("main.py", b"main-v2")
+    fs.write_bytes("app_prev/edge/x.py", b"app-v1")
+    fs.write_text("boot_state.json", _pending_app_state())
+
+    manager.rollback()
+
+    assert fs.read_bytes("main.py") == b"main-v2"
+    assert fs.read_bytes("app/edge/x.py") == b"app-v1"

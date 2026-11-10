@@ -93,6 +93,31 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task StreamReleaseAsync_StreamsRootEntryPointsAfterAllOtherFiles()
+    {
+        CreateRelease("pico", "1.1.0", new[]
+        {
+            ("boot.py", "h-boot"),
+            ("main.py", "h-main"),
+            ("config.json", "h-config"),
+            ("edge/shared/app/startup.py", "h-startup"),
+            ("edge/shared/app/updater.py", "h-updater"),
+        });
+
+        using var ms = new MemoryStream();
+        await CreateService().StreamReleaseAsync("pico", "1.1.0", ms);
+
+        var streamed = Encoding.ASCII.GetString(ms.ToArray())
+            .Split('\n')
+            .Where(line => line.StartsWith("FILE:", StringComparison.Ordinal))
+            .Select(line => line["FILE:".Length..])
+            .ToList();
+        Assert.Equal(
+            new[] { "config.json", "edge/shared/app/startup.py", "edge/shared/app/updater.py", "boot.py", "main.py" },
+            streamed);
+    }
+
+    [Fact]
     public async Task StreamReleaseAsync_WritesNothing_WhenReleaseHasNoManifest()
     {
         Directory.CreateDirectory(Path.Combine(_tempRoot, "esp32", "1.0.0"));
@@ -306,7 +331,9 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
 
         foreach (var item in manifest)
         {
-            File.WriteAllText(Path.Combine(releaseDir, item.Path), "print('" + item.Path + "')");
+            var filePath = Path.Combine(releaseDir, item.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            File.WriteAllText(filePath, "print('" + item.Path + "')");
         }
     }
 

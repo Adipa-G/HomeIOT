@@ -33,7 +33,13 @@ def run_control_loop(
     updater=None,
     max_iterations=None,
     clock=None,
+    ota_checked=False,
 ):
+    """Run the device main loop.
+
+    ota_checked: the caller already ran an OTA check, so wait one poll interval
+    before the next instead of checking again on the first iteration.
+    """
     if clock is None and hasattr(system, "sync_time"):
         clock = WallClock(system)
     mode = "production"
@@ -56,7 +62,7 @@ def run_control_loop(
     next_heartbeat_ms = 0
     next_dev_poll_ms = 0
     next_module_poll_ms = 0
-    next_ota_poll_ms = 0
+    next_ota_poll_ms = system.ticks_add(system.time_ms(), ota_poll_interval_ms) if ota_checked else 0
     next_network_retry_ms = 0
 
     last_dev_revision_hash = None

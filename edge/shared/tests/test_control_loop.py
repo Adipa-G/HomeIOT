@@ -1116,6 +1116,67 @@ def test_control_loop_does_not_check_ota_when_network_disconnected():
     assert updater.check_calls == 0
 
 
+def test_control_loop_waits_one_interval_when_ota_already_checked():
+    system = _FakeSystem()
+    config = _config()
+    config.ota_poll_interval_ms = 1000
+    updater = _FakeUpdater(update_info=None)
+
+    run_control_loop(
+        system=system,
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=_FakeModuleRuntime(),
+        logger=_FakeLogger(),
+        config=config,
+        updater=updater,
+        max_iterations=1,
+        ota_checked=True,
+    )
+
+    assert updater.check_calls == 0
+
+
+def test_control_loop_checks_ota_after_interval_when_already_checked():
+    system = _FakeSystem()
+    config = _config()
+    config.ota_poll_interval_ms = 1000
+    updater = _FakeUpdater(update_info=None)
+
+    run_control_loop(
+        system=system,
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=_FakeModuleRuntime(),
+        logger=_FakeLogger(),
+        config=config,
+        updater=updater,
+        max_iterations=50,
+        ota_checked=True,
+    )
+
+    assert updater.check_calls >= 1
+
+
+def test_control_loop_checks_ota_on_first_iteration_by_default():
+    system = _FakeSystem()
+    config = _config()
+    updater = _FakeUpdater(update_info=None)
+
+    run_control_loop(
+        system=system,
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=_FakeModuleRuntime(),
+        logger=_FakeLogger(),
+        config=config,
+        updater=updater,
+        max_iterations=1,
+    )
+
+    assert updater.check_calls == 1
+
+
 
 # Radio-off light sleep tests
 

@@ -4,6 +4,11 @@ from edge.shared.app.config import CONFIG_PATH, CONFIG_PREV_PATH, CONFIG_STAGING
 from edge.shared.hal.interfaces import IFileSystem, ISystem
 from edge.shared.app.safe_io import atomic_write_bytes, atomic_write_text
 
+# OTA stages the root entry points (boot.py, main.py) in this folder inside the app
+# tree. They are copied to the filesystem root only when the app is swapped, and the
+# outgoing ones are saved in app_prev, so entry points always match the app version.
+ROOT_FILES_DIR = "_root"
+
 
 class BootManager:
     def __init__(
@@ -59,6 +64,20 @@ class BootManager:
     def get_state(self):
         return self._load_state()
 
+    def discard_app_backup(self) -> bool:
+        """Delete app_prev once the running app is confirmed, freeing flash for OTA staging.
+
+        Rollback only restores app_prev while pending_app_changed is set, which
+        mark_success() clears, so a confirmed app's backup can never be used.
+        """
+        if not self._fs.exists(self._app_prev_path):
+            return False
+        if self._load_state().get("pending_app_changed"):
+            return False
+        self._remove_tree(self._app_prev_path)
+        self._log_info("Discarded confirmed app backup", {"path": self._app_prev_path})
+        return True
+
     def mark_success(self) -> None:
         state = self._load_state()
         state["boot_count"] = 0
@@ -77,9 +96,13 @@ class BootManager:
 
         if app_staged:
             self._remove_tree(self._app_prev_path)
-            if self._fs.exists(self._app_path):
+            had_app = self._fs.exists(self._app_path)
+            if had_app:
                 self._fs.rename(self._app_path, self._app_prev_path)
             self._fs.rename(self._app_staging_path, self._app_path)
+            if had_app:
+                self._backup_root_files(self._app_prev_path)
+            self._install_root_files(self._app_path)
 
         self._promote_config()
 
@@ -116,6 +139,8 @@ class BootManager:
             if has_app_backup:
                 self._remove_tree(self._app_path)
                 self._fs.rename(self._app_prev_path, self._app_path)
+                if not self._install_root_files(self._app_path):
+                    self._log_warn("Restored app has no boot.py/main.py backup; keeping current entry points")
                 state["current_version"] = state.get("previous_version") or state.get("current_version")
             else:
                 # No backup exists (e.g. first OTA from a freshly-deployed device).
@@ -199,6 +224,24 @@ class BootManager:
 
         self._remove_tree(self._config_path)
         self._fs.rename(self._config_prev_path, self._config_path)
+
+    def _backup_root_files(self, app_dir: str) -> None:
+        """Save the live boot.py/main.py with the outgoing app so rollback can restore them."""
+        backup_dir = self._join(app_dir, ROOT_FILES_DIR)
+        for name in ("boot.py", "main.py"):
+            if self._fs.exists(name):
+                if not self._fs.exists(backup_dir):
+                    self._fs.makedirs(backup_dir)
+                atomic_write_bytes(self._fs, self._join(backup_dir, name), self._fs.read_bytes(name))
+
+    def _install_root_files(self, app_dir: str) -> bool:
+        """Copy the app's staged boot.py/main.py to the filesystem root. Returns False if it has none."""
+        source_dir = self._join(app_dir, ROOT_FILES_DIR)
+        if not self._fs.exists(source_dir):
+            return False
+        for name in self._fs.listdir(source_dir):
+            atomic_write_bytes(self._fs, name, self._fs.read_bytes(self._join(source_dir, name)))
+        return True
 
     def _copy_tree(self, src: str, dst: str) -> None:
         if self._fs.is_dir(src):
