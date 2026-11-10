@@ -1,6 +1,6 @@
 """Tests for MicroPythonNetwork.connect() disconnect-before-reconnect logic."""
 
-from edge.shared.hal.network import MicroPythonNetwork
+from edge.shared.hal.network import MicroPythonNetwork, sanitize_hostname
 from edge.platforms.esp32.hal.network import MicroPythonNetwork as Esp32Network
 
 
@@ -291,3 +291,60 @@ def test_set_country_returns_false_when_setter_fails(monkeypatch):
     _install_network_module(monkeypatch, country=_fail)
 
     assert MicroPythonNetwork().set_country("AU") is False
+
+
+def test_sanitize_hostname_replaces_unsupported_characters():
+    assert sanitize_hostname("Kitchen_Sensor #1") == "kitchen-sensor-1"
+    assert sanitize_hostname("--a..b--") == "a-b"
+    assert sanitize_hostname("___") == ""
+    assert sanitize_hostname(None) == ""
+
+
+def test_sanitize_hostname_truncates_without_trailing_hyphen():
+    assert sanitize_hostname("a" * 31 + "-bcd") == "a" * 31
+    assert len(sanitize_hostname("x" * 100)) == 32
+
+
+def test_set_hostname_uses_network_hostname(monkeypatch):
+    import sys
+    import types
+
+    calls = []
+    network_mod = types.ModuleType("network")
+    network_mod.hostname = calls.append
+    monkeypatch.setitem(sys.modules, "network", network_mod)
+
+    assert MicroPythonNetwork().set_hostname("Pico_Garage") is True
+    assert calls == ["pico-garage"]
+
+
+def test_set_hostname_falls_back_to_wlan_config(monkeypatch):
+    import sys
+    import types
+
+    monkeypatch.setitem(sys.modules, "network", types.ModuleType("network"))
+
+    class _HostnameWlan:
+        def __init__(self):
+            self.values = {}
+
+        def config(self, **kwargs):
+            if "dhcp_hostname" in kwargs:
+                raise ValueError("unknown config param")
+            self.values.update(kwargs)
+
+    wlan = _HostnameWlan()
+    net = _make_network(wlan)
+
+    assert net.set_hostname("esp32.lounge") is True
+    assert wlan.values == {"hostname": "esp32-lounge"}
+
+
+def test_set_hostname_rejects_empty_name(monkeypatch):
+    calls = []
+    _install_network_module(monkeypatch)
+    import sys
+    sys.modules["network"].hostname = calls.append
+
+    assert MicroPythonNetwork().set_hostname("!!!") is False
+    assert calls == []

@@ -5,9 +5,14 @@ class MockNetwork:
         self.connect_calls = []
         self.suspend_calls = 0
         self.country = None
+        self.hostname = None
 
     def set_country(self, country: str) -> bool:
         self.country = country
+        return True
+
+    def set_hostname(self, name: str) -> bool:
+        self.hostname = name
         return True
 
     def connect(self, ssid: str, password: str, timeout_ms: int = 15000) -> None:

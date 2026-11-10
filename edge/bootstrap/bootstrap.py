@@ -66,6 +66,9 @@ def connect_wifi(network, system, config, logger, attempts=WIFI_CONNECT_ATTEMPTS
     country = getattr(config, "wifi_country", None)
     if country and hasattr(network, "set_country") and not network.set_country(country):
         logger.warn("WiFi country not applied", {"country": country})
+    device_id = getattr(config, "device_id", None)
+    if device_id and hasattr(network, "set_hostname") and not network.set_hostname(device_id):
+        logger.warn("WiFi hostname not applied", {"device_id": device_id})
     last_error = None
     for attempt in range(1, attempts + 1):
         logger.info("Connecting to WiFi", {"ssid": config.wifi_ssid, "attempt": attempt})

@@ -1,4 +1,5 @@
 import ast
+import functools
 import hashlib
 import json
 import os
@@ -210,6 +211,8 @@ def test_bundle_covers_bootstrap_import_closure():
 
 def test_extract_payload_writes_embedded_files(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    # MicroPython always uses UTF-8; CPython on Windows would default to cp1252.
+    monkeypatch.setattr(loader, "open", functools.partial(open, encoding="utf-8"), raising=False)
     provision = _provision()
     Path("main.py").write_text(_build_script(provision), encoding="utf-8")
 
@@ -418,6 +421,15 @@ def test_connect_wifi_skips_country_when_not_configured():
     connect_wifi(network, MockSystem(), config, _SilentLogger())
 
     assert network.country is None
+
+
+def test_connect_wifi_sets_hostname_from_device_id():
+    config = _loaded_config()
+    network = MockNetwork()
+
+    connect_wifi(network, MockSystem(), config, _SilentLogger())
+
+    assert network.hostname == config.device_id
 
 
 def test_build_device_config_defaults_wifi_country_to_au():

@@ -1,5 +1,19 @@
 from edge.shared.hal.interfaces import INetwork
 
+# MicroPython ports cap the hostname at 32 bytes (MICROPY_PY_NETWORK_HOSTNAME_MAX_LEN).
+HOSTNAME_MAX_LEN = 32
+
+
+def sanitize_hostname(value, max_len=HOSTNAME_MAX_LEN) -> str:
+    """Convert value into an RFC 1123 hostname label (a-z, 0-9, '-')."""
+    chars = []
+    for ch in str(value or "").lower():
+        if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
+            chars.append(ch)
+        elif chars and chars[-1] != "-":
+            chars.append("-")
+    return "".join(chars)[:max_len].strip("-")
+
 
 class MicroPythonNetwork(INetwork):
     _POWER_SAVE_CONSTANTS = {
@@ -78,6 +92,33 @@ class MicroPythonNetwork(INetwork):
             return True
         except Exception:
             return False
+
+    def set_hostname(self, name: str) -> bool:
+        hostname = sanitize_hostname(name)
+        if not hostname:
+            return False
+        try:
+            import network
+        except ImportError:  # pragma: no cover - desktop fallback
+            return False
+        setter = getattr(network, "hostname", None)
+        if callable(setter):
+            try:
+                setter(hostname)
+                return True
+            except Exception:
+                pass
+        # Firmware older than v1.20 only exposes it through WLAN.config().
+        config = getattr(self._get_wlan(), "config", None)
+        if not callable(config):
+            return False
+        for key in ("dhcp_hostname", "hostname"):
+            try:
+                config(**{key: hostname})
+                return True
+            except Exception:
+                pass
+        return False
 
     @staticmethod
     def _read_status(wlan):
