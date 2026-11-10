@@ -68,6 +68,7 @@ def test_defaults_when_no_variables_assigned():
     assert mod["RAIN_THRESHOLD_LAST_12H"] == 100
     assert mod["UTC_OFFSET_MINUTES"] == 600
     assert mod["USE_AU_DST"] is True
+    assert mod["TURN_VALVE_ON_MANUALLY"] is False
 
 
 def test_assigned_variables_override_defaults():
@@ -75,10 +76,12 @@ def test_assigned_variables_override_defaults():
         "VALVE_START_TIME": "06:30",
         "VALVE_RUN_DURATION_MINUTES": "25",
         "RAIN_THRESHOLD_LAST_12H": "300",
+        "TURN_VALVE_ON_MANUALLY": "true",
     })
     assert mod["VALVE_START_TIME"] == "06:30"
     assert mod["VALVE_RUN_DURATION_MINUTES"] == 25
     assert mod["RAIN_THRESHOLD_LAST_12H"] == 300
+    assert mod["TURN_VALVE_ON_MANUALLY"] is True
 
 
 # -- Time helpers --------------------------------------------------------------
@@ -265,6 +268,7 @@ class _FakePin:
 
     def value(self, new_value=None):
         if new_value is None:
+            self._machine.reads.append((self.pin_id, self._machine.outputs.get(4)))
             return self._machine.input_values.get(self.pin_id, 1)
         self._machine.outputs[self.pin_id] = new_value
         return None
@@ -276,12 +280,15 @@ class _FakeAdc:
         self._pin_id = pin.pin_id
 
     def read_u16(self):
+        self._machine.reads.append((self._pin_id, self._machine.outputs.get(4)))
         return self._machine.adc_values[self._pin_id]
 
 
 def _fake_machine(adc_values, input_values=None):
     machine = types.ModuleType("machine")
     machine.outputs = {}
+    # (pin_id, rain sensor power state at the time of the read)
+    machine.reads = []
     machine.adc_values = adc_values
     machine.input_values = input_values or {}
 
@@ -328,7 +335,7 @@ def test_run_opens_valve_and_reports_readings(rp2):
     assert result["battery_voltage"] == pytest.approx(3.3, abs=0.01)
     assert result["rain_wetness"] == 0
     assert result["rain_digital_wet"] is False
-    assert machine.outputs == {0: 1, 2: 0, 3: 0}
+    assert machine.outputs == {0: 1, 2: 0, 3: 0, 4: 0}
 
 
 def test_run_keeps_rain_history_between_runs(rp2):
@@ -347,7 +354,7 @@ def test_run_keeps_rain_history_between_runs(rp2):
     result = mod["run"]({})
     assert result["rain_peak_12h"] == 1023
     assert result["valve_open"] is False
-    assert machine.outputs == {0: 0, 2: 1, 3: 1}
+    assert machine.outputs == {0: 0, 2: 1, 3: 1, 4: 0}
 
 
 def test_run_keeps_valve_closed_until_clock_synced(rp2):
@@ -369,3 +376,63 @@ def test_run_closes_valve_on_error(rp2):
     assert result["success"] is False
     assert "VALVE_START_TIME" in result["error"]
     assert machine.outputs[0] == 0
+
+
+def test_run_powers_rain_sensor_only_while_reading(rp2):
+    machine = rp2({26: 32768, 27: 65535}, {1: 1})
+    mod = _load()
+    mod["_utc_now"] = lambda: _local_summer(15, 12)
+    mod["run"]({})
+    reads = dict(machine.reads)
+    assert reads[27] == 1
+    assert reads[1] == 1
+    assert reads[26] in (None, 0)
+    assert machine.outputs[4] == 0
+
+
+def test_run_powers_off_rain_sensor_when_read_fails(rp2):
+    machine = rp2({26: 32768})
+    mod = _load()
+    mod["_utc_now"] = lambda: _local_summer(15, 17, 1)
+    result = mod["run"]({})
+    assert result["success"] is False
+    assert machine.outputs[4] == 0
+    assert machine.outputs[0] == 0
+
+
+def test_manual_override_opens_valve_outside_window_and_despite_rain(rp2):
+    machine = rp2({26: 40000, 27: 0}, {1: 0})
+    mod = _load({"TURN_VALVE_ON_MANUALLY": "true"})
+    mod["_utc_now"] = lambda: _local_summer(15, 12)
+    result = mod["run"]({})
+    assert result["success"] is True
+    assert result["manual_override"] is True
+    assert result["scheduled_open"] is False
+    assert result["valve_open"] is True
+    assert result["rain_threshold_exceeded"] is True
+    assert machine.outputs[0] == 1
+
+
+def test_manual_override_off_returns_to_schedule(rp2):
+    machine = rp2({26: 40000, 27: 65535}, {1: 1})
+    mod = _load({"TURN_VALVE_ON_MANUALLY": "true"})
+    mod["_utc_now"] = lambda: _local_summer(15, 12)
+    mod["run"]({})
+    assert machine.outputs[0] == 1
+
+    mod = _load({"TURN_VALVE_ON_MANUALLY": "false"})
+    mod["_utc_now"] = lambda: _local_summer(15, 12, 1)
+    result = mod["run"]({})
+    assert result["manual_override"] is False
+    assert result["valve_open"] is False
+    assert machine.outputs[0] == 0
+
+
+def test_manual_override_works_before_clock_synced(rp2):
+    machine = rp2({26: 40000, 27: 65535})
+    mod = _load({"TURN_VALVE_ON_MANUALLY": "true"})
+    mod["_utc_now"] = lambda: None
+    result = mod["run"]({})
+    assert result["success"] is True
+    assert result["valve_open"] is True
+    assert machine.outputs[0] == 1

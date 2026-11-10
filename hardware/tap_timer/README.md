@@ -15,6 +15,9 @@ On each run the module:
 
 - Reads the battery voltage from GPIO 26. This pin gets half of VSYS through a
   divider, so the voltage is doubled.
+- Powers the rain sensor from GPIO 4 only while taking a reading, so the
+  probe doesn't corrode. It waits 100 ms for the sensor to settle, reads it,
+  then switches the power off again, even if the read fails.
 - Reads the rain sensor's analog output on GPIO 27 as a wetness value from
   0 (dry) to 1023 (soaked). It also reads the digital output on GPIO 1, which
   is low while wet. The digital reading is only reported.
@@ -29,6 +32,10 @@ On each run the module:
     raining.
 - Keeps the valve closed until the clock is synced, and closes it if the run
   fails.
+- Opens the valve on the next run when `TURN_VALVE_ON_MANUALLY` is set to
+  `true`. This ignores the schedule, rain and clock sync. The valve stays open
+  until the variable is set back to `false`, then the schedule takes over
+  again. Rain is still tracked while it's on.
 
 ### Indicator LEDs
 
@@ -53,6 +60,7 @@ default is used.
 | `RAIN_THRESHOLD_LAST_12H`    | `100`     | Peak wetness (0-1023) in the last 12 hours that skips watering. |
 | `UTC_OFFSET_MINUTES`         | `600`     | Standard-time offset from UTC. |
 | `USE_AU_DST`                 | `true`    | Apply Australian daylight saving (first Sunday in October to first Sunday in April). |
+| `TURN_VALVE_ON_MANUALLY`     | `false`   | Hold the valve open regardless of schedule and rain. Use a boolean variable with a toggle control. |
 
 ## PCB design and power
 

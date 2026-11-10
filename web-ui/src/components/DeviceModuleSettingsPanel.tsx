@@ -84,7 +84,8 @@ export const DeviceModuleSettingsPanel: React.FC<DeviceModuleSettingsPanelProps>
     onError: () => toast('Failed to update variables', 'error'),
   });
 
-  const controllableVars = variableDefs.filter((v) => v.control_type);
+  // Server-computed variables are never user-editable, so no input is rendered for them.
+  const controllableVars = variableDefs.filter((v) => v.control_type && !v.has_server_code);
 
   if (controllableVars.length === 0) {
     return (

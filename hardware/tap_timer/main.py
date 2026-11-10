@@ -3,6 +3,7 @@ import time
 
 # --- PIN CONFIGURATION ---
 VOLTAGE_SENSOR_PIN = 26
+RAIN_SENSOR_ACTIVATION_PIN = 4
 RAIN_ANALOG_SENSOR_PIN = 27
 RAIN_DIGITAL_SENSOR_PIN = 1
 VALVE_CONTROL_PIN = 0
@@ -32,6 +33,10 @@ try:
     USE_AU_DST
 except NameError:
     USE_AU_DST = True
+try:
+    TURN_VALVE_ON_MANUALLY
+except NameError:
+    TURN_VALVE_ON_MANUALLY = False
 
 # --- CONSTANTS ---
 VSYS_DIVIDER_RATIO = 2.0
@@ -39,6 +44,7 @@ ADC_REFERENCE_VOLTAGE = 3.3
 WETNESS_SCALE_MAX = 1023
 RAIN_WINDOW_SECONDS = 12 * 3600
 RAIN_BUCKET_SECONDS = 600
+RAIN_SENSOR_SETTLE_SECONDS = 0.1
 MIN_SYNCED_YEAR = 2024
 
 # Modules are re-executed on every run, so in-memory state lives in sys.modules
@@ -217,6 +223,22 @@ def _evaluate(state, now_s, wetness, start_minutes, duration_minutes, threshold)
     }
 
 
+def _read_rain_sensor(machine):
+    """Power the sensor only while reading so the probe doesn't corrode.
+
+    Returns (raw_u16, digital_wet). The digital output is pulled low while wet.
+    """
+    power = machine.Pin(RAIN_SENSOR_ACTIVATION_PIN, machine.Pin.OUT)
+    power.value(1)
+    try:
+        time.sleep(RAIN_SENSOR_SETTLE_SECONDS)
+        raw = machine.ADC(machine.Pin(RAIN_ANALOG_SENSOR_PIN)).read_u16()
+        digital = machine.Pin(RAIN_DIGITAL_SENSOR_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+        return raw, digital.value() == 0
+    finally:
+        power.value(0)
+
+
 def run(ctx):
     platform = sys.platform
     if platform != "rp2":
@@ -236,20 +258,19 @@ def run(ctx):
 
         voltage_raw = machine.ADC(machine.Pin(VOLTAGE_SENSOR_PIN)).read_u16()
         battery_voltage = round(voltage_raw * ADC_REFERENCE_VOLTAGE * VSYS_DIVIDER_RATIO / 65535, 3)
-        rain_raw = machine.ADC(machine.Pin(RAIN_ANALOG_SENSOR_PIN)).read_u16()
+        rain_raw, rain_digital_wet = _read_rain_sensor(machine)
         wetness = _wetness(rain_raw)
-        # The sensor's digital output is pulled low while wet.
-        rain_digital = machine.Pin(RAIN_DIGITAL_SENSOR_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
-        rain_digital_wet = rain_digital.value() == 0
+        manual = bool(TURN_VALVE_ON_MANUALLY)
 
         now_s = _utc_now()
         if now_s is None:
-            valve.value(0)
+            valve.value(1 if manual else 0)
             return {
-                "success": False,
+                "success": manual,
                 "platform": platform,
-                "error": "Clock not synced; valve kept closed.",
-                "valve_open": False,
+                "error": None if manual else "Clock not synced; valve kept closed.",
+                "valve_open": manual,
+                "manual_override": manual,
                 "battery_voltage": battery_voltage,
                 "rain_wetness": wetness,
                 "rain_digital_wet": rain_digital_wet,
@@ -265,7 +286,8 @@ def run(ctx):
             threshold,
         )
 
-        valve.value(1 if result["valve_open"] else 0)
+        valve_open = manual or result["valve_open"]
+        valve.value(1 if valve_open else 0)
         rain_indicator.value(1 if result["rain_threshold_exceeded"] else 0)
         not_run_indicator.value(1 if result["valve_not_run_today"] else 0)
 
@@ -275,7 +297,9 @@ def run(ctx):
             "platform": platform,
             "now_utc": _iso(now_s),
             "local_time": "%02d:%02d" % ((local_s % 86400) // 3600, (local_s % 3600) // 60),
-            "valve_open": result["valve_open"],
+            "valve_open": valve_open,
+            "manual_override": manual,
+            "scheduled_open": result["valve_open"],
             "valve_start_time": VALVE_START_TIME,
             "valve_run_duration_minutes": VALVE_RUN_DURATION_MINUTES,
             "current_window_start_utc": _iso(result["current_window_start"]),

@@ -68,6 +68,45 @@ describe('DeviceModuleSettingsPanel', () => {
     expect(checkbox.checked).toBe(true);
   });
 
+  it('does not render inputs for server-computed variables', async () => {
+    const variableDefs: ModuleVariableDefItem[] = [
+      {
+        name: 'threshold',
+        type: 'number',
+        default_value: '25',
+        description: 'Threshold',
+        has_server_code: false,
+        control_type: 'text',
+      },
+      {
+        name: 'computed',
+        type: 'number',
+        default_value: '1',
+        description: 'Computed value',
+        has_server_code: true,
+        control_type: 'text',
+      },
+    ];
+    vi.mocked(api.get).mockResolvedValue([
+      { variable_name: 'threshold', value: '25', source: 'default' },
+      { variable_name: 'computed', value: '1', source: 'default' },
+    ]);
+
+    renderWithProviders(
+      <DeviceModuleSettingsPanel
+        moduleId="sensor-reader"
+        assignmentId="a1"
+        variableDefs={variableDefs}
+        variableValues={[]}
+        showInDashboard={true}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Threshold')).toBeInTheDocument();
+    expect(screen.queryByText('Computed value')).not.toBeInTheDocument();
+  });
+
   it('sends a PUT request when the toggle is changed', async () => {
     vi.mocked(api.get).mockResolvedValue([]);
     vi.mocked(api.put).mockResolvedValue({});

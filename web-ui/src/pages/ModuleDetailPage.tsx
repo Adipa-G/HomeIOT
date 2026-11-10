@@ -46,7 +46,7 @@ export default function ModuleDetailPage() {
   const [varDefaultValue, setVarDefaultValue] = useState('');
   const [varDescription, setVarDescription] = useState('');
   const [varServerCode, setVarServerCode] = useState('');
-  const [varControlType, setVarControlType] = useState<string>('');
+  const [varControlType, setVarControlType] = useState<string>('text');
   const [varControlOptions, setVarControlOptions] = useState('');
   const [varError, setVarError] = useState('');
   const [showVariableForm, setShowVariableForm] = useState(false);
@@ -167,7 +167,8 @@ export default function ModuleDetailPage() {
         default_value: varDefaultValue.trim() === '' ? null : varDefaultValue,
         description: varDescription.trim() === '' ? null : varDescription,
         server_code: varServerCode.trim() === '' ? null : varServerCode,
-        control_type: varControlType || null,
+        // control_type marks a variable as an input; without it the variable is treated as an output.
+        control_type: varControlType || 'text',
         control_options: controlOptions,
       };
       return api.put<ModuleVariableDefItem>(
@@ -363,7 +364,7 @@ export default function ModuleDetailPage() {
     setVarDefaultValue('');
     setVarDescription('');
     setVarServerCode('');
-    setVarControlType('');
+    setVarControlType('text');
     setVarControlOptions('');
     setVarError('');
   };
@@ -396,7 +397,7 @@ export default function ModuleDetailPage() {
     setVarDefaultValue(v.default_value ?? '');
     setVarDescription(v.description ?? '');
     setVarServerCode(v.server_code ?? '');
-    setVarControlType(v.control_type ?? '');
+    setVarControlType(v.control_type || 'text');
     setVarControlOptions(Array.isArray(v.control_options) ? JSON.stringify(v.control_options) : '');
     setVarError('');
     setShowVariableForm(true);
@@ -681,7 +682,7 @@ export default function ModuleDetailPage() {
                           <tr key={v.name} className="hover:bg-gray-50">
                             <td className="px-4 py-3 font-mono">{v.name}</td>
                             <td className="px-4 py-3">{v.type}</td>
-                            <td className="px-4 py-3 text-xs">{v.control_type ? `${v.control_type}` : '—'}</td>
+                            <td className="px-4 py-3 text-xs">{v.has_server_code ? 'server' : (v.control_type ?? '—')}</td>
                             <td className="px-4 py-3">{v.has_server_code ? 'Yes' : 'No'}</td>
                             <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                               <button
@@ -796,34 +797,39 @@ export default function ModuleDetailPage() {
                       />
                     </div>
                     <hr className="my-2" />
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label htmlFor="var-control-type" className="mb-1 block text-xs text-gray-600">Control type (optional)</label>
-                        <select
-                          id="var-control-type"
-                          value={varControlType}
-                          onChange={(e) => setVarControlType(e.target.value)}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                        >
-                          <option value="">— none —</option>
-                          <option value="text">text input</option>
-                          <option value="dropdown">dropdown</option>
-                          <option value="toggle">toggle</option>
-                        </select>
-                      </div>
-                      {varControlType === 'dropdown' && (
+                    {varServerCode.trim() ? (
+                      <p className="text-xs text-gray-600">
+                        This variable is computed by the server, so no input control is shown on devices.
+                      </p>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label htmlFor="var-control-options" className="mb-1 block text-xs text-gray-600">Dropdown options (JSON array)</label>
-                          <input
-                            id="var-control-options"
-                            value={varControlOptions}
-                            onChange={(e) => setVarControlOptions(e.target.value)}
-                            placeholder='["Option1", "Option2", "Option3"]'
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-mono"
-                          />
+                          <label htmlFor="var-control-type" className="mb-1 block text-xs text-gray-600">Control type</label>
+                          <select
+                            id="var-control-type"
+                            value={varControlType}
+                            onChange={(e) => setVarControlType(e.target.value)}
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                          >
+                            <option value="text">text input</option>
+                            <option value="dropdown">dropdown</option>
+                            <option value="toggle">toggle</option>
+                          </select>
                         </div>
-                      )}
-                    </div>
+                        {varControlType === 'dropdown' && (
+                          <div>
+                            <label htmlFor="var-control-options" className="mb-1 block text-xs text-gray-600">Dropdown options (JSON array)</label>
+                            <input
+                              id="var-control-options"
+                              value={varControlOptions}
+                              onChange={(e) => setVarControlOptions(e.target.value)}
+                              placeholder='["Option1", "Option2", "Option3"]'
+                              className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-mono"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex gap-2 pt-2">
                       <button
                         type="button"
