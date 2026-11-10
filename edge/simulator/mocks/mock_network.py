@@ -37,6 +37,10 @@ class SimulatorNetwork(INetwork):
         """Accept any country code; the simulator has no radio."""
         return True
 
+    def set_hostname(self, name: str) -> bool:
+        """Accept any hostname; the simulator has no radio."""
+        return True
+
     def suspend(self) -> None:
         """Simulate powering the radio down; connect() restores it."""
         self._connected = False

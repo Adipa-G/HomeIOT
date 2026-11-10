@@ -63,6 +63,10 @@ class INetwork:
         """Set the Wi-Fi regulatory country (ISO 3166 alpha-2). Returns False if unsupported."""
         raise NotImplementedError()
 
+    def set_hostname(self, name: str) -> bool:
+        """Set the DHCP hostname (sanitized). Call before connect(). Returns False if unsupported."""
+        raise NotImplementedError()
+
     def suspend(self) -> None:
         """Disconnect and power down the radio. connect() brings it back up."""
         raise NotImplementedError()

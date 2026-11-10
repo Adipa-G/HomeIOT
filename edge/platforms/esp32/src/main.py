@@ -57,6 +57,9 @@ def run_main() -> None:
         else:
             logger.warn("WiFi country not applied", {"country": config.wifi_country})
 
+    if not network.set_hostname(config.device_id):
+        logger.warn("WiFi hostname not applied", {"device_id": config.device_id})
+
     logger.info("Attempting WiFi connection", {"ssid": config.wifi_ssid})
     try:
         network.connect(config.wifi_ssid, config.wifi_password)
