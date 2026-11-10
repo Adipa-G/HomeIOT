@@ -2,6 +2,7 @@ from edge.shared.app.config import Config
 from edge.shared.app.utc_time import epoch_to_datetime, iso_to_epoch
 from edge.shared.app.wall_clock import WallClock
 from edge.shared.app.control_loop import (
+    _ControlLoop,
     _ensure_network_connected,
     _requested_network_power_mode,
     run_control_loop,
@@ -1678,3 +1679,145 @@ def test_regular_sleep_does_not_touch_hardware_clock():
     _run_sync(system, _FakeNetwork(connected=True), iterations=2)
 
     assert system.rtc_writes == []
+
+
+# ---------------------------------------------------------------- _ControlLoop steps
+
+
+def _loop(**overrides):
+    deps = {
+        "system": _FakeSystem(),
+        "presence": _FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
+        "device_control": _FakeDeviceControl(assignment=None),
+        "module_runtime": _FakeModuleRuntime(),
+        "logger": _FakeLogger(),
+        "config": _config(),
+        "network": None,
+        "watchdog": None,
+        "updater": None,
+        "clock": None,
+        "ota_checked": False,
+    }
+    deps.update(overrides)
+    return _ControlLoop(**deps)
+
+
+def test_control_loop_stops_when_module_requests_reset():
+    class _ResettingRuntime(_FakeModuleRuntime):
+        def tick(self, **_kwargs):
+            self.tick_calls += 1
+            return {"reset_requested": self.tick_calls >= 2}
+
+    module_runtime = _ResettingRuntime()
+    system = _FakeSystem()
+
+    run_control_loop(
+        system=system,
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=module_runtime,
+        logger=_FakeLogger(),
+        config=_config(),
+        max_iterations=10,
+    )
+
+    assert module_runtime.tick_calls == 2
+    assert len(system.sleep_calls) == 1
+
+
+def _heartbeat_logs(logger):
+    return [msg for msg, _ in logger.info_log if msg == "Heartbeat sent"]
+
+
+def test_send_heartbeat_logs_success():
+    logger = _FakeLogger()
+    loop = _loop(logger=logger, presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 30000}))
+
+    loop._send_heartbeat(1000)
+
+    assert _heartbeat_logs(logger) == ["Heartbeat sent"]
+
+
+def test_send_heartbeat_logs_success_for_empty_metadata():
+    logger = _FakeLogger()
+    loop = _loop(logger=logger, presence=_FakePresence({}))
+
+    loop._send_heartbeat(1000)
+
+    assert _heartbeat_logs(logger) == ["Heartbeat sent"]
+
+
+def test_send_heartbeat_does_not_log_sent_when_rejected_or_failing():
+    rejected_logger = _FakeLogger()
+    failing_logger = _FakeLogger()
+    rejected = _loop(logger=rejected_logger, presence=_FakePresence(None))
+    failing = _loop(logger=failing_logger, presence=_FakePresence(None, error=RuntimeError("No module named 'requests'")))
+
+    rejected._send_heartbeat(1000)
+    failing._send_heartbeat(1000)
+
+    assert _heartbeat_logs(rejected_logger) == []
+    assert _heartbeat_logs(failing_logger) == []
+    assert failing_logger.warn_calls == 1
+    # Still schedules the next attempt.
+    assert rejected.next_heartbeat_ms == 1000 + rejected.heartbeat_interval_ms
+    assert failing.next_heartbeat_ms == 1000 + failing.heartbeat_interval_ms
+
+
+def test_heartbeat_metadata_enforces_minimum_intervals():
+    loop = _loop()
+
+    loop._apply_heartbeat_metadata(
+        {
+            "mode": "development",
+            "next_heartbeat_ms": 10,
+            "dev_poll_interval_ms": 10,
+            "module_assignment_poll_interval_ms": 10,
+        }
+    )
+
+    assert loop.mode == "development"
+    assert loop.heartbeat_interval_ms == 1000
+    assert loop.dev_poll_interval_ms == 500
+    assert loop.module_poll_interval_ms == 1000
+
+
+def test_heartbeat_metadata_keeps_current_values_for_missing_fields():
+    loop = _loop()
+    loop.mode = "development"
+
+    loop._apply_heartbeat_metadata({"next_heartbeat_ms": 45000})
+
+    assert loop.mode == "development"
+    assert loop.heartbeat_interval_ms == 45000
+    assert loop.dev_poll_interval_ms == 2000
+    assert loop.module_poll_interval_ms == 60000
+
+
+def test_sleep_duration_targets_nearest_deadline_within_mode_bounds():
+    loop = _loop()
+    loop.next_heartbeat_ms = 1000 + 3000
+    loop.next_module_poll_ms = 1000 + 60000
+
+    assert loop._sleep_duration_ms(1000) == 3000
+
+    loop.next_heartbeat_ms = 1000 + 100
+    assert loop._sleep_duration_ms(1000) == 500  # production minimum
+
+    loop.mode = "development"
+    loop.next_heartbeat_ms = 1000 + 60000
+    loop.next_dev_poll_ms = 1000 + 60000
+    assert loop._sleep_duration_ms(1000) == 1000  # development maximum
+
+
+def test_sleep_duration_includes_network_retry_only_while_disconnected():
+    loop = _loop(network=_FakeNetwork(connected=False))
+    loop.connected = False
+    loop.next_heartbeat_ms = 1000 + 5000
+    loop.next_module_poll_ms = 1000 + 5000
+    loop.next_network_retry_ms = 1000 + 2000
+
+    assert loop._sleep_duration_ms(1000) == 2000
+
+    loop.connected = True
+    assert loop._sleep_duration_ms(1000) == 5000
