@@ -810,3 +810,115 @@ def test_merge_keeps_device_radio_off_sleep_when_release_has_no_power_block():
     merged = _merge_with_active({"power": {"radio_off_sleep_enabled": True}}, {})
 
     assert merged["power"] == {"radio_off_sleep_enabled": True}
+
+
+# ---------------------------------------------------------------------------
+# Flash space: confirmed app backup is freed before staging
+# ---------------------------------------------------------------------------
+
+def _updater_with_confirmed_app(fs, http, system, pending_app_changed=False):
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    fs.write_bytes("app/edge/main.py", b"current")
+    fs.write_bytes("app_prev/edge/main.py", b"previous")
+    fs.write_bytes("app_prev/edge/stale.py", b"previous-only")
+    boot_manager.mark_success()
+    if pending_app_changed:
+        state = json.loads(fs.read_text("boot_state.json"))
+        state["pending_app_changed"] = True
+        fs.write_text("boot_state.json", json.dumps(state))
+    return Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+
+
+def test_apply_discards_confirmed_app_backup_before_staging():
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    updater = _updater_with_confirmed_app(fs, http, system)
+    new_file = b"new"
+    http.add_stream_response(_STREAM_URL, _build_ota_stream([("edge/main.py", new_file)]))
+
+    updater.apply(UpdateInfo(available=True, version="1.1.0", manifest=[]))
+
+    assert fs.read_bytes("app/edge/main.py") == new_file
+    assert fs.read_bytes("app_prev/edge/main.py") == b"current"
+    assert not fs.exists("app_prev/edge/stale.py")
+
+
+def test_apply_frees_confirmed_backup_even_when_download_fails():
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    updater = _updater_with_confirmed_app(fs, http, system)
+    http.add_stream_response(_STREAM_URL, _build_ota_stream([("edge/main.py", b"new", "0" * 64)]))
+
+    with pytest.raises(ValueError):
+        updater.apply(UpdateInfo(available=True, version="1.1.0", manifest=[]))
+
+    assert not fs.exists("app_prev")
+    assert fs.read_bytes("app/edge/main.py") == b"current"
+
+
+def test_apply_keeps_backup_while_current_app_is_unconfirmed():
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    updater = _updater_with_confirmed_app(fs, http, system, pending_app_changed=True)
+    http.add_stream_response(_STREAM_URL, _build_ota_stream([("edge/main.py", b"new", "0" * 64)]))
+
+    with pytest.raises(ValueError):
+        updater.apply(UpdateInfo(available=True, version="1.1.0", manifest=[]))
+
+    assert fs.read_bytes("app_prev/edge/stale.py") == b"previous-only"
+
+# ---------------------------------------------------------------------------
+# Root entry points are staged, not written to the live root mid-download
+# ---------------------------------------------------------------------------
+
+def test_apply_leaves_live_entry_points_untouched_when_download_fails():
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+    fs.write_bytes("main.py", b"main-v1")
+    fs.write_bytes("boot.py", b"boot-v1")
+    fs.write_bytes("app/edge/x.py", b"app-v1")
+    http.add_stream_response(
+        _STREAM_URL,
+        _build_ota_stream(
+            [
+                ("boot.py", b"boot-v2"),
+                ("main.py", b"main-v2"),
+                ("edge/x.py", b"app-v2", "0" * 64),
+            ]
+        ),
+    )
+
+    with pytest.raises(ValueError):
+        updater.apply(UpdateInfo(available=True, version="1.1.0", manifest=[]))
+
+    assert fs.read_bytes("main.py") == b"main-v1"
+    assert fs.read_bytes("boot.py") == b"boot-v1"
+    assert not fs.exists("app_staging")
+    assert system.reset_calls == 0
+
+
+def test_apply_installs_entry_points_with_app_swap():
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    updater = Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager)
+    fs.write_bytes("main.py", b"main-v1")
+    fs.write_bytes("app/edge/x.py", b"app-v1")
+    http.add_stream_response(
+        _STREAM_URL,
+        _build_ota_stream([("main.py", b"main-v2"), ("edge/x.py", b"app-v2")]),
+    )
+
+    updater.apply(UpdateInfo(available=True, version="1.1.0", manifest=[]))
+
+    assert fs.read_bytes("main.py") == b"main-v2"
+    assert fs.read_bytes("app/edge/x.py") == b"app-v2"
+    assert fs.read_bytes("app_prev/_root/main.py") == b"main-v1"
+    assert system.reset_calls == 1

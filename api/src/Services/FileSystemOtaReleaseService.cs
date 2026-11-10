@@ -21,6 +21,12 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
         WriteIndented = true,
     };
 
+    // Firmware before root-file staging writes these straight to the device's filesystem root
+    // while the rest of the release goes to a staging folder. Streaming them last means a failed
+    // download (e.g. flash full) aborts before they are replaced, so such devices never boot new
+    // entry points against old app code.
+    private static readonly HashSet<string> RootEntryPoints = new(StringComparer.Ordinal) { "boot.py", "main.py" };
+
     private readonly string _artifactRoot;
     private readonly string _manifestFileName;
     private readonly ILogger<FileSystemOtaReleaseService> _logger;
@@ -95,7 +101,7 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
             return;
         }
 
-        foreach (var item in release.Manifest)
+        foreach (var item in release.Manifest.OrderBy(i => RootEntryPoints.Contains(i.Path) ? 1 : 0))
         {
             var fullPath = TryResolveSafePath(releaseRoot, item.Path);
             if (fullPath is null || !File.Exists(fullPath))

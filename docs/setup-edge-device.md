@@ -195,9 +195,9 @@ Without a physical device, you can run the edge control loop on your PC.
 
 1. **Install dependencies**
    ```bash
-   pip install -r edge/shared/tests/requirements.txt
+   pip install -r edge/requirements.txt
    ```
-   The simulator runs as CPython, so its HTTP client uses the `requests` package from this requirements file.
+   The simulator runs as CPython, so its HTTP client uses the `requests` package from this requirements file. To also run the edge tests, install `edge/shared/tests/requirements.txt` instead; it includes `edge/requirements.txt`.
 
 2. **Create the simulator config**
    ```bash
@@ -206,6 +206,8 @@ Without a physical device, you can run the edge control loop on your PC.
    Set `api_url` to your API (e.g. `http://localhost:5228`). Then set `device_id` and `api_key` to a device the server knows. The server rejects unknown devices. Either:
    - keep the defaults (`simulator-device-1` / `simulator-api-key`), which match the development seed device (see [Server Setup](setup-server.md)); or
    - create a device with **Add device**, then copy its `device_id` and `api_key` from the `#@@PROVISION {...}` line near the top of the downloaded `main.py`. The simulator config takes the plain-text key.
+
+   If the config file doesn't exist, the simulator logs a warning and uses `edge/simulator/config.template.json` instead. That works with the development seed device and a local API on port 5228.
 
 3. **Run the simulator**
    ```bash
@@ -216,17 +218,18 @@ Without a physical device, you can run the edge control loop on your PC.
 
 ### Simulator Features
 
-- Runs the same control loop as real devices
+- Runs the same startup sequence (`edge/shared/app/startup.py`) and control loop as real devices
 - Connects to the real API (requires a running server)
 - Runs modules as CPython, not MicroPython
 - Sends real heartbeats and polls for dev commands
 - Logs appear in the web dashboard like those from real devices
+- OTA updates are disabled, because applying a release would overwrite files in the working directory
 
 ### CLI Options
 
 ```bash
 python edge/simulator/worker.py \
-  --config simulator-config.json \      # Config file path (default: config.json)
+  --config simulator-config.json \      # Config file path (default: config.json; falls back to the template if missing)
   --device-id test-device-001 \          # Override device ID from config
   --api-url http://your-api:5228 \      # Override API URL from config
   --api-key your-key-here \              # Override API key from config
@@ -235,8 +238,8 @@ python edge/simulator/worker.py \
 
 ### Troubleshooting the Simulator
 
-**`ModuleNotFoundError: No module named 'requests'`:**
-- Install the dependencies: `pip install -r edge/shared/tests/requirements.txt`. Use the same Python/venv you run the simulator with.
+**`The simulator needs the 'requests' package` / `No module named 'requests'`:**
+- The Python running the simulator doesn't have the dependencies. Either run it with the Python where you installed them (e.g. `.venv\Scripts\python.exe edge/simulator/worker.py ...`), or install them for this Python: `python -m pip install -r edge/requirements.txt`.
 
 **`401 Unauthorized` / device not shown:**
 - The device ID must already exist on the server, and the API key must match it. Self-registration is disabled.

@@ -15,13 +15,8 @@ from pathlib import Path
 if "." not in sys.path:
     sys.path.insert(0, ".")
 
-from edge.shared.app.boot_manager import BootManager
+from edge.shared.app import startup
 from edge.shared.app.config import Config
-from edge.shared.app.control_loop import run_control_loop
-from edge.shared.app.device_control import DeviceControlClient
-from edge.shared.app.logger import EdgeLogger
-from edge.shared.app.module_runtime import ModuleRuntime
-from edge.shared.app.presence import PresenceService
 from edge.simulator.mocks import (
     SimulatorFileSystem,
     SimulatorHttpClient,
@@ -37,6 +32,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger_py = logging.getLogger("simulator")
+
+TEMPLATE_CONFIG_PATH = Path(__file__).resolve().parent / "config.template.json"
 
 
 class SimulatorShutdown(Exception):
@@ -56,6 +53,20 @@ def _setup_signal_handlers():
     signal.signal(signal.SIGTERM, _signal_handler)
 
 
+def _require_requests():
+    """Exit early: without `requests` every API call fails and the simulator only logs warnings."""
+    try:
+        import requests  # noqa: F401
+    except ImportError:
+        logger_py.error(
+            "The simulator needs the 'requests' package, which is not installed for %s. "
+            "Install it with: \"%s\" -m pip install -r edge/requirements.txt",
+            sys.executable,
+            sys.executable,
+        )
+        sys.exit(1)
+
+
 def run_simulator(
     config_path: str,
     device_id: str = None,
@@ -73,6 +84,7 @@ def run_simulator(
         max_iterations: Limit control loop iterations (for testing)
     """
     logger_py.info("Starting edge device simulator")
+    _require_requests()
     _setup_signal_handlers()
 
     try:
@@ -99,81 +111,19 @@ def run_simulator(
             f"api_url={config.api_url}"
         )
 
-        # Initialize logger
-        logger = EdgeLogger(
+        # OTA stays off: applying a release would overwrite files in the
+        # working directory (the repository) and then request a device reset.
+        runtime = startup.create_runtime(
+            fs=fs,
             system=system,
             http=http,
-            device_id=config.device_id,
-            api_url=config.api_url,
-            api_key=config.api_key,
-            logging_config=config.logging,
-        )
-
-        logger.info("Simulator startup")
-        logger.info("Configuration loaded", {"device_id": config.device_id})
-
-        # Network connection (simulator is always "connected")
-        logger.info("Network ready (simulator mode - no WiFi needed)")
-        if system.sync_time():
-            logger.info("Time synced")
-        else:
-            logger.warn("Time sync failed")
-
-        # Boot manager
-        boot_manager = BootManager(
-            fs=fs,
-            system=system,
-            max_attempts=config.max_boot_attempts,
-            logger=logger,
-        )
-
-        # Initialize services
-        presence = PresenceService(
-            http=http, network=network, system=system, config=config, logger=logger
-        )
-        device_control = DeviceControlClient(
-            http=http, config=config, fs=fs, logger=logger
-        )
-        module_runtime = ModuleRuntime(
-            system=system,
-            device_control=device_control,
+            network=network,
+            watchdog=watchdog,
             config=config,
-            fs=fs,
-            logger=logger,
+            platform="simulator",
+            enable_ota=False,
         )
-
-        # Get boot state
-        state = boot_manager.get_state()
-        if state.get("current_version"):
-            config.current_version = state["current_version"]
-
-        # Register device
-        logger.info(
-            "Registering device presence",
-            {"version": config.current_version},
-        )
-        try:
-            presence.register(config.current_version)
-            logger_py.info("✓ Device registration successful")
-        except Exception as exc:
-            logger.warn("Device registration threw exception", {"error": str(exc)})
-            logger_py.warning(f"✗ Device registration failed: {exc}")
-
-        # Flush any pending state
-        try:
-            module_runtime.flush_pending_timeout_result()
-        except Exception as exc:
-            logger.warn("Timeout marker flush threw exception", {"error": str(exc)})
-
-        try:
-            module_runtime.flush_pending_module_status()
-        except Exception as exc:
-            logger.warn("Module-status marker flush threw exception", {"error": str(exc)})
-
-        # Mark boot successful
-        boot_manager.mark_success()
-        logger.info("Boot path completed, entering control loop")
-        logger.flush("startup")
+        startup.start(runtime)
 
         logger_py.info("=" * 70)
         logger_py.info(f"Simulator running. Device: {config.device_id}")
@@ -182,18 +132,7 @@ def run_simulator(
         logger_py.info("Press Ctrl+C to stop")
         logger_py.info("=" * 70)
 
-        # Run control loop
-        run_control_loop(
-            system=system,
-            presence=presence,
-            device_control=device_control,
-            module_runtime=module_runtime,
-            logger=logger,
-            config=config,
-            network=network,
-            watchdog=watchdog,
-            max_iterations=max_iterations,
-        )
+        startup.run(runtime, max_iterations=max_iterations)
 
         logger_py.info("Control loop exited")
 
@@ -206,6 +145,20 @@ def run_simulator(
         logger_py.info("Simulator shutdown complete")
 
 
+def _resolve_config_path(config_path: str) -> str:
+    """Return config_path, or the bundled template (with a warning) when it doesn't exist."""
+    if Path(config_path).exists():
+        return config_path
+    if not TEMPLATE_CONFIG_PATH.exists():
+        logger_py.error(f"Config file not found: {config_path}")
+        sys.exit(1)
+    logger_py.warning(
+        f"Config file not found: {config_path}; falling back to the template "
+        f"{TEMPLATE_CONFIG_PATH}. Copy it and edit the copy to use your own settings."
+    )
+    return str(TEMPLATE_CONFIG_PATH)
+
+
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -215,7 +168,7 @@ def main():
         "--config",
         type=str,
         default="config.json",
-        help="Path to config.json (default: config.json)",
+        help="Path to config.json (default: config.json; falls back to edge/simulator/config.template.json if missing)",
     )
     parser.add_argument(
         "--device-id",
@@ -240,13 +193,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Verify config file exists
-    if not Path(args.config).exists():
-        logger_py.error(f"Config file not found: {args.config}")
-        sys.exit(1)
-
     run_simulator(
-        config_path=args.config,
+        config_path=_resolve_config_path(args.config),
         device_id=args.device_id,
         api_url=args.api_url,
         api_key=args.api_key,

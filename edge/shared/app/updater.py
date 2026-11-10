@@ -1,6 +1,7 @@
 import json
 
 from edge.shared.app.boot_manager import BootManager
+from edge.shared.app.boot_manager import ROOT_FILES_DIR
 from edge.shared.app.config import CONFIG_PATH, CONFIG_STAGING_PATH, Config
 from edge.shared.app.endpoints import OTA_CHECK_PATH, OTA_STREAM_PATH
 from edge.shared.app.safe_io import atomic_write_bytes
@@ -144,6 +145,8 @@ class Updater:
     def apply(self, update_info: UpdateInfo) -> None:
         self._log_info("Applying OTA update", {"version": update_info.version})
         self._clear_staging()
+        # Without this, staging needs room for three app copies (app, app_prev, app_staging).
+        self._boot_manager.discard_app_backup()
         self._ensure_dir(self._staging_root)
 
         try:
@@ -237,7 +240,7 @@ class Updater:
                 # Resolve staging path before reading content so we can stream
                 # directly to disk — no large bytearray needed.
                 if rel_path in _ROOT_FILES:
-                    target_path = rel_path
+                    target_path = self._join(self._staging_root, ROOT_FILES_DIR + "/" + rel_path)
                 elif rel_path == CONFIG_PATH:
                     target_path = self._config_staging_target()
                 else:
