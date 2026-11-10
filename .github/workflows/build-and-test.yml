@@ -16,19 +16,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: |
+            edge/requirements.txt
+            edge/shared/tests/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov
+          pip install -r edge/shared/tests/requirements.txt
 
       - name: Run tests
-        working-directory: ./edge
-        run: python -m pytest --tb=short
+        run: python -m pytest edge --tb=short
 
   # .NET tests for API
   dotnet-tests:
