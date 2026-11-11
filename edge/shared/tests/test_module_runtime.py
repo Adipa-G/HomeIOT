@@ -578,6 +578,35 @@ def test_variables_injected_into_module_scope():
     assert payloads[0]["output"]["got"] == "injected_value"
 
 
+def test_assigned_variables_override_module_level_defaults():
+    """Modules keep defaults with try/except NameError; assigned values must win."""
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    system = MockSystem()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(
+        system=system, device_control=client, config=config,
+        utc_now_iso=lambda: "2026-01-01T00:00:00Z"
+    )
+    source = (
+        b"try:\n    A\nexcept NameError:\n    A = 'default-a'\n"
+        b"try:\n    B\nexcept NameError:\n    B = 'default-b'\n"
+        b"def run(context):\n    return {'a': A, 'b': B}\n"
+    )
+    fs.write_bytes("modules_cache/m-def/1.0.0.pkg", source)
+
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m-def", "version": "1.0.0",
+                       "interval_ms": 60000, "timeout_ms": 5000,
+                       "variables": {"A": "assigned"}}]},
+        now_ms=0,
+    )
+    runtime.tick(now_ms=0)
+
+    assert _post_payloads(http)[0]["output"] == {"a": "assigned", "b": "default-b"}
+
+
 def test_module_with_no_variables_runs_normally():
     """Assignment with no variables dict still runs fine (backward compat)."""
     fs = MockFileSystem()
