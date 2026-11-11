@@ -9,7 +9,7 @@ Devices are added from the web UI. **Add device** registers the device, generate
 - **Server running.** See [Server Setup](setup-server.md).
 - **A firmware release for the device's platform.** The installer downloads the latest release, so at least one must exist. See [Step 1](#step-1-publish-a-firmware-release).
 - **MicroPython flashed on the board.** Use the firmware from [micropython.org/download](https://micropython.org/download/).
-- **A way to copy one file to the board.** Either `mpremote` (`pip install mpremote`) or Thonny.
+- **A way to copy one file to the board.** Either `mpremote` (`uvx mpremote`) or Thonny.
 - **WiFi credentials** for the network the device will join (2.4 GHz).
 
 ---
@@ -195,9 +195,9 @@ Without a physical device, you can run the edge control loop on your PC.
 
 1. **Install dependencies**
    ```bash
-   pip install -r edge/requirements.txt
+   uv sync
    ```
-   The simulator runs as CPython, so its HTTP client uses the `requests` package from this requirements file. To also run the edge tests, install `edge/shared/tests/requirements.txt` instead; it includes `edge/requirements.txt`.
+   Run this from the repository root. It creates `.venv` from `pyproject.toml`, including the `requests` package the simulator's CPython HTTP client uses and the edge test tools.
 
 2. **Create the simulator config**
    ```bash
@@ -211,7 +211,7 @@ Without a physical device, you can run the edge control loop on your PC.
 
 3. **Run the simulator**
    ```bash
-   python edge/simulator/worker.py --config simulator-config.json
+   uv run python edge/simulator/worker.py --config simulator-config.json
    ```
 
 4. **View in dashboard.** Open the web UI, go to **Devices**, and select your simulator device to see logs, heartbeats and module assignments.
@@ -228,7 +228,7 @@ Without a physical device, you can run the edge control loop on your PC.
 ### CLI Options
 
 ```bash
-python edge/simulator/worker.py \
+uv run python edge/simulator/worker.py \
   --config simulator-config.json \      # Config file path (default: config.json; falls back to the template if missing)
   --device-id test-device-001 \          # Override device ID from config
   --api-url http://your-api:5228 \      # Override API URL from config
@@ -239,7 +239,7 @@ python edge/simulator/worker.py \
 ### Troubleshooting the Simulator
 
 **`The simulator needs the 'requests' package` / `No module named 'requests'`:**
-- The Python running the simulator doesn't have the dependencies. Either run it with the Python where you installed them (e.g. `.venv\Scripts\python.exe edge/simulator/worker.py ...`), or install them for this Python: `python -m pip install -r edge/requirements.txt`.
+- The Python running the simulator doesn't have the dependencies. Run `uv sync` from the repository root, then start the simulator with `uv run python edge/simulator/worker.py ...` so it uses `.venv`.
 
 **`401 Unauthorized` / device not shown:**
 - The device ID must already exist on the server, and the API key must match it. Self-registration is disabled.
