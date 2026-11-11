@@ -288,9 +288,60 @@ describe('ModuleDetailPage', () => {
           default_value: '08:00',
           description: 'start time',
           server_code: 'return "08:00";',
+          control_type: 'text',
         }),
       );
     });
+  });
+
+  it('defaults input variables to a text control so they stay in the input section', async () => {
+    const user = userEvent.setup();
+    mockModuleAndDevices();
+    vi.mocked(api.put).mockResolvedValue({});
+
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Input Variables')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '+ Add Input Variable' }));
+
+    const controlSelect = screen.getByLabelText('Control type');
+    expect(controlSelect).toHaveValue('text');
+    expect(screen.queryByRole('option', { name: '— none —' })).not.toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('e.g. TEMP_THRESHOLD'), 'NEW_INPUT');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(api.put).toHaveBeenCalledWith(
+        '/api/admin/modules/sensor-reader/variables/NEW_INPUT',
+        expect.objectContaining({ control_type: 'text' }),
+      );
+    });
+  });
+
+  it('hides the control type picker for server-computed variables', async () => {
+    const user = userEvent.setup();
+    mockModuleAndDevices();
+    renderWithProviders(<ModuleDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TEMP_THRESHOLD')).toBeInTheDocument();
+    });
+    expect(screen.getByText('server')).toBeInTheDocument();
+
+    const editButtons = screen.getAllByRole('button', { name: 'Edit' });
+    await user.click(editButtons[editButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/computed by the server, so no input control is shown/)).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText('Control type')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Server code (optional)'));
+    expect(screen.getByLabelText('Control type')).toBeInTheDocument();
   });
 
   it('prefills form when editing an existing variable', async () => {
