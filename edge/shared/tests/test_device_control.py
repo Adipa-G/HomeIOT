@@ -33,6 +33,7 @@ def test_get_next_dev_command_includes_auth_headers():
 
     command = client.get_next_dev_command(last_revision_hash="abc")
 
+    assert command is not None
     assert command["command_id"] == "cmd-1"
     method, _, _, headers = http.calls[0]
     assert method == "GET"
@@ -66,6 +67,7 @@ def test_get_module_assignment_and_module_result_flow():
     assignment = client.get_module_assignment(last_assignment_hash="old")
     posted = client.report_module_result({"module_id": "m1", "status": "success"})
 
+    assert assignment is not None
     assert assignment["assignment_hash"] == "new"
     assert posted is True
 
@@ -287,6 +289,16 @@ def test_download_returns_false_on_http_error():
 
     assert client.ensure_module_present("temp-sensor", "2.0.0", "sha256:deadbeef") is False
     assert not fs.exists(PACKAGE_PATH)
+
+
+def test_download_returns_false_without_filesystem():
+    http = MockHttpClient()
+    logger = _Logger()
+    client = DeviceControlClient(http=http, config=_config(), logger=logger)
+
+    assert client.download_module_package("temp-sensor", "2.0.0") is False
+    assert http.calls == []
+    assert logger.warnings[0][0] == "Module filesystem unavailable"
 
 
 def test_download_returns_false_when_stream_cannot_open():

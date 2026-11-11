@@ -69,10 +69,10 @@ def _require_requests():
 
 def run_simulator(
     config_path: str,
-    device_id: str = None,
-    api_url: str = None,
-    api_key: str = None,
-    max_iterations: int = None,
+    device_id: str | None = None,
+    api_url: str | None = None,
+    api_key: str | None = None,
+    max_iterations: int | None = None,
 ):
     """Run the edge device simulator.
 

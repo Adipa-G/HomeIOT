@@ -1,5 +1,5 @@
 try:
-    import uos as _os
+    import uos as _os  # pyright: ignore[reportMissingImports]
 except ImportError:  # pragma: no cover - desktop fallback
     import os as _os
 

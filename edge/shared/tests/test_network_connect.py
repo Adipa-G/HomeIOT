@@ -2,6 +2,7 @@
 
 from edge.shared.hal.network import MicroPythonNetwork, sanitize_hostname
 from edge.platforms.esp32.hal.network import MicroPythonNetwork as Esp32Network
+from edge.shared.tests.mocks.fake_module import fake_module
 
 
 class _FakeWlan:
@@ -230,7 +231,7 @@ def test_connect_timeout_powers_radio_down_and_reports_status():
 
 def test_connect_timeout_without_status_method():
     class _NoStatusWlan(_NeverConnectsWlan):
-        status = None
+            status = None  # pyright: ignore[reportAssignmentType]
 
     wlan = _NoStatusWlan()
     net = _make_network(wlan)
@@ -245,14 +246,13 @@ def test_connect_timeout_without_status_method():
 
 def _install_network_module(monkeypatch, country=None, rp2_country=None):
     import sys
-    import types
 
-    network_mod = types.ModuleType("network")
+    network_mod = fake_module("network")
     if country is not None:
         network_mod.country = country
     monkeypatch.setitem(sys.modules, "network", network_mod)
     if rp2_country is not None:
-        rp2_mod = types.ModuleType("rp2")
+        rp2_mod = fake_module("rp2")
         rp2_mod.country = rp2_country
         monkeypatch.setitem(sys.modules, "rp2", rp2_mod)
     else:
@@ -307,10 +307,9 @@ def test_sanitize_hostname_truncates_without_trailing_hyphen():
 
 def test_set_hostname_uses_network_hostname(monkeypatch):
     import sys
-    import types
 
     calls = []
-    network_mod = types.ModuleType("network")
+    network_mod = fake_module("network")
     network_mod.hostname = calls.append
     monkeypatch.setitem(sys.modules, "network", network_mod)
 
@@ -320,9 +319,8 @@ def test_set_hostname_uses_network_hostname(monkeypatch):
 
 def test_set_hostname_falls_back_to_wlan_config(monkeypatch):
     import sys
-    import types
 
-    monkeypatch.setitem(sys.modules, "network", types.ModuleType("network"))
+    monkeypatch.setitem(sys.modules, "network", fake_module("network"))
 
     class _HostnameWlan:
         def __init__(self):
@@ -344,7 +342,7 @@ def test_set_hostname_rejects_empty_name(monkeypatch):
     calls = []
     _install_network_module(monkeypatch)
     import sys
-    sys.modules["network"].hostname = calls.append
+    setattr(sys.modules["network"], "hostname", calls.append)
 
     assert MicroPythonNetwork().set_hostname("!!!") is False
     assert calls == []

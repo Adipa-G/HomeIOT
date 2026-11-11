@@ -52,6 +52,17 @@
       ],
       "group": "test",
       "problemMatcher": []
+    },
+    {
+      "label": "python: typecheck edge",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\pyright.exe",
+      "args": [
+        "--pythonpath",
+        "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+      ],
+      "group": "test",
+      "problemMatcher": []
     }
   ]
 }

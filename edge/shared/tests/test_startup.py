@@ -161,6 +161,9 @@ class _FakeModuleRuntime:
             raise self.error
 
 
+_DEFAULT_UPDATER = object()
+
+
 def _runtime(
     events,
     config=None,
@@ -169,10 +172,10 @@ def _runtime(
     watchdog=None,
     boot_state=None,
     presence_error=None,
-    updater="default",
+    updater=_DEFAULT_UPDATER,
     module_error=None,
 ):
-    if updater == "default":
+    if updater is _DEFAULT_UPDATER:
         updater = _FakeUpdater(events)
     return DeviceRuntime(
         fs=object(),

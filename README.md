@@ -180,6 +180,8 @@ dotnet test api/tests/homeiot.api.tests.csproj
 # Edge tests (Python)
 python -m pytest edge
 
+# Edge type check (Python, config in pyrightconfig.json)
+pyright
 # Web UI tests (optional)
 cd web-ui && npm test
 ```
@@ -226,7 +228,7 @@ The `demo-sensor` readings cycle through the configured threshold bands, includi
 ### Code Conventions
 
 - **C# / API**: One class per file, `PascalCase` file names, records for DTOs, `snake_case` JSON properties
-- **Python / Edge**: MicroPython-compatible, pytest tests in `edge/shared/tests/`
+- **Python / Edge**: MicroPython-compatible, pytest tests in `edge/shared/tests/`, type-checked with `pyright` (standard mode)
 - **TypeScript / Web**: React components in `src/components/`, pages in `src/pages/`
 
 See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed conventions.

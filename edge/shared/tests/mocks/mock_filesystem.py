@@ -1,4 +1,7 @@
-class MockFileSystem:
+from edge.shared.hal.interfaces import IFileSystem
+
+
+class MockFileSystem(IFileSystem):
     def __init__(self):
         self.files = {}
         self.directories = {""}

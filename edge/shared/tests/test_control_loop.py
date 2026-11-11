@@ -1,5 +1,5 @@
 from edge.shared.app.config import Config
-from edge.shared.app.utc_time import epoch_to_datetime, iso_to_epoch
+from edge.shared.app.utc_time import datetime_to_epoch, epoch_to_datetime
 from edge.shared.app.wall_clock import WallClock
 from edge.shared.app.control_loop import (
     _ControlLoop,
@@ -80,7 +80,7 @@ class _FakeNetwork:
 
 
 class _FakePowerNetwork(_FakeNetwork):
-    def __init__(self, connected=True, fail_connect=False, power_save_result=True):
+    def __init__(self, connected=True, fail_connect=False, power_save_result: bool | None = True):
         super().__init__(connected=connected, fail_connect=fail_connect)
         self.power_modes = []
         self.power_save_result = power_save_result
@@ -133,7 +133,7 @@ class _FakeDeviceControl:
     def should_execute_dev_command(command, _):
         return bool(command)
 
-    def prefetch_server_code(self, modules):
+    def prefetch_server_code(self, modules) -> bool:
         self.prefetch_calls += 1
         self.prefetch_payloads.append(modules)
         return True
@@ -1495,7 +1495,7 @@ def test_regular_sleep_does_not_flush_logs_early():
 class _SyncSystem(_ClockSystem):
     """Models the RP2040: the hardware clock reads 2021 until NTP, and stops during light sleep."""
 
-    REAL_BOOT_S = iso_to_epoch("2026-10-22T00:00:00Z")
+    REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))
 
     def __init__(self, clock_set=False, sync_ok=True, **kwargs):
         super().__init__(**kwargs)

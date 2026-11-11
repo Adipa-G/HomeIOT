@@ -1,5 +1,7 @@
 import io
 
+import pytest
+
 from edge.shared.hal.http_client import StreamingResponse, _read_response
 from edge.shared.hal.interfaces import HttpResponse
 
@@ -62,6 +64,16 @@ def test_streaming_response_close_is_idempotent():
     sr = StreamingResponse(sock, 200)
     sr.close()
     sr.close()  # should not raise
+
+
+def test_streaming_response_read_after_close_raises_os_error():
+    sr = StreamingResponse(io.BytesIO(b"data"), 200)
+    sr.close()
+
+    with pytest.raises(OSError, match="closed"):
+        sr.read(4)
+    with pytest.raises(OSError, match="closed"):
+        sr.readinto(bytearray(4))
 
 
 def test_streaming_response_readinto_fills_buffer_and_returns_count():

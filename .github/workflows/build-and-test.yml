@@ -29,6 +29,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r edge/shared/tests/requirements.txt
 
+      - name: Type check (pyright)
+        run: pyright
+
       - name: Run tests
         run: python -m pytest edge --tb=short
 

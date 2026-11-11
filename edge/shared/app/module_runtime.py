@@ -478,7 +478,7 @@ class ModuleRuntime:
 
     def _redate_if_needed(self, entry):
         """Replace pre-sync timestamps with times derived from the run's tick readings."""
-        if entry.get("clock_synced") or not self._clock_synced():
+        if entry.get("clock_synced") or self._clock is None or not self._clock_synced():
             return
         payload = entry["payload"]
         payload["started_at_utc"] = self._clock.iso_at_ticks(entry["started_ticks"])

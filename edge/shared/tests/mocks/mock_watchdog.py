@@ -1,4 +1,7 @@
-class MockWatchdog:
+from edge.shared.hal.interfaces import IWatchdog
+
+
+class MockWatchdog(IWatchdog):
     def __init__(self):
         self.timeout_ms = None
         self.feed_calls = 0

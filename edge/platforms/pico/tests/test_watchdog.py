@@ -1,7 +1,7 @@
 import sys
-import types
 
 from edge.platforms.pico.hal.watchdog import PicoWatchdog
+from edge.shared.tests.mocks.fake_module import fake_module
 
 
 def test_pico_watchdog_stays_below_rp2040_hardware_limit():
@@ -11,7 +11,7 @@ def test_pico_watchdog_stays_below_rp2040_hardware_limit():
 def test_pico_watchdog_extends_long_timeout_with_timer(monkeypatch):
     created = {}
 
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
 
     class WDT:
         def __init__(self, **kwargs):
@@ -29,7 +29,7 @@ def test_pico_watchdog_extends_long_timeout_with_timer(monkeypatch):
     machine.WDT = WDT
     machine.Timer = Timer
 
-    utime = types.ModuleType("utime")
+    utime = fake_module("utime")
     utime.ticks_ms = lambda: 0
     utime.ticks_diff = lambda a, b: a - b
 
