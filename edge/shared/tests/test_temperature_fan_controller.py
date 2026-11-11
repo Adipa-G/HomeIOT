@@ -5,6 +5,8 @@ import types
 
 import pytest
 
+from edge.shared.tests.mocks.fake_module import fake_module
+
 
 MODULE_PATH = os.path.abspath(
     os.path.join(
@@ -17,6 +19,7 @@ MODULE_PATH = os.path.abspath(
 
 def _load_module():
     spec = importlib.util.spec_from_file_location("temperature_fan_controller_main", MODULE_PATH)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -88,12 +91,12 @@ class FakeHardware:
                     raise hw.read_temp_error
                 return hw.temperature
 
-        machine = types.ModuleType("machine")
+        machine = fake_module("machine")
         machine.Pin = Pin
         machine.PWM = PWM
-        onewire = types.ModuleType("onewire")
+        onewire = fake_module("onewire")
         onewire.OneWire = OneWire
-        ds18x20 = types.ModuleType("ds18x20")
+        ds18x20 = fake_module("ds18x20")
         ds18x20.DS18X20 = DS18X20
         return {"machine": machine, "onewire": onewire, "ds18x20": ds18x20}
 

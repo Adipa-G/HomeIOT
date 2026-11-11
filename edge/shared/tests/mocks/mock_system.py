@@ -1,4 +1,7 @@
-class MockSystem:
+from edge.shared.hal.interfaces import ISystem
+
+
+class MockSystem(ISystem):
     def __init__(self):
         self.reset_calls = 0
         self.sleep_calls = []

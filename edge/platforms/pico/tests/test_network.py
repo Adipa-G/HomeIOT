@@ -1,11 +1,9 @@
 from edge.platforms.pico.hal.network import PicoNetwork
 
 
-class _FakeCyw43Wlan:
-    def __init__(self, with_deinit=True):
+class _FakeWlanWithoutDeinit:
+    def __init__(self):
         self.calls = []
-        if not with_deinit:
-            self.deinit = None
 
     def disconnect(self):
         self.calls.append("disconnect")
@@ -13,14 +11,22 @@ class _FakeCyw43Wlan:
     def active(self, enable):
         self.calls.append(("active", enable))
 
+
+class _FakeCyw43Wlan(_FakeWlanWithoutDeinit):
     def deinit(self):
         self.calls.append("deinit")
 
 
+def _make_network(wlan):
+    net = PicoNetwork()
+    # suspend() resets _wlan to None, so pyright narrows the attribute to None.
+    setattr(net, "_wlan", wlan)
+    return net
+
+
 def test_suspend_powers_off_cyw43_chip_with_deinit():
     wlan = _FakeCyw43Wlan()
-    net = PicoNetwork()
-    net._wlan = wlan
+    net = _make_network(wlan)
 
     net.suspend()
 
@@ -30,9 +36,8 @@ def test_suspend_powers_off_cyw43_chip_with_deinit():
 
 
 def test_suspend_without_deinit_keeps_wlan_handle():
-    wlan = _FakeCyw43Wlan(with_deinit=False)
-    net = PicoNetwork()
-    net._wlan = wlan
+    wlan = _FakeWlanWithoutDeinit()
+    net = _make_network(wlan)
 
     net.suspend()
 
@@ -52,9 +57,8 @@ def test_connect_timeout_fully_powers_off_cyw43_chip():
             return 1
 
     wlan = _NeverConnects()
-    net = PicoNetwork()
-    net._wlan = wlan
-    net._sleep_ms = lambda _time_mod, _ms: None
+    net = _make_network(wlan)
+    net._sleep_ms = lambda time_mod, milliseconds: None
 
     try:
         net.connect("ssid", "pass", timeout_ms=0)

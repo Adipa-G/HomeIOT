@@ -1,7 +1,7 @@
 import io
 import json
 
-from edge.shared.hal.interfaces import HttpResponse
+from edge.shared.hal.interfaces import HttpResponse, IHttpClient
 
 
 class MockStreamingResponse:
@@ -24,7 +24,7 @@ class MockStreamingResponse:
         self._stream.close()
 
 
-class MockHttpClient:
+class MockHttpClient(IHttpClient):
     def __init__(self):
         self.calls = []
         self._responses = {}

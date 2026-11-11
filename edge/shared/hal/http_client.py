@@ -12,9 +12,13 @@ class StreamingResponse:
         self._sock = sock
 
     def read(self, n: int) -> bytes:
+        if self._sock is None:
+            raise OSError("Stream is closed")
         return self._sock.read(n)
 
     def readinto(self, buf) -> int:
+        if self._sock is None:
+            raise OSError("Stream is closed")
         return self._sock.readinto(buf)
 
     def close(self) -> None:
@@ -52,7 +56,7 @@ def _read_response(response):
 class MicroPythonHttpClient(IHttpClient):
     def get(self, url, headers=None):
         try:
-            import urequests as requests
+            import urequests as requests  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             import requests
 
@@ -62,7 +66,7 @@ class MicroPythonHttpClient(IHttpClient):
 
     def post(self, url, data, headers=None, timeout_s=None):
         try:
-            import urequests as requests
+            import urequests as requests  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             import requests
 
@@ -72,7 +76,7 @@ class MicroPythonHttpClient(IHttpClient):
 
     def get_stream(self, url, headers=None):
         try:
-            import urequests as requests
+            import urequests as requests  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             import requests
 

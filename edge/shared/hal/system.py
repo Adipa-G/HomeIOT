@@ -6,7 +6,7 @@ from edge.shared.hal.interfaces import ISystem
 class MicroPythonSystem(ISystem):
     def __init__(self):
         try:
-            import utime as _time
+            import utime as _time  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             import time as _time
         self._time = _time
@@ -14,57 +14,57 @@ class MicroPythonSystem(ISystem):
 
     def reset(self) -> None:
         try:
-            import machine
+            import machine  # pyright: ignore[reportMissingImports]
         except ImportError as exc:  # pragma: no cover - desktop fallback
             raise RuntimeError("machine module is not available") from exc
         machine.reset()
 
     def unique_id(self) -> str:
         try:
-            import machine
+            import machine  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             return "desktop-test-device"
         return binascii.hexlify(machine.unique_id()).decode("ascii")
 
     def time_ms(self) -> int:
         if hasattr(self._time, "ticks_ms"):
-            return self._time.ticks_ms()
+            return self._time.ticks_ms()  # pyright: ignore[reportAttributeAccessIssue]
         return int(self._time.time() * 1000)
 
     def ticks_diff(self, a: int, b: int) -> int:
         if hasattr(self._time, "ticks_diff"):
-            return self._time.ticks_diff(a, b)
+            return self._time.ticks_diff(a, b)  # pyright: ignore[reportAttributeAccessIssue]
         return a - b
 
     def ticks_add(self, ticks: int, delta: int) -> int:
         if hasattr(self._time, "ticks_add"):
-            return self._time.ticks_add(ticks, delta)
+            return self._time.ticks_add(ticks, delta)  # pyright: ignore[reportAttributeAccessIssue]
         return ticks + delta
 
     def uptime_ms(self) -> int:
         now = self.time_ms()
         if hasattr(self._time, "ticks_diff"):
-            return self._time.ticks_diff(now, self._boot_ms)
+            return self._time.ticks_diff(now, self._boot_ms)  # pyright: ignore[reportAttributeAccessIssue]
         return now - self._boot_ms
 
     def free_memory_bytes(self) -> int:
         try:
             import gc
             gc.collect()
-            return gc.mem_free()
+            return gc.mem_free()  # pyright: ignore[reportAttributeAccessIssue]
         except (ImportError, AttributeError):  # pragma: no cover - desktop fallback
             return 0
 
     def sleep_ms(self, milliseconds: int) -> None:
         if hasattr(self._time, "sleep_ms"):
-            self._time.sleep_ms(milliseconds)
+            self._time.sleep_ms(milliseconds)  # pyright: ignore[reportAttributeAccessIssue]
         else:
             self._time.sleep(milliseconds / 1000)
 
     def light_sleep_ms(self, milliseconds: int) -> bool:
         lightsleep = None
         try:
-            import machine
+            import machine  # pyright: ignore[reportMissingImports]
             lightsleep = getattr(machine, "lightsleep", None)
         except ImportError:  # pragma: no cover - desktop fallback
             pass
@@ -87,7 +87,7 @@ class MicroPythonSystem(ISystem):
 
     def reset_cause(self) -> str:
         try:
-            import machine
+            import machine  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             return "unknown"
         try:
@@ -100,9 +100,11 @@ class MicroPythonSystem(ISystem):
         return "unknown(" + str(cause) + ")"
 
     def get_sleep_capabilities(self) -> dict:
-        capabilities = {"lightsleep": False, "deepsleep": False}
+        capabilities = {}
+        capabilities["lightsleep"] = False
+        capabilities["deepsleep"] = False
         try:
-            import machine
+            import machine  # pyright: ignore[reportMissingImports]
             capabilities["lightsleep"] = callable(getattr(machine, "lightsleep", None))
             capabilities["deepsleep"] = callable(getattr(machine, "deepsleep", None))
         except ImportError:  # pragma: no cover - desktop fallback
@@ -131,7 +133,7 @@ class MicroPythonSystem(ISystem):
 
     def sync_time(self) -> bool:
         try:
-            import ntptime
+            import ntptime  # pyright: ignore[reportMissingImports]
             ntptime.settime()
             return True
         except Exception:  # pragma: no cover - desktop fallback
@@ -141,11 +143,10 @@ class MicroPythonSystem(ISystem):
     _MIN_SYNCED_YEAR = 2024
 
     def clock_is_set(self) -> bool:
-        gmtime = getattr(self._time, "gmtime", None)
-        if not callable(gmtime):
+        if not callable(getattr(self._time, "gmtime", None)):
             return True
         try:
-            return gmtime()[0] >= self._MIN_SYNCED_YEAR
+            return self._time.gmtime()[0] >= self._MIN_SYNCED_YEAR
         except Exception:
             return True
 
@@ -153,6 +154,6 @@ class MicroPythonSystem(ISystem):
         return tuple(self._time.gmtime()[:6])
 
     def set_utc_datetime(self, parts) -> None:
-        import machine
+        import machine  # pyright: ignore[reportMissingImports]
         year, month, day, hour, minute, second, weekday = parts
         machine.RTC().datetime((year, month, day, weekday, hour, minute, second, 0))

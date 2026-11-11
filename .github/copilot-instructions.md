@@ -26,3 +26,5 @@
 
 - MicroPython-compatible code — no CPython-only features.
 - Tests use pytest and run from workspace root: `python -m pytest edge`.
+- Code must pass `pyright` (standard mode, config in `pyrightconfig.json`). Run from workspace root: `pyright` (locally add `--pythonpath .venv/Scripts/python.exe` if the venv is not activated).
+- MicroPython-only imports/attributes (`machine`, `utime`, `time.ticks_ms`, ...) get a targeted `# pyright: ignore[rule]` comment. In tests, build fake MicroPython modules with `fake_module()` from `edge/shared/tests/mocks/fake_module.py`, and have mocks subclass the `edge/shared/hal/interfaces.py` interfaces.

@@ -1,4 +1,7 @@
-class MockNetwork:
+from edge.shared.hal.interfaces import INetwork
+
+
+class MockNetwork(INetwork):
     def __init__(self, ip="192.168.1.20"):
         self.connected = False
         self.ip = ip

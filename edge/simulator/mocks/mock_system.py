@@ -8,7 +8,7 @@ from edge.shared.hal.interfaces import ISystem
 class SimulatorSystem(ISystem):
     """CPython-compatible system implementation for PC simulator."""
 
-    def __init__(self, device_id: str = None):
+    def __init__(self, device_id: str | None = None):
         self._unique_id = device_id or f"sim-{uuid.uuid4().hex[:8]}"
         self._boot_time_s = time.time()
 

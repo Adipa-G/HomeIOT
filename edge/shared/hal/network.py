@@ -31,7 +31,7 @@ class MicroPythonNetwork(INetwork):
                 import network
             except ImportError as exc:  # pragma: no cover - desktop fallback
                 raise RuntimeError("network module is not available") from exc
-            self._wlan = network.WLAN(network.STA_IF)
+            self._wlan = network.WLAN(network.STA_IF)  # pyright: ignore[reportAttributeAccessIssue]
         return self._wlan
 
     def connect(self, ssid: str, password: str, timeout_ms: int = 15000) -> None:
@@ -52,7 +52,7 @@ class MicroPythonNetwork(INetwork):
         wlan.connect(ssid, password)
 
         try:
-            import utime as _time
+            import utime as _time  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             import time as _time
 
@@ -81,7 +81,7 @@ class MicroPythonNetwork(INetwork):
         setter = getattr(network, "country", None)
         if not callable(setter):
             try:
-                import rp2
+                import rp2  # pyright: ignore[reportMissingImports]
                 setter = getattr(rp2, "country", None)
             except ImportError:
                 setter = None

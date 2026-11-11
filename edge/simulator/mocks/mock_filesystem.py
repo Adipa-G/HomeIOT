@@ -1,7 +1,7 @@
 """Mock filesystem HAL for PC simulator."""
 import os
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable
 
 from edge.shared.hal.interfaces import IFileSystem
 
@@ -45,7 +45,7 @@ class SimulatorFileSystem(IFileSystem):
     def rename(self, src: str, dst: str) -> None:
         Path(src).rename(dst)
 
-    def write_chunks(self, path: str, chunks: Iterator[bytes]) -> None:
+    def write_chunks(self, path: str, chunks: Iterable[bytes]) -> None:
         """Write an iterable of bytes chunks to path without buffering all at once."""
         with open(path, "wb") as f:
             for chunk in chunks:

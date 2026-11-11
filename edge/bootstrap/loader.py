@@ -129,15 +129,15 @@ def main():
     except Exception as exc:
         print("[bootstrap] Install failed:", exc)
         if hasattr(sys, "print_exception"):
-            sys.print_exception(exc)
+            sys.print_exception(exc)  # pyright: ignore[reportAttributeAccessIssue]
         print("[bootstrap] Retrying in", RETRY_DELAY_MS // 1000, "seconds (Ctrl-C to stop)")
         import time
 
         if hasattr(time, "sleep_ms"):
-            time.sleep_ms(RETRY_DELAY_MS)
+            time.sleep_ms(RETRY_DELAY_MS)  # pyright: ignore[reportAttributeAccessIssue]
         else:
             time.sleep(RETRY_DELAY_MS / 1000)
-        import machine
+        import machine  # pyright: ignore[reportMissingImports]
 
         machine.reset()
 

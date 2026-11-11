@@ -1,8 +1,8 @@
-from edge.shared.app.utc_time import epoch_to_datetime, iso_to_epoch
+from edge.shared.app.utc_time import datetime_to_epoch, epoch_to_datetime
 from edge.shared.app.wall_clock import WallClock
 
 
-REAL_BOOT_S = iso_to_epoch("2026-10-22T00:00:00Z")
+REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))
 
 
 class _System:
@@ -12,7 +12,7 @@ class _System:
         self.ticks = 0
         self.clock_set = clock_set
         self.sync_ok = sync_ok
-        self.frozen_rtc_s = None
+        self.frozen_rtc_s: int | None = None
         self.rtc_writes = []
 
     def time_ms(self):

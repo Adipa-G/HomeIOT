@@ -66,6 +66,7 @@ def test_heartbeat_with_metadata_returns_payload():
 
     payload = service.heartbeat_with_metadata()
 
+    assert payload is not None
     assert payload["mode"] == "development"
 
 

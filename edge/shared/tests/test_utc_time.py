@@ -31,6 +31,7 @@ def test_iso_to_epoch_matches_calendar_timegm(value):
 
 def test_epoch_to_iso_round_trips_every_day_across_leap_years():
     start = iso_to_epoch("2020-12-25T13:14:15Z")
+    assert start is not None
     for day in range(0, 2000):
         seconds = start + day * 86400 + day * 37
         assert iso_to_epoch(epoch_to_iso(seconds)) == seconds

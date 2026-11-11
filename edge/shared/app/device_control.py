@@ -53,6 +53,10 @@ class DeviceControlClient:
         The package is never held in RAM as a whole: on a fragmented MicroPython
         heap even a ~10 KB contiguous buffer can fail to allocate.
         """
+        if self._fs is None:
+            self._log_warn("Module filesystem unavailable", {"module_id": module_id, "version": version})
+            return False
+
         url = self._config.api_url + MODULE_PACKAGE_PATH + "?module_id=" + str(module_id) + "&version=" + str(version)
         package_path = self._module_package_path(module_id, version)
         tmp_path = package_path + ".tmp"
@@ -170,6 +174,8 @@ class DeviceControlClient:
         expected = _normalize_hash(expected_hash)
         if not expected:
             return True
+        if self._fs is None:
+            return False
         hash_path = package_path + _HASH_SUFFIX
         if self._fs.exists(hash_path):
             return self._fs.read_text(hash_path).strip().lower() == expected

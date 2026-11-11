@@ -218,6 +218,7 @@ def test_extract_payload_writes_embedded_files(tmp_path, monkeypatch):
 
     provision_json = loader.extract_payload(os)
 
+    assert provision_json is not None
     assert json.loads(provision_json) == provision
     for rel_path in BUNDLE["release_files"]:
         extracted = (tmp_path / loader.LIB_DIR / rel_path).read_text(encoding="utf-8")
@@ -415,7 +416,7 @@ def test_connect_wifi_sets_country_before_connecting():
 
 def test_connect_wifi_skips_country_when_not_configured():
     config = _loaded_config()
-    config.wifi_country = None
+    config.wifi_country = ""
     network = MockNetwork()
 
     connect_wifi(network, MockSystem(), config, _SilentLogger())

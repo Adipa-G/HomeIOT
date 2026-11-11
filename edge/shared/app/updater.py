@@ -172,7 +172,7 @@ class Updater:
         # fragmentation so larger contiguous blocks become available.
         version = update_info.version
         update_info.manifest.clear()
-        update_info = None
+        del update_info
 
         self._boot_manager.set_new_version(version)
         self._log_info("OTA apply complete, resetting", {"version": version, "free_bytes": self._system.free_memory_bytes()})
@@ -193,18 +193,17 @@ class Updater:
         Raises RuntimeError or ValueError on any stream or hash error.
         """
         try:
-            import uhashlib as _hashlib
+            import uhashlib as _hashlib  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
             import hashlib as _hashlib
 
         try:
-            from ubinascii import hexlify as _hexlify
-
-            def _hex(digest):
-                return str(_hexlify(digest), "ascii")
+            from ubinascii import hexlify as _hexlify  # pyright: ignore[reportMissingImports]
         except ImportError:  # pragma: no cover - desktop fallback
-            def _hex(digest):
-                return digest.hex()
+            from binascii import hexlify as _hexlify
+
+        def _hex(digest):
+            return str(_hexlify(digest), "ascii")
 
         url = self._config.api_url + OTA_STREAM_PATH + "?version=" + update_info.version
         self._log_info("Opening OTA stream", {"version": update_info.version, "free_bytes": self._system.free_memory_bytes()})

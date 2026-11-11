@@ -4,6 +4,7 @@ import types
 import pytest
 
 from edge.shared.hal.watchdog import MicroPythonWatchdog
+from edge.shared.tests.mocks.fake_module import fake_module
 
 
 class _FakeTime(types.ModuleType):
@@ -20,7 +21,7 @@ class _FakeTime(types.ModuleType):
 
 
 def _fake_machine(timer_error=None, wdt_error=None, timer_rejects_hard=False):
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
     machine.wdts = []
     machine.timers = []
 

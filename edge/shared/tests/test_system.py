@@ -2,10 +2,11 @@ import sys
 import types
 
 from edge.shared.hal.system import MicroPythonSystem
+from edge.shared.tests.mocks.fake_module import fake_module
 
 
 def test_get_sleep_capabilities_detects_machine_sleep_functions(monkeypatch):
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
     machine.lightsleep = lambda *_args: None
     monkeypatch.setitem(sys.modules, "machine", machine)
     system = MicroPythonSystem()
@@ -28,7 +29,7 @@ def test_get_sleep_capabilities_returns_unsupported_on_desktop(monkeypatch):
 
 def test_light_sleep_ms_uses_machine_lightsleep(monkeypatch):
     calls = []
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
     machine.lightsleep = lambda ms: calls.append(ms)
     monkeypatch.setitem(sys.modules, "machine", machine)
     system = MicroPythonSystem()
@@ -38,7 +39,7 @@ def test_light_sleep_ms_uses_machine_lightsleep(monkeypatch):
 
 
 def test_light_sleep_ms_falls_back_to_regular_sleep(monkeypatch):
-    monkeypatch.setitem(sys.modules, "machine", types.ModuleType("machine"))
+    monkeypatch.setitem(sys.modules, "machine", fake_module("machine"))
     system = MicroPythonSystem()
     sleeps = []
     monkeypatch.setattr(system, "sleep_ms", lambda ms: sleeps.append(ms))
@@ -48,7 +49,7 @@ def test_light_sleep_ms_falls_back_to_regular_sleep(monkeypatch):
 
 
 def test_reset_cause_maps_machine_constants(monkeypatch):
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
     machine.PWRON_RESET = 1
     machine.HARD_RESET = 2
     machine.WDT_RESET = 3
@@ -59,7 +60,7 @@ def test_reset_cause_maps_machine_constants(monkeypatch):
 
 
 def test_reset_cause_reports_unmapped_value(monkeypatch):
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
     machine.PWRON_RESET = 1
     machine.reset_cause = lambda: 0
     monkeypatch.setitem(sys.modules, "machine", machine)
@@ -68,7 +69,7 @@ def test_reset_cause_reports_unmapped_value(monkeypatch):
 
 
 def test_reset_cause_unknown_when_unavailable(monkeypatch):
-    monkeypatch.setitem(sys.modules, "machine", types.ModuleType("machine"))
+    monkeypatch.setitem(sys.modules, "machine", fake_module("machine"))
 
     assert MicroPythonSystem().reset_cause() == "unknown"
 
@@ -107,7 +108,7 @@ def test_set_utc_datetime_writes_rtc_in_machine_order(monkeypatch):
         def datetime(self, value):
             writes.append(value)
 
-    machine = types.ModuleType("machine")
+    machine = fake_module("machine")
     machine.RTC = _Rtc
     monkeypatch.setitem(sys.modules, "machine", machine)
 

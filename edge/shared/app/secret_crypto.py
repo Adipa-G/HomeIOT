@@ -67,7 +67,7 @@ def _u32be(value: int) -> bytes:
 
 def _sha256(data: bytes) -> bytes:
     try:
-        import uhashlib as hashlib
+        import uhashlib as hashlib  # pyright: ignore[reportMissingImports]
     except ImportError:  # pragma: no cover - desktop fallback
         import hashlib
     return hashlib.sha256(data).digest()
