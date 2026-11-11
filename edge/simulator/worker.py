@@ -60,7 +60,7 @@ def _require_requests():
     except ImportError:
         logger_py.error(
             "The simulator needs the 'requests' package, which is not installed for %s. "
-            "Run `uv sync` from the repository root, then start the simulator with `uv run`.",
+            "Run `uv sync --project edge` from the repository root, then start the simulator with `uv run --project edge`.",
             sys.executable,
         )
         sys.exit(1)

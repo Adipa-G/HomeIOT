@@ -12,6 +12,9 @@ jobs:
   python-tests:
     name: Python Tests (Edge)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: edge
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +22,9 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.11'
+          working-directory: edge
           enable-cache: true
+          cache-dependency-glob: edge/uv.lock
 
       - name: Install dependencies
         run: uv sync --locked
@@ -28,7 +33,7 @@ jobs:
         run: uv run pyright
 
       - name: Run tests
-        run: uv run pytest edge --tb=short
+        run: uv run pytest --tb=short
 
   # .NET tests for API
   dotnet-tests:

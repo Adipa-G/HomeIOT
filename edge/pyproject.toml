@@ -22,11 +22,13 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-testpaths = ["edge"]
+testpaths = ["."]
 
 [tool.pyright]
-include = ["edge"]
-exclude = ["**/__pycache__", "**/.pytest_cache"]
+include = ["."]
+exclude = [".venv", "**/__pycache__", "**/.pytest_cache"]
+# Code imports itself as `edge.…`, so resolve it from the repository root.
+extraPaths = [".."]
 pythonVersion = "3.11"
 pythonPlatform = "Linux"
 typeCheckingMode = "standard"
