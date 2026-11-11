@@ -322,10 +322,15 @@ class ModuleRuntime:
             raise FileNotFoundError(
                 "Module package not cached for " + schedule.module_id + "@" + schedule.version
             )
-        source = package.decode("utf-8")
-        preamble = self._build_variable_preamble(schedule.variables)
         scope = {}
-        exec(preamble + source, scope, scope)
+        preamble = self._build_variable_preamble(schedule.variables)
+        if preamble:
+            exec(preamble, scope, scope)
+        # Compile straight from the cached bytes: decoding to str or prepending
+        # the preamble would hold extra full copies of the source on the heap.
+        _collect_garbage()
+        exec(package, scope, scope)
+        package = None
         entrypoint = scope.get(schedule.entrypoint)
         if not callable(entrypoint):
             raise ValueError(
@@ -640,3 +645,11 @@ class ModuleRuntime:
     def _log_warn(self, message, context=None):
         if self._logger is not None:
             self._logger.warn(message, context)
+
+
+def _collect_garbage():
+    try:
+        import gc
+        gc.collect()
+    except Exception:  # pragma: no cover - gc is always present on supported ports
+        pass

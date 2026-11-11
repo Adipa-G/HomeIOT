@@ -246,3 +246,22 @@ class TestSimulatorHttpClient:
         
         # Close should not raise
         wrapper.close()
+
+    def test_streaming_response_wrapper_readinto(self):
+        from unittest.mock import MagicMock
+        from edge.simulator.mocks.mock_http_client import StreamingResponseWrapper
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.iter_content.return_value = iter([b"abcdef", b"gh"])
+        wrapper = StreamingResponseWrapper(mock_response)
+        buf = bytearray(4)
+        received = b""
+        while True:
+            n = wrapper.readinto(memoryview(buf))
+            if not n:
+                break
+            received += bytes(buf[:n])
+
+        assert wrapper.status_code == 200
+        assert received == b"abcdefgh"

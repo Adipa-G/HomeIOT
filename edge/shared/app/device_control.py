@@ -1,6 +1,6 @@
 import json
 
-from edge.shared.app.safe_io import atomic_write_bytes
+from edge.shared.app.safe_io import atomic_write_text
 
 from edge.shared.app.endpoints import (
     DEV_COMMAND_NEXT_PATH,
@@ -47,13 +47,52 @@ class DeviceControlClient:
             return None
         return self._parse_json(response.text)
 
-    def get_module_package(self, module_id, version):
+    def download_module_package(self, module_id, version, expected_hash=None):
+        """Stream the package to flash in small chunks, hashing as it arrives.
+
+        The package is never held in RAM as a whole: on a fragmented MicroPython
+        heap even a ~10 KB contiguous buffer can fail to allocate.
+        """
         url = self._config.api_url + MODULE_PACKAGE_PATH + "?module_id=" + str(module_id) + "&version=" + str(version)
-        response = self._http.get(url, headers=self._auth_headers())
-        if response.status_code != 200:
-            self._log_warn("Module package download failed", {"status_code": response.status_code, "module_id": module_id})
-            return None
-        return response.content
+        package_path = self._module_package_path(module_id, version)
+        tmp_path = package_path + ".tmp"
+        hash_path = package_path + _HASH_SUFFIX
+        parent = self._parent_dir(package_path)
+        if parent and not self._fs.exists(parent):
+            self._fs.makedirs(parent)
+
+        _collect_garbage()
+        hasher = _sha256()
+        try:
+            response = self._http.get_stream(url, headers=self._auth_headers())
+        except Exception as exc:
+            self._log_warn("Module package download failed", {"error": str(exc), "module_id": module_id})
+            return False
+        try:
+            if response.status_code != 200:
+                self._log_warn("Module package download failed", {"status_code": response.status_code, "module_id": module_id})
+                return False
+            self._fs.write_chunks(tmp_path, _hashed_chunks(response, hasher))
+        except Exception:
+            _remove_file(self._fs, tmp_path)
+            raise
+        finally:
+            response.close()
+
+        digest = _hex(hasher.digest())
+        expected = _normalize_hash(expected_hash)
+        if expected and digest != expected:
+            _remove_file(self._fs, tmp_path)
+            self._log_warn("Downloaded module hash mismatch", {"module_id": module_id, "version": version})
+            return False
+
+        # Drop the stale hash first: if power fails before the new one is written,
+        # the next check falls back to hashing the package itself.
+        _remove_file(self._fs, hash_path)
+        _remove_file(self._fs, package_path)
+        self._fs.rename(tmp_path, package_path)
+        atomic_write_text(self._fs, hash_path, digest)
+        return True
 
     def prefetch_server_code(self, modules):
         """Fire-and-forget: ask server to pre-compute variables for upcoming modules."""
@@ -102,8 +141,15 @@ class DeviceControlClient:
             if not module_id or not version:
                 continue
             checked += 1
-            if self.ensure_module_present(module_id, version, module.get("package_hash")):
-                ready += 1
+            try:
+                if self.ensure_module_present(module_id, version, module.get("package_hash")):
+                    ready += 1
+            except Exception as exc:
+                # Includes MemoryError: one failed download must not take down the control loop.
+                self._log_warn(
+                    "Module package fetch failed",
+                    {"module_id": module_id, "version": version, "error": str(exc) or type(exc).__name__},
+                )
 
         return {"checked": checked, "ready": ready}
 
@@ -114,22 +160,24 @@ class DeviceControlClient:
 
         package_path = self._module_package_path(module_id, version)
         if self._fs.exists(package_path):
-            existing = self._fs.read_bytes(package_path)
-            if self._hash_matches(existing, expected_hash):
+            if self._cached_hash_matches(package_path, expected_hash):
                 return True
             self._log_warn("Cached module hash mismatch; redownloading", {"module_id": module_id, "version": version})
 
-        content = self.get_module_package(module_id, version)
-        if content is None:
-            return False
-        if not self._hash_matches(content, expected_hash):
-            self._log_warn("Downloaded module hash mismatch", {"module_id": module_id, "version": version})
-            return False
+        return self.download_module_package(module_id, version, expected_hash)
 
-        parent = self._parent_dir(package_path)
-        if parent and not self._fs.exists(parent):
-            self._fs.makedirs(parent)
-        atomic_write_bytes(self._fs, package_path, content)
+    def _cached_hash_matches(self, package_path, expected_hash):
+        expected = _normalize_hash(expected_hash)
+        if not expected:
+            return True
+        hash_path = package_path + _HASH_SUFFIX
+        if self._fs.exists(hash_path):
+            return self._fs.read_text(hash_path).strip().lower() == expected
+        # Packages cached before hash files existed: verify once, then record the hash.
+        _collect_garbage()
+        if self._digest_bytes(self._fs.read_bytes(package_path)) != expected:
+            return False
+        atomic_write_text(self._fs, hash_path, expected)
         return True
 
     def get_cached_module_package(self, module_id, version):
@@ -169,25 +217,12 @@ class DeviceControlClient:
 
     @staticmethod
     def _digest_bytes(data):
-        try:
-            import uhashlib as hashlib  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            import hashlib
-
-        digest = hashlib.sha256(data).digest()
-        return "".join("{:02x}".format(byte) for byte in digest)
+        hasher = _sha256()
+        hasher.update(data)
+        return _hex(hasher.digest())
 
     def _module_package_path(self, module_id, version):
         return self._modules_root + "/" + str(module_id) + "/" + str(version) + ".pkg"
-
-    @classmethod
-    def _hash_matches(cls, content, expected_hash):
-        if not expected_hash:
-            return True
-        expected = str(expected_hash)
-        if expected.startswith("sha256:"):
-            expected = expected.split(":", 1)[1]
-        return cls._digest_bytes(content).lower() == expected.lower()
 
     @staticmethod
     def _parent_dir(path):
@@ -202,3 +237,52 @@ class DeviceControlClient:
     def _log_info(self, message, context=None):
         if self._logger is not None:
             self._logger.info(message, context)
+
+
+_HASH_SUFFIX = ".sha256"
+_PACKAGE_CHUNK_SIZE = 512
+
+
+def _sha256():
+    try:
+        import uhashlib as hashlib  # pyright: ignore[reportMissingImports]
+    except ImportError:  # pragma: no cover - desktop fallback
+        import hashlib
+    return hashlib.sha256()
+
+
+def _hex(digest):
+    return "".join("{:02x}".format(byte) for byte in digest)
+
+
+def _normalize_hash(expected_hash):
+    if not expected_hash:
+        return ""
+    expected = str(expected_hash)
+    if expected.startswith("sha256:"):
+        expected = expected.split(":", 1)[1]
+    return expected.strip().lower()
+
+
+def _hashed_chunks(response, hasher):
+    # One reused buffer: no per-chunk allocations on the device heap.
+    mv = memoryview(bytearray(_PACKAGE_CHUNK_SIZE))
+    while True:
+        n = response.readinto(mv)
+        if not n:
+            return
+        hasher.update(mv[:n])
+        yield mv[:n]
+
+
+def _remove_file(fs, path):
+    if fs.exists(path) and not fs.is_dir(path):
+        fs.remove(path)
+
+
+def _collect_garbage():
+    try:
+        import gc
+        gc.collect()
+    except Exception:  # pragma: no cover - gc is always present on supported ports
+        pass

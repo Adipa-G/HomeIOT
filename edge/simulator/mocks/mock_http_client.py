@@ -11,14 +11,28 @@ class StreamingResponseWrapper:
 
     def __init__(self, response):
         self._response = response
+        self.status_code = response.status_code
         self._iter = response.iter_content(chunk_size=4096)
+        self._pending = b""
 
     def read(self, n: int) -> bytes:
         """Read up to n bytes from response."""
+        if self._pending:
+            data, self._pending = self._pending[:n], self._pending[n:]
+            return data
         try:
             return next(self._iter)
         except StopIteration:
             return b""
+
+    def readinto(self, buf) -> int:
+        """Fill buf with up to len(buf) bytes; returns 0 at end of stream."""
+        if not self._pending:
+            self._pending = self.read(len(buf))
+        n = min(len(buf), len(self._pending))
+        buf[:n] = self._pending[:n]
+        self._pending = self._pending[n:]
+        return n
 
     def close(self) -> None:
         """Close the response."""

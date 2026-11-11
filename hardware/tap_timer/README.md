@@ -16,37 +16,35 @@ On each run the module:
 - Reads the battery voltage from GPIO 26. This pin gets half of VSYS through a
   divider, so the voltage is doubled.
 - Powers the rain sensor from GPIO 4 only while taking a reading, so the
-  probe doesn't corrode. It waits 100 ms for the sensor to settle, reads it,
-  then switches the power off again, even if the read fails.
+  probe doesn't corrode.
 - Reads the rain sensor's analog output on GPIO 27 as a wetness value from
   0 (dry) to 1023 (soaked). It also reads the digital output on GPIO 1, which
   is low while wet. The digital reading is only reported.
-- Keeps the peak wetness over a sliding 12-hour window in memory. A reboot
-  clears it.
-- Opens the valve on GPIO 0 from `VALVE_START_TIME` (local time) for
-  `VALVE_RUN_DURATION_MINUTES`. The decision is made once, at the start of the
-  window:
-  - If the 12-hour peak is above `RAIN_THRESHOLD_LAST_12H`, the window is
-    skipped.
-  - Otherwise the valve stays open for the whole window, even if it starts
-    raining.
+- Opens the valve on GPIO 0 from `VALVE_START_TIME` for
+  `VALVE_RUN_DURATION_MINUTES`, as long as the current wetness is at or below
+  `RAIN_THRESHOLD`. Once open, it stays open for the whole window even if it
+  starts raining. There's no rain history: if the sensor dries out partway
+  through a skipped window, the valve opens for the rest of it.
+- Uses a fixed UTC+10 (AEST) clock with no daylight saving, so a 17:00 start
+  happens at 18:00 by the clock in summer.
 - Keeps the valve closed until the clock is synced, and closes it if the run
   fails.
-- Opens the valve on the next run when `TURN_VALVE_ON_MANUALLY` is set to
-  `true`. This ignores the schedule, rain and clock sync. The valve stays open
-  until the variable is set back to `false`, then the schedule takes over
-  again. Rain is still tracked while it's on.
+- Opens the valve when `TURN_VALVE_ON_MANUALLY` is set to `true`, ignoring the
+  schedule, rain and clock sync. It stays open until the variable is set back
+  to `false`.
+
+The module stores nothing between runs. It reads the valve and indicator pins
+back to remember what it decided last time. A reboot sets them all low.
+
+The source is kept small on purpose. The Pico W ran out of memory compiling an
+11 KB version of this module.
 
 ### Indicator LEDs
 
 | Pin    | On when |
 |--------|---------|
-| GPIO 2 | The 12-hour peak wetness is above `RAIN_THRESHOLD_LAST_12H` right now. |
-| GPIO 3 | The valve won't run today. Either the current window was skipped, or the rain won't age out of the 12-hour window before the next start. |
-
-Both LEDs clear on their own. GPIO 2 clears once 12 hours pass with no
-reading above the threshold. GPIO 3 clears once the skipped window has passed
-and the next window is far enough away for the rain to age out by then.
+| GPIO 2 | The current wetness is above `RAIN_THRESHOLD`. |
+| GPIO 3 | Rain skipped today's window. It stays on until midnight. |
 
 ### Module variables
 
@@ -55,11 +53,9 @@ default is used.
 
 | Variable                     | Default   | Description |
 |------------------------------|-----------|-------------|
-| `VALVE_START_TIME`           | `"17:00"` | Local start time (`HH:MM`). |
+| `VALVE_START_TIME`           | `"17:00"` | Start time (`HH:MM`, AEST). |
 | `VALVE_RUN_DURATION_MINUTES` | `10`      | How long the valve stays open. |
-| `RAIN_THRESHOLD_LAST_12H`    | `100`     | Peak wetness (0-1023) in the last 12 hours that skips watering. |
-| `UTC_OFFSET_MINUTES`         | `600`     | Standard-time offset from UTC. |
-| `USE_AU_DST`                 | `true`    | Apply Australian daylight saving (first Sunday in October to first Sunday in April). |
+| `RAIN_THRESHOLD`             | `100`     | Wetness (0-1023) above which the window is skipped. |
 | `TURN_VALVE_ON_MANUALLY`     | `false`   | Hold the valve open regardless of schedule and rain. Use a boolean variable with a toggle control. |
 
 ## PCB design and power
