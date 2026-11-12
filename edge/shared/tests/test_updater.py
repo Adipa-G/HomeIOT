@@ -1,6 +1,9 @@
+from pathlib import Path
 import hashlib
 import json
 import sys
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from edge.shared.app.secret_crypto import encrypt_secret
 
@@ -42,7 +45,7 @@ def _sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _build_ota_stream(files) -> bytes:
+def _build_ota_stream(files: Sequence[tuple[Any, ...]]) -> bytes:
     """Build an OTA stream payload as the server would send it.
 
     files: list of (rel_path, content_bytes) or (rel_path, content_bytes, hash_override)
@@ -328,19 +331,19 @@ def test_apply_raises_on_invalid_config_and_cleans_staging():
 class _TrackingLogger:
     """Logger that records pause/resume/flush calls for verification."""
     def __init__(self):
-        self.calls = []
-    def pause_uplink(self):
+        self.calls: list[object] = []
+    def pause_uplink(self) -> None:
         self.calls.append("pause")
-    def resume_uplink(self):
+    def resume_uplink(self) -> None:
         self.calls.append("resume")
-    def flush(self, reason="manual"):
+    def flush(self, reason: str = "manual") -> bool:
         self.calls.append(("flush", reason))
         return True
-    def info(self, msg, context=None):
+    def info(self, msg: str, context: dict[str, Any] | None = None) -> None:
         pass
-    def warn(self, msg, context=None):
+    def warn(self, msg: str, context: dict[str, Any] | None = None) -> None:
         pass
-    def error(self, msg, context=None):
+    def error(self, msg: str, context: dict[str, Any] | None = None) -> None:
         pass
 
 
@@ -432,7 +435,7 @@ def test_stream_frame_reader_read_chunks_small_chunk():
 def test_stream_frame_reader_reports_progress_per_chunk():
     payload = b"0123456789"
     resp = MockStreamingResponse(payload + b"END\n")
-    progress = []
+    progress: list[int] = []
     reader = _StreamFrameReader(resp, on_progress=lambda: progress.append(1))
 
     chunks = [bytes(c) for c in reader.read_chunks(len(payload), chunk_size=4)]
@@ -515,8 +518,6 @@ def test_apply_writes_large_file_without_full_buffer():
 
 def test_apply_cleans_tmp_file_on_stream_error():
     """If the stream is cut during a file, any .ota_tmp file must be cleaned up."""
-    import io
-
     fs = MockFileSystem()
     http = MockHttpClient()
     system = MockSystem()
@@ -732,10 +733,10 @@ def test_apply_feeds_watchdog_while_streaming():
     assert watchdog.feed_calls >= 4096 // 512
 
 
-def _merge_with_active(active_extra, staged_extra):
+def _merge_with_active(active_extra: dict[str, Any], staged_extra: dict[str, Any]) -> dict[str, Any]:
     fs = MockFileSystem()
     system = MockSystem()
-    active = {
+    active: dict[str, Any] = {
         "device_id": "esp32-001",
         "api_url": "http://localhost:8000",
         "api_key": "old-secret",
@@ -751,7 +752,7 @@ def _merge_with_active(active_extra, staged_extra):
         fs=fs, http=MockHttpClient(), system=system, config=_config(),
         boot_manager=BootManager(fs=fs, system=system, max_attempts=3),
     )
-    staged = {
+    staged: dict[str, Any] = {
         "device_id": "replace-with-device-id",
         "api_url": "replace-with-api-url",
         "api_key": "replace-with-device-api-key",
@@ -825,7 +826,9 @@ def test_merge_keeps_device_radio_off_sleep_when_release_has_no_power_block():
 # Flash space: confirmed app backup is freed before staging
 # ---------------------------------------------------------------------------
 
-def _updater_with_confirmed_app(fs, http, system, pending_app_changed=False):
+def _updater_with_confirmed_app(
+    fs: MockFileSystem, http: MockHttpClient, system: MockSystem, pending_app_changed: bool = False
+) -> Updater:
     boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
     fs.write_bytes("app/edge/main.py", b"current")
     fs.write_bytes("app_prev/edge/main.py", b"previous")
@@ -941,22 +944,24 @@ _PROBE = (PROBE_PATH, b"M\x06\x00\x1f probe")
 
 
 class _Probe:
-    def __init__(self, error=None):
+    def __init__(self, error: Exception | None = None):
         self.error = error
-        self.calls = []
+        self.calls: list[str] = []
 
-    def __call__(self, directory):
+    def __call__(self, directory: str) -> None:
         self.calls.append(directory)
         if self.error is not None:
             raise self.error
 
 
-def _probe_updater(fs, http, system, probe):
+def _probe_updater(
+    fs: MockFileSystem, http: MockHttpClient, system: MockSystem, probe: Callable[[str], None] | None
+) -> Updater:
     boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
     return Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager, probe=probe)
 
 
-def _release(files):
+def _release(files: list[tuple[str, bytes]]) -> UpdateInfo:
     return UpdateInfo(
         available=True,
         version="1.1.0",
@@ -1019,7 +1024,7 @@ def test_apply_without_probe_installs_mpy_release():
     assert fs.read_bytes("app/mpy_probe.mpy") == _PROBE[1]
 
 
-def test_import_probe_loads_module_from_directory_and_cleans_up(tmp_path, monkeypatch):
+def test_import_probe_loads_module_from_directory_and_cleans_up(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "path", list(sys.path))
     (tmp_path / "mpy_probe.py").write_text("OK = 1\n", encoding="utf-8")
 
@@ -1029,7 +1034,7 @@ def test_import_probe_loads_module_from_directory_and_cleans_up(tmp_path, monkey
     assert "mpy_probe" not in sys.modules
 
 
-def test_import_probe_raises_when_module_cannot_load(tmp_path, monkeypatch):
+def test_import_probe_raises_when_module_cannot_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "path", list(sys.path))
     (tmp_path / "mpy_probe.py").write_text("raise ValueError('incompatible .mpy file')\n", encoding="utf-8")
 

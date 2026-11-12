@@ -1,10 +1,11 @@
 import ast
 import base64
-import functools
 import hashlib
 import json
 import os
 import sys
+from collections.abc import Sequence
+from typing import IO, Any
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from edge.bootstrap.bootstrap import connect_wifi, run_bootstrap, write_config
 from edge.bootstrap.provisioning import build_device_config
 from edge.shared.app.config import Config
 from edge.shared.app.secret_crypto import decrypt_secret
+from edge.shared.hal.interfaces import HttpResponse
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 from edge.shared.tests.mocks.mock_network import MockNetwork
@@ -37,7 +39,7 @@ TEMPLATE = {
 }
 
 
-def _provision(**overrides):
+def _provision(**overrides: str) -> dict[str, str]:
     data = {
         "device_id": "esp32-new",
         "platform": "esp32",
@@ -54,7 +56,7 @@ def _release_source(rel_path: str, platform: str = "esp32") -> Path:
     return build_artifact._collect_files(ROOT, platform)[rel_path]
 
 
-def _build_script(provision: dict, platform: str = "esp32") -> str:
+def _build_script(provision: dict[str, str], platform: str = "esp32") -> str:
     """Mirror of the API's BootstrapScriptBuilder output format."""
     lines = [(ROOT / BUNDLE["loader"]).read_text(encoding="utf-8").rstrip("\n"), ""]
     lines.append(loader.PROVISION_MARKER + json.dumps(provision, ensure_ascii=False))
@@ -68,7 +70,7 @@ def _build_script(provision: dict, platform: str = "esp32") -> str:
     return "\n".join(lines) + "\n"
 
 
-def _build_script_from_release(provision: dict, artifact_dir: Path) -> str:
+def _build_script_from_release(provision: dict[str, str], artifact_dir: Path) -> str:
     """Mirror of BootstrapScriptBuilder reading a built release: .py as text, else .mpy as base64."""
     lines = [(ROOT / BUNDLE["loader"]).read_text(encoding="utf-8").rstrip("\n"), ""]
     lines.append(loader.PROVISION_MARKER + json.dumps(provision, ensure_ascii=False))
@@ -90,7 +92,7 @@ def _build_script_from_release(provision: dict, artifact_dir: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _ota_stream(files) -> bytes:
+def _ota_stream(files: Sequence[tuple[str, bytes]]) -> bytes:
     out = bytearray()
     for rel_path, content in files:
         out.extend(("HASH:" + hashlib.sha256(content).hexdigest() + "\n").encode())
@@ -101,7 +103,7 @@ def _ota_stream(files) -> bytes:
     return bytes(out)
 
 
-def _release_files():
+def _release_files() -> list[tuple[str, bytes]]:
     return [
         ("boot.py", b"print('boot')\n"),
         ("main.py", b"print('firmware main')\n"),
@@ -110,7 +112,7 @@ def _release_files():
     ]
 
 
-def _mock_ota(http: MockHttpClient, version: str = "1.2.0", files=None):
+def _mock_ota(http: MockHttpClient, version: str = "1.2.0", files: Sequence[tuple[str, bytes]] | None = None) -> None:
     files = files if files is not None else _release_files()
     manifest = [{"path": p, "hash": hashlib.sha256(c).hexdigest()} for p, c in files]
     http.add_json_response(
@@ -124,18 +126,18 @@ def _mock_ota(http: MockHttpClient, version: str = "1.2.0", files=None):
 
 class _SilentLogger:
     def __init__(self):
-        self.messages = []
+        self.messages: list[tuple[str, str]] = []
 
-    def info(self, message, context=None):
+    def info(self, message: str, context: dict[str, Any] | None = None) -> None:
         self.messages.append(("INFO", message))
 
-    def warn(self, message, context=None):
+    def warn(self, message: str, context: dict[str, Any] | None = None) -> None:
         self.messages.append(("WARN", message))
 
-    def error(self, message, context=None):
+    def error(self, message: str, context: dict[str, Any] | None = None) -> None:
         self.messages.append(("ERROR", message))
 
-    def flush(self, reason=None):
+    def flush(self, reason: str | None = None) -> None:
         pass
 
 
@@ -184,7 +186,7 @@ def test_write_config_rejects_missing_fields():
 
 
 @pytest.mark.parametrize("platform", ["esp32", "pico"])
-def test_bundle_release_files_are_part_of_every_release(platform):
+def test_bundle_release_files_are_part_of_every_release(platform: str):
     release = build_artifact._collect_files(ROOT, platform)
 
     missing = [p for p in BUNDLE["release_files"] if p not in release]
@@ -231,7 +233,7 @@ def _edge_imports(path: Path):
 def test_bundle_covers_bootstrap_import_closure():
     bundled = set(BUNDLE["bootstrap_files"]) | set(BUNDLE["release_files"])
     pending = ["edge.bootstrap.bootstrap"]
-    seen = set()
+    seen: set[str] = set()
     while pending:
         module = pending.pop()
         if module in seen:
@@ -249,12 +251,12 @@ def test_bundle_covers_bootstrap_import_closure():
 # ---------------------------------------------------------------- loader
 
 
-def _utf8_text_open(path, mode="r"):
+def _utf8_text_open(path: str, mode: str = "r") -> IO[Any]:
     # MicroPython always uses UTF-8; CPython on Windows would default to cp1252.
     return open(path, mode) if "b" in mode else open(path, mode, encoding="utf-8")
 
 
-def test_extract_payload_writes_embedded_files(tmp_path, monkeypatch):
+def test_extract_payload_writes_embedded_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     # MicroPython always uses UTF-8; CPython on Windows would default to cp1252.
     monkeypatch.setattr(loader, "open", _utf8_text_open, raising=False)
@@ -273,13 +275,13 @@ def test_extract_payload_writes_embedded_files(tmp_path, monkeypatch):
         assert extracted.splitlines() == (ROOT / rel_path).read_text(encoding="utf-8").splitlines()
 
 
-def test_generated_script_is_valid_python(tmp_path):
+def test_generated_script_is_valid_python(tmp_path: Path):
     script = _build_script(_provision())
 
     compile(script, "main.py", "exec")
 
 
-def test_extract_payload_replaces_stale_lib_dir(tmp_path, monkeypatch):
+def test_extract_payload_replaces_stale_lib_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     stale = tmp_path / loader.LIB_DIR / "stale" / "old.py"
     stale.parent.mkdir(parents=True)
@@ -300,7 +302,9 @@ def test_extract_payload_replaces_stale_lib_dir(tmp_path, monkeypatch):
         ("#@@FILE a.py\n#|x\nprint(1)\n#@@END\n", "unterminated"),
     ],
 )
-def test_extract_payload_rejects_corrupt_payloads(tmp_path, monkeypatch, content, message):
+def test_extract_payload_rejects_corrupt_payloads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str, message: str
+):
     monkeypatch.chdir(tmp_path)
     Path("main.py").write_text(content, encoding="utf-8")
 
@@ -308,7 +312,7 @@ def test_extract_payload_rejects_corrupt_payloads(tmp_path, monkeypatch, content
         loader.extract_payload(os)
 
 
-def test_extract_payload_writes_compiled_release_files(tmp_path, monkeypatch):
+def test_extract_payload_writes_compiled_release_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path / "artifacts", compile_mpy=True)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(loader, "open", _utf8_text_open, raising=False)
@@ -329,7 +333,7 @@ def test_extract_payload_writes_compiled_release_files(tmp_path, monkeypatch):
             assert extracted.splitlines() == (artifact_dir / rel_path).read_text(encoding="utf-8").splitlines()
 
 
-def _compiled_installer(provision: dict) -> str:
+def _compiled_installer(provision: dict[str, str]) -> str:
     probe = base64.b64encode(b"M\x06\x00\x1f probe").decode()
     return "\n".join([
         loader.PROVISION_MARKER + json.dumps(provision),
@@ -342,13 +346,13 @@ def _compiled_installer(provision: dict) -> str:
     ]) + "\n"
 
 
-def test_loader_run_stops_before_install_when_probe_fails(tmp_path, monkeypatch):
+def test_loader_run_stops_before_install_when_probe_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "path", list(sys.path))
     Path("main.py").write_text(_compiled_installer(_provision()), encoding="utf-8")
-    calls = []
+    calls: list[str] = []
 
-    def failing_probe(lib_dir):
+    def failing_probe(lib_dir: str) -> None:
         calls.append(lib_dir)
         raise ValueError("This firmware can't load the installer's compiled modules")
 
@@ -359,13 +363,13 @@ def test_loader_run_stops_before_install_when_probe_fails(tmp_path, monkeypatch)
     assert (tmp_path / loader.LIB_DIR / "mpy_probe.mpy").read_bytes() == b"M\x06\x00\x1f probe"
 
 
-def test_loader_run_skips_probe_for_source_installer(tmp_path, monkeypatch):
+def test_loader_run_skips_probe_for_source_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "path", list(sys.path))
     Path("main.py").write_text(_build_script(_provision()), encoding="utf-8")
     fs, system, network, http = MockFileSystem(), MockSystem(), MockNetwork(), MockHttpClient()
     _mock_ota(http)
-    calls = []
+    calls: list[str] = []
 
     loader.run(os_mod=os, services=(fs, system, network, http), probe=calls.append)
 
@@ -373,7 +377,7 @@ def test_loader_run_skips_probe_for_source_installer(tmp_path, monkeypatch):
     assert system.reset_calls == 1
 
 
-def test_import_probe_explains_failure_and_cleans_up(tmp_path, monkeypatch):
+def test_import_probe_explains_failure_and_cleans_up(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "path", list(sys.path))
     (tmp_path / "mpy_probe.py").write_text("raise ValueError('incompatible .mpy file')\n", encoding="utf-8")
 
@@ -383,7 +387,7 @@ def test_import_probe_explains_failure_and_cleans_up(tmp_path, monkeypatch):
     assert "mpy_probe" not in sys.modules
 
 
-def test_import_probe_accepts_loadable_module(tmp_path, monkeypatch):
+def test_import_probe_accepts_loadable_module(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "path", list(sys.path))
     (tmp_path / "mpy_probe.py").write_text("OK = 1\n", encoding="utf-8")
 
@@ -392,7 +396,7 @@ def test_import_probe_accepts_loadable_module(tmp_path, monkeypatch):
     assert "mpy_probe" not in sys.modules
 
 
-def test_loader_run_installs_release_and_cleans_up(tmp_path, monkeypatch):
+def test_loader_run_installs_release_and_cleans_up(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "path", list(sys.path))
     Path("main.py").write_text(_build_script(_provision()), encoding="utf-8")
@@ -459,16 +463,16 @@ def test_run_bootstrap_raises_when_device_is_rejected():
 
 
 class _FailingHttp(MockHttpClient):
-    def __init__(self, error):
+    def __init__(self, error: Exception):
         super().__init__()
         self._error = error
 
-    def get(self, url, headers=None):
+    def get(self, url: str, headers: dict[str, str] | None = None) -> HttpResponse:
         raise self._error
 
 
 @pytest.mark.parametrize("errno", [-2, -202])
-def test_run_bootstrap_explains_unresolvable_api_host(errno):
+def test_run_bootstrap_explains_unresolvable_api_host(errno: int):
     fs, system, network = MockFileSystem(), MockSystem(), MockNetwork()
 
     with pytest.raises(RuntimeError, match="Cannot resolve the API host in " + API_URL):
@@ -485,18 +489,18 @@ def test_run_bootstrap_propagates_other_network_errors():
 
 
 class _FlakyNetwork(MockNetwork):
-    def __init__(self, failures):
+    def __init__(self, failures: int):
         super().__init__()
         self._failures = failures
 
-    def connect(self, ssid, password, timeout_ms=15000):
+    def connect(self, ssid: str, password: str, timeout_ms: int = 15000) -> None:
         self.connect_calls.append((ssid, password, timeout_ms))
         if len(self.connect_calls) <= self._failures:
             raise OSError("timeout")
         self.connected = True
 
 
-def _loaded_config():
+def _loaded_config() -> Config:
     fs = MockFileSystem()
     write_config(fs, _provision(), TEMPLATE)
     return Config.load(fs)
@@ -524,13 +528,13 @@ def test_connect_wifi_sets_country_before_connecting():
     class _CountryNetwork(MockNetwork):
         def __init__(self):
             super().__init__()
-            self.events = []
+            self.events: list[tuple[str, str]] = []
 
-        def set_country(self, country):
+        def set_country(self, country: str) -> bool:
             self.events.append(("country", country))
             return True
 
-        def connect(self, ssid, password, timeout_ms=15000):
+        def connect(self, ssid: str, password: str, timeout_ms: int = 15000) -> None:
             self.events.append(("connect", ssid))
             super().connect(ssid, password, timeout_ms)
 

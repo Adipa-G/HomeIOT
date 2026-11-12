@@ -2,6 +2,8 @@ import importlib.util
 import os
 import sys
 import types
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -17,7 +19,7 @@ MODULE_PATH = os.path.abspath(
 )
 
 
-def _load_module():
+def _load_module() -> Any:
     spec = importlib.util.spec_from_file_location("temperature_fan_controller_main", MODULE_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -25,28 +27,34 @@ def _load_module():
     return module
 
 
-def _duty(percent):
+def _duty(percent: float) -> int:
     return int((percent / 100) * 65535)
 
 
 class FakeHardware:
     """Simulates the RP2 peripherals used by the fan controller."""
 
-    def __init__(self, temperature=30.0, roms=None, tach_pulses=None, read_temp_error=None):
+    def __init__(
+        self,
+        temperature: float = 30.0,
+        roms: list[bytes] | None = None,
+        tach_pulses: list[int] | None = None,
+        read_temp_error: Exception | None = None,
+    ):
         self.temperature = temperature
         self.roms = [b"rom-1"] if roms is None else roms
         # Pulses delivered to the tach IRQ during each 1 s RPM measurement window.
         self.tach_pulses = list(tach_pulses or [])
         self.read_temp_error = read_temp_error
-        self.tach_handler = None
-        self.irq_trigger = None
-        self.pwm_freq = None
-        self.duties = []
-        self.sleeps = []
-        self.pin_args = []
+        self.tach_handler: Callable[[object], None] | None = None
+        self.irq_trigger: object = None
+        self.pwm_freq: int | None = None
+        self.duties: list[int] = []
+        self.sleeps: list[float] = []
+        self.pin_args: list[tuple[object, tuple[object, ...]]] = []
         self.converted = False
 
-    def build_modules(self):
+    def build_modules(self) -> dict[str, Any]:
         hw = self
 
         class Pin:
@@ -54,39 +62,39 @@ class FakeHardware:
             PULL_UP = "PULL_UP"
             IRQ_FALLING = "IRQ_FALLING"
 
-            def __init__(self, pin_id, *args):
+            def __init__(self, pin_id: object, *args: object):
                 self.pin_id = pin_id
                 hw.pin_args.append((pin_id, args))
 
-            def irq(self, trigger, handler):
+            def irq(self, trigger: object, handler: Callable[[object], None]) -> None:
                 hw.irq_trigger = trigger
                 hw.tach_handler = handler
 
         class PWM:
-            def __init__(self, pin):
+            def __init__(self, pin: object):
                 self.pin = pin
 
-            def freq(self, value):
+            def freq(self, value: int) -> None:
                 hw.pwm_freq = value
 
-            def duty_u16(self, value):
+            def duty_u16(self, value: int) -> None:
                 hw.duties.append(value)
 
         class OneWire:
-            def __init__(self, pin):
+            def __init__(self, pin: object):
                 self.pin = pin
 
         class DS18X20:
-            def __init__(self, bus):
+            def __init__(self, bus: object):
                 self.bus = bus
 
-            def scan(self):
+            def scan(self) -> list[bytes]:
                 return hw.roms
 
-            def convert_temp(self):
+            def convert_temp(self) -> None:
                 hw.converted = True
 
-            def read_temp(self, rom):
+            def read_temp(self, rom: bytes) -> float:
                 if hw.read_temp_error is not None:
                     raise hw.read_temp_error
                 return hw.temperature
@@ -100,7 +108,7 @@ class FakeHardware:
         ds18x20.DS18X20 = DS18X20
         return {"machine": machine, "onewire": onewire, "ds18x20": ds18x20}
 
-    def sleep(self, seconds):
+    def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
         if seconds == 1.0 and self.tach_handler is not None:
             pulses = self.tach_pulses.pop(0) if self.tach_pulses else 0
@@ -109,8 +117,8 @@ class FakeHardware:
 
 
 @pytest.fixture
-def run_controller(monkeypatch):
-    def _run(hw, platform="rp2"):
+def run_controller(monkeypatch: pytest.MonkeyPatch) -> Callable[..., Any]:
+    def _run(hw: FakeHardware, platform: str = "rp2") -> Any:
         module = _load_module()
         for name, fake in hw.build_modules().items():
             monkeypatch.setitem(sys.modules, name, fake)
@@ -121,7 +129,7 @@ def run_controller(monkeypatch):
     return _run
 
 
-def test_returns_error_on_unsupported_platform(run_controller):
+def test_returns_error_on_unsupported_platform(run_controller: Callable[..., Any]):
     hw = FakeHardware()
 
     result = run_controller(hw, platform="linux")
@@ -134,7 +142,7 @@ def test_returns_error_on_unsupported_platform(run_controller):
     assert hw.duties == []
 
 
-def test_returns_error_when_no_sensor_found(run_controller):
+def test_returns_error_when_no_sensor_found(run_controller: Callable[..., Any]):
     hw = FakeHardware(roms=[])
 
     result = run_controller(hw)
@@ -160,7 +168,7 @@ def test_returns_error_when_no_sensor_found(run_controller):
         (70.0, 100),
     ],
 )
-def test_maps_temperature_to_fan_speed(run_controller, temperature, expected_speed):
+def test_maps_temperature_to_fan_speed(run_controller: Callable[..., Any], temperature: float, expected_speed: int):
     hw = FakeHardware(temperature=temperature, tach_pulses=[40])
 
     result = run_controller(hw)
@@ -171,7 +179,7 @@ def test_maps_temperature_to_fan_speed(run_controller, temperature, expected_spe
     assert hw.duties == [_duty(expected_speed)]
 
 
-def test_reports_rpm_from_tach_pulses(run_controller):
+def test_reports_rpm_from_tach_pulses(run_controller: Callable[..., Any]):
     # 2 pulses per revolution over a 1 s window: 50 pulses -> 25 rev/s -> 1500 RPM.
     hw = FakeHardware(temperature=42.0, tach_pulses=[50])
 
@@ -187,7 +195,7 @@ def test_reports_rpm_from_tach_pulses(run_controller):
     assert isinstance(result["rpm"], int)
 
 
-def test_configures_peripherals(run_controller):
+def test_configures_peripherals(run_controller: Callable[..., Any]):
     hw = FakeHardware(temperature=30.0)
 
     run_controller(hw)
@@ -198,7 +206,7 @@ def test_configures_peripherals(run_controller):
     assert (2, ("IN", "PULL_UP")) in hw.pin_args
 
 
-def test_kick_starts_stalled_fan_at_low_speed(run_controller):
+def test_kick_starts_stalled_fan_at_low_speed(run_controller: Callable[..., Any]):
     hw = FakeHardware(temperature=36.0, tach_pulses=[0, 20])
 
     result = run_controller(hw)
@@ -210,7 +218,7 @@ def test_kick_starts_stalled_fan_at_low_speed(run_controller):
     assert hw.sleeps == [1.0, 0.4, 1.0]
 
 
-def test_does_not_kick_start_when_fan_is_spinning(run_controller):
+def test_does_not_kick_start_when_fan_is_spinning(run_controller: Callable[..., Any]):
     hw = FakeHardware(temperature=36.0, tach_pulses=[10])
 
     result = run_controller(hw)
@@ -221,7 +229,7 @@ def test_does_not_kick_start_when_fan_is_spinning(run_controller):
 
 
 @pytest.mark.parametrize("temperature, expected_speed", [(30.0, 0), (42.0, 50), (50.0, 100)])
-def test_does_not_kick_start_outside_low_speed_range(run_controller, temperature, expected_speed):
+def test_does_not_kick_start_outside_low_speed_range(run_controller: Callable[..., Any], temperature: float, expected_speed: int):
     hw = FakeHardware(temperature=temperature, tach_pulses=[0])
 
     result = run_controller(hw)
@@ -231,7 +239,7 @@ def test_does_not_kick_start_outside_low_speed_range(run_controller, temperature
     assert hw.sleeps == [1.0]
 
 
-def test_returns_error_when_hardware_raises(run_controller):
+def test_returns_error_when_hardware_raises(run_controller: Callable[..., Any]):
     hw = FakeHardware(read_temp_error=OSError("CRC error"))
 
     result = run_controller(hw)

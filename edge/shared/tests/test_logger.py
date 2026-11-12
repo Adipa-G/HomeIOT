@@ -1,7 +1,8 @@
+import pytest
 from edge.shared.app.config import LoggingConfig
 from edge.shared.app.endpoints import LOGS_PATH
 from edge.shared.app.logger import EdgeLogger
-from edge.shared.hal.interfaces import IHttpClient, ISystem
+from edge.shared.hal.interfaces import HttpResponse, IHttpClient, ISystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 
 
@@ -19,10 +20,10 @@ class ControlledSystem(ISystem):
         self.now += 100
         return self.now
 
-    def ticks_diff(self, a, b):
+    def ticks_diff(self, a: int, b: int) -> int:
         return a - b
 
-    def sleep_ms(self, milliseconds):
+    def sleep_ms(self, milliseconds: int) -> None:
         self.now += milliseconds
 
 
@@ -115,7 +116,7 @@ def test_logger_drops_newest_when_buffer_full_and_reports_truncation():
     assert data["dropped_count"] > 0
 
 
-def test_logger_prints_console_event_with_context(capsys):
+def test_logger_prints_console_event_with_context(capsys: pytest.CaptureFixture[str]):
     system = ControlledSystem()
     cfg = LoggingConfig(
         enabled_uplink=False,
@@ -134,7 +135,13 @@ def test_logger_prints_console_event_with_context(capsys):
 
 def test_logger_flush_returns_false_on_transport_exception():
     class FailingHttpClient(IHttpClient):
-        def post(self, url, data, headers=None, timeout_s=None):
+        def post(
+            self,
+            url: str,
+            data: object,
+            headers: dict[str, str] | None = None,
+            timeout_s: float | None = None,
+        ) -> HttpResponse:
             raise OSError(113)
 
     system = ControlledSystem()

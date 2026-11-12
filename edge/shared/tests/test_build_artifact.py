@@ -15,7 +15,7 @@ def _manifest(artifact_dir: Path) -> dict[str, str]:
     return {item["path"]: item["hash"] for item in data["manifest"]}
 
 
-def test_source_build_ships_source_only(tmp_path):
+def test_source_build_ships_source_only(tmp_path: Path):
     artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path, compile_mpy=False)
 
     paths = _manifest(artifact_dir)
@@ -24,7 +24,7 @@ def test_source_build_ships_source_only(tmp_path):
 
 
 @pytest.mark.parametrize("platform", ["esp32", "pico"])
-def test_compiled_build_compiles_everything_except_entry_points(tmp_path, platform):
+def test_compiled_build_compiles_everything_except_entry_points(tmp_path: Path, platform: str):
     artifact_dir = build_artifact.build(platform, "1.0.0", tmp_path, compile_mpy=True)
 
     paths = _manifest(artifact_dir)
@@ -35,7 +35,7 @@ def test_compiled_build_compiles_everything_except_entry_points(tmp_path, platfo
     assert f"edge/platforms/{platform}/hal/network.mpy" in paths
 
 
-def test_compiled_build_ships_probe_first(tmp_path):
+def test_compiled_build_ships_probe_first(tmp_path: Path):
     artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path, compile_mpy=True)
 
     data = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -43,7 +43,7 @@ def test_compiled_build_ships_probe_first(tmp_path):
     assert (artifact_dir / "mpy_probe.mpy").read_bytes()[:2] == b"M\x06"
 
 
-def test_compiled_build_manifest_hashes_match_shipped_files(tmp_path):
+def test_compiled_build_manifest_hashes_match_shipped_files(tmp_path: Path):
     artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path, compile_mpy=True)
 
     for rel_path, expected in _manifest(artifact_dir).items():
@@ -51,7 +51,7 @@ def test_compiled_build_manifest_hashes_match_shipped_files(tmp_path):
         assert actual == expected, rel_path
 
 
-def test_compiled_modules_are_portable_bytecode_without_local_paths(tmp_path):
+def test_compiled_modules_are_portable_bytecode_without_local_paths(tmp_path: Path):
     artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path, compile_mpy=True)
 
     data = (artifact_dir / "edge/shared/app/control_loop.mpy").read_bytes()
@@ -63,7 +63,7 @@ def test_compiled_modules_are_portable_bytecode_without_local_paths(tmp_path):
     assert str(ROOT).encode() not in data
 
 
-def test_compiled_build_keeps_empty_package_files_as_source(tmp_path):
+def test_compiled_build_keeps_empty_package_files_as_source(tmp_path: Path):
     artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path, compile_mpy=True)
 
     paths = _manifest(artifact_dir)

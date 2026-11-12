@@ -1,3 +1,6 @@
+from typing import Any
+
+import pytest
 from edge.shared.app.config import Config
 from edge.shared.app.device_control import DeviceControlClient
 from edge.shared.app.module_runtime import ModuleRuntime
@@ -22,7 +25,7 @@ def _config():
     )
 
 
-def _post_payloads(http):
+def _post_payloads(http: MockHttpClient) -> list[Any]:
     return [call[2] for call in http.calls if call[0] == "POST" and call[1].endswith("/api/devices/modules/results")]
 
 
@@ -210,7 +213,7 @@ def test_module_runtime_flushes_persisted_timeout_marker_when_upload_recovers():
 # ──────────────────────────── quarantine tests ────────────────────────────
 
 
-def _status_payloads(http):
+def _status_payloads(http: MockHttpClient) -> list[Any]:
     return [call[2] for call in http.calls if call[0] == "POST" and call[1].endswith("/api/devices/modules/status")]
 
 
@@ -316,7 +319,6 @@ def test_quarantine_healthy_module_keeps_running_while_bad_is_disabled():
     assert result["executed"] == 1
     assert result["success"] == 1
     payloads = _post_payloads(http)
-    last_module_ids = [p["module_id"] for p in payloads[-1:]]
     assert "m-ok" in [p["module_id"] for p in payloads]
 
 
@@ -726,12 +728,12 @@ class _ScriptedDeviceControl:
     def __init__(self):
         self.online = False
         self.reject = False
-        self.uploaded = []
+        self.uploaded: list[str] = []
 
-    def get_cached_module_package(self, module_id, version):
+    def get_cached_module_package(self, module_id: str, version: str) -> bytes | None:
         return b"def run(context):\n    return {'v': 1}\n"
 
-    def report_module_result(self, payload):
+    def report_module_result(self, payload: dict[str, Any]) -> bool:
         if not self.online:
             raise OSError("[Errno 113] EHOSTUNREACH")
         if self.reject:
@@ -739,8 +741,11 @@ class _ScriptedDeviceControl:
         self.uploaded.append(payload["run_id"])
         return True
 
+    def report_module_status(self, payload: dict[str, Any]) -> bool:
+        return True
 
-def _queue_runtime(device_control, **kwargs):
+
+def _queue_runtime(device_control: "_ScriptedDeviceControl", **kwargs: Any) -> ModuleRuntime:
     runtime = ModuleRuntime(
         system=MockSystem(),
         device_control=device_control,
@@ -755,7 +760,7 @@ def _queue_runtime(device_control, **kwargs):
     return runtime
 
 
-def _run_ticks(runtime, count):
+def _run_ticks(runtime: ModuleRuntime, count: int) -> None:
     for i in range(count):
         runtime.tick(now_ms=i * 1000)
 
@@ -825,36 +830,46 @@ class _TickSystem(ISystem):
 
     REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))
 
-    def __init__(self, clock_set=False):
+    def __init__(self, clock_set: bool = False):
         self.ticks = 0
         self.clock_set = clock_set
 
-    def time_ms(self):
+    def time_ms(self) -> int:
         return self.ticks
 
-    def ticks_diff(self, a, b):
+    def ticks_diff(self, a: int, b: int) -> int:
         return a - b
 
-    def ticks_add(self, ticks, delta):
+    def ticks_add(self, ticks: int, delta: int) -> int:
         return ticks + delta
 
-    def clock_is_set(self):
+    def clock_is_set(self) -> bool:
         return self.clock_set
 
-    def sync_time(self):
+    def sync_time(self) -> bool:
         self.clock_set = True
         return True
 
-    def utc_datetime(self):
+    def utc_datetime(self) -> tuple[int, ...]:
         if not self.clock_set:
             return (2021, 1, 1, 0, 0, 0)
         return epoch_to_datetime(self.REAL_BOOT_S + self.ticks // 1000)[:6]
 
-    def reset(self):
+    def reset(self) -> None:
         pass
 
 
-def _clock_runtime(system, device_control, clock):
+def _recording_reporter(sent: list[dict[str, Any]]):
+    """A report_module_result replacement that records each payload and succeeds."""
+
+    def report(payload: dict[str, Any]) -> bool:
+        sent.append(payload)
+        return True
+
+    return report
+
+
+def _clock_runtime(system: _TickSystem, device_control: _ScriptedDeviceControl, clock: WallClock) -> ModuleRuntime:
     runtime = ModuleRuntime(system=system, device_control=device_control, config=_config(), clock=clock)
     runtime.update_assignment(
         {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 60000, "timeout_ms": 5000}]},
@@ -877,9 +892,9 @@ def test_results_queued_before_sync_are_redated_from_ticks():
     system.ticks = 300000
     assert clock.sync() is True
 
-    sent = []
+    sent: list[dict[str, Any]] = []
     device_control.online = True
-    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    device_control.report_module_result = _recording_reporter(sent)
     runtime.flush_pending_results()
 
     assert [p["started_at_utc"] for p in sent] == ["2026-10-22T00:01:00Z", "2026-10-22T00:02:00Z"]
@@ -896,15 +911,15 @@ def test_results_queued_after_sync_keep_their_timestamps():
     runtime.tick(now_ms=60000)
     system.ticks = 600000
 
-    sent = []
+    sent: list[dict[str, Any]] = []
     device_control.online = True
-    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    device_control.report_module_result = _recording_reporter(sent)
     runtime.flush_pending_results()
 
     assert sent[0]["started_at_utc"] == "2026-10-22T00:01:00Z"
 
 
-def test_results_queued_before_sync_unchanged_while_still_unsynced(monkeypatch):
+def test_results_queued_before_sync_unchanged_while_still_unsynced(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ModuleRuntime, "_default_utc_now_iso", staticmethod(lambda: "2021-01-01T00:01:00Z"))
     system = _TickSystem(clock_set=False)
     device_control = _ScriptedDeviceControl()
@@ -913,9 +928,9 @@ def test_results_queued_before_sync_unchanged_while_still_unsynced(monkeypatch):
     system.ticks = 60000
     runtime.tick(now_ms=60000)
 
-    sent = []
+    sent: list[dict[str, Any]] = []
     device_control.online = True
-    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    device_control.report_module_result = _recording_reporter(sent)
     runtime.flush_pending_results()
 
     assert sent[0]["started_at_utc"] == "2021-01-01T00:01:00Z"
@@ -928,8 +943,8 @@ def test_runtime_stamps_results_from_clock_not_gmtime():
     device_control = _ScriptedDeviceControl()
     device_control.online = True
     runtime = _clock_runtime(system, device_control, clock)
-    sent = []
-    device_control.report_module_result = lambda payload: sent.append(payload) or True
+    sent: list[dict[str, Any]] = []
+    device_control.report_module_result = _recording_reporter(sent)
 
     system.ticks = 3600000
     runtime.tick(now_ms=3600000)

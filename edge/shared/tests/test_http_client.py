@@ -3,23 +3,22 @@ import io
 import pytest
 
 from edge.shared.hal.http_client import StreamingResponse, _read_response
-from edge.shared.hal.interfaces import HttpResponse
 
 
 class FakeResponse:
     """Mimics MicroPython requests.Response: .content closes the socket and sets raw=None."""
 
-    def __init__(self, status_code, body):
+    def __init__(self, status_code: int, body: bytes):
         self.status_code = status_code
         self._body = body
         self.closed = False
         self.raw = io.BytesIO(body)
 
     @property
-    def content(self):
+    def content(self) -> bytes:
         return self._body
 
-    def close(self):
+    def close(self) -> None:
         self.closed = True
 
 

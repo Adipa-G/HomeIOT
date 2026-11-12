@@ -39,19 +39,25 @@ exclude = [".venv", "**/__pycache__", "**/.pytest_cache"]
 extraPaths = [".."]
 pythonVersion = "3.11"
 pythonPlatform = "Linux"
-typeCheckingMode = "standard"
-# Folders moved to strict mode so far; add one at a time as each is fully typed.
-strict = [
-    "bootstrap",
-    "platforms",
-    "shared/app",
-    "shared/hal",
-    "shared/tests/mocks",
-    "simulator",
-    "tools",
-]
+typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
 stubPath = "typings"
 # MicroPython modules are stub-only (the implementation is in the firmware).
 reportMissingModuleSource = "none"
+
+# Tests check private implementation details on purpose.
+[[tool.pyright.executionEnvironments]]
+root = "shared/tests"
+extraPaths = [".."]
+reportPrivateUsage = false
+
+[[tool.pyright.executionEnvironments]]
+root = "platforms/esp32/tests"
+extraPaths = [".."]
+reportPrivateUsage = false
+
+[[tool.pyright.executionEnvironments]]
+root = "platforms/pico/tests"
+extraPaths = [".."]
+reportPrivateUsage = false

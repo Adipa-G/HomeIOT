@@ -1,3 +1,4 @@
+import pytest
 import json
 from typing import Any
 
@@ -14,7 +15,7 @@ from edge.shared.tests.mocks.mock_network import MockNetwork
 from edge.shared.tests.mocks.mock_watchdog import MockWatchdog
 
 
-def _config(wifi_country=None):
+def _config(wifi_country: str | None = None) -> Config:
     return Config(
         device_id="esp32-001",
         api_url="http://localhost:8000",
@@ -29,99 +30,101 @@ def _config(wifi_country=None):
 
 
 class _FakeSystem(ISystem):
-    def reset_cause(self):
+    def reset_cause(self) -> str:
         return "pwron_reset"
 
-    def time_ms(self):
+    def time_ms(self) -> int:
         return 0
 
 
 class _FakeNetwork:
-    def __init__(self, fail_connect=False, connected=True, country_ok=True, hostname_ok=True):
+    def __init__(
+        self, fail_connect: bool = False, connected: bool = True, country_ok: bool = True, hostname_ok: bool = True
+    ):
         self.fail_connect = fail_connect
         self.connected = connected
         self.country_ok = country_ok
         self.hostname_ok = hostname_ok
-        self.connect_calls = []
-        self.country_calls = []
-        self.hostname_calls = []
+        self.connect_calls: list[tuple[str, str]] = []
+        self.country_calls: list[str] = []
+        self.hostname_calls: list[str] = []
 
-    def set_country(self, country):
+    def set_country(self, country: str) -> bool:
         self.country_calls.append(country)
         return self.country_ok
 
-    def set_hostname(self, name):
+    def set_hostname(self, name: str) -> bool:
         self.hostname_calls.append(name)
         return self.hostname_ok
 
-    def connect(self, ssid, password):
+    def connect(self, ssid: str, password: str) -> None:
         self.connect_calls.append((ssid, password))
         if self.fail_connect:
             self.connected = False
             raise RuntimeError("wifi down")
 
-    def is_connected(self):
+    def is_connected(self) -> bool:
         return self.connected
 
-    def get_ip(self):
+    def get_ip(self) -> str:
         return "192.168.1.20"
 
 
 class _FakeClock:
-    def __init__(self, synced=True):
+    def __init__(self, synced: bool = True):
         self.synced = synced
         self.sync_calls = 0
 
-    def sync(self):
+    def sync(self) -> bool:
         self.sync_calls += 1
         return self.synced
 
 
 class _FakeWatchdog:
-    def __init__(self, error=None):
+    def __init__(self, error: Exception | None = None):
         self.error = error
         self.feed_calls = 0
 
-    def feed(self):
+    def feed(self) -> None:
         self.feed_calls += 1
         if self.error is not None:
             raise self.error
 
 
 class _FakeLogger:
-    def __init__(self, events):
+    def __init__(self, events: list[str]):
         self.events = events
-        self.infos = []
-        self.warns = []
+        self.infos: list[str] = []
+        self.warns: list[str] = []
 
-    def info(self, msg, data=None):
+    def info(self, msg: str, data: object = None) -> None:
         self.infos.append(msg)
 
-    def warn(self, msg, data=None):
+    def warn(self, msg: str, data: object = None) -> None:
         self.warns.append(msg)
 
-    def flush(self, reason):
+    def flush(self, reason: str) -> None:
         self.events.append("flush:" + reason)
 
 
 class _FakeBootManager:
-    def __init__(self, events, state=None):
+    def __init__(self, events: list[str], state: dict[str, Any] | None = None):
         self.events = events
         self.state = state or {}
 
-    def get_state(self):
+    def get_state(self) -> dict[str, Any]:
         return self.state
 
-    def mark_success(self):
+    def mark_success(self) -> None:
         self.events.append("mark_success")
 
 
 class _FakePresence:
-    def __init__(self, events, error=None):
+    def __init__(self, events: list[str], error: Exception | None = None):
         self.events = events
         self.error = error
 
-    def register(self, version):
+    def register(self, version: str) -> bool:
         self.events.append("register:" + version)
         if self.error is not None:
             raise self.error
@@ -133,35 +136,41 @@ class _UpdateInfo:
 
 
 class _FakeUpdater:
-    def __init__(self, events, update_info=None, check_error=None, apply_error=None):
+    def __init__(
+        self,
+        events: list[str],
+        update_info: _UpdateInfo | None = None,
+        check_error: Exception | None = None,
+        apply_error: Exception | None = None,
+    ):
         self.events = events
         self.update_info = update_info
         self.check_error = check_error
         self.apply_error = apply_error
 
-    def check(self):
+    def check(self) -> _UpdateInfo | None:
         self.events.append("ota_check")
         if self.check_error is not None:
             raise self.check_error
         return self.update_info
 
-    def apply(self, update_info):
+    def apply(self, update_info: _UpdateInfo) -> None:
         self.events.append("ota_apply:" + update_info.version)
         if self.apply_error is not None:
             raise self.apply_error
 
 
 class _FakeModuleRuntime:
-    def __init__(self, events, error=None):
+    def __init__(self, events: list[str], error: Exception | None = None):
         self.events = events
         self.error = error
 
-    def flush_pending_timeout_result(self):
+    def flush_pending_timeout_result(self) -> None:
         self.events.append("flush_timeout")
         if self.error is not None:
             raise self.error
 
-    def flush_pending_module_status(self):
+    def flush_pending_module_status(self) -> None:
         self.events.append("flush_status")
         if self.error is not None:
             raise self.error
@@ -171,15 +180,15 @@ _DEFAULT_UPDATER = object()
 
 
 def _runtime(
-    events,
-    config=None,
-    network=None,
-    clock=None,
-    watchdog=None,
-    boot_state=None,
-    presence_error=None,
-    updater=_DEFAULT_UPDATER,
-    module_error=None,
+    events: list[str],
+    config: Config | None = None,
+    network: _FakeNetwork | None = None,
+    clock: _FakeClock | None = None,
+    watchdog: _FakeWatchdog | None = None,
+    boot_state: dict[str, Any] | None = None,
+    presence_error: Exception | None = None,
+    updater: object = _DEFAULT_UPDATER,
+    module_error: Exception | None = None,
 ) -> Any:
     # Any: the runtime is built from fakes, and tests read their recorded state back through it.
     if updater is _DEFAULT_UPDATER:
@@ -255,7 +264,7 @@ def test_create_runtime_omits_updater_when_ota_disabled():
 
 
 def test_start_runs_boot_path_in_order_when_online():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events)
 
     start(runtime)
@@ -274,7 +283,7 @@ def test_start_runs_boot_path_in_order_when_online():
 
 
 def test_start_uses_version_from_boot_state():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events, boot_state={"current_version": "1.4.2"})
 
     start(runtime)
@@ -284,7 +293,7 @@ def test_start_uses_version_from_boot_state():
 
 
 def test_start_applies_available_update():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events)
     runtime.updater = _FakeUpdater(events, update_info=_UpdateInfo())
 
@@ -294,7 +303,7 @@ def test_start_applies_available_update():
 
 
 def test_start_skips_ota_when_updater_disabled():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events, updater=None)
 
     start(runtime)
@@ -305,7 +314,7 @@ def test_start_skips_ota_when_updater_disabled():
 
 
 def test_start_continues_offline_when_wifi_connect_fails():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events, network=_FakeNetwork(fail_connect=True))
 
     start(runtime)
@@ -317,7 +326,7 @@ def test_start_continues_offline_when_wifi_connect_fails():
 
 
 def test_start_survives_service_exceptions_and_still_marks_success():
-    events = []
+    events: list[str] = []
     runtime = _runtime(
         events,
         presence_error=RuntimeError("register boom"),
@@ -338,7 +347,7 @@ def test_start_survives_service_exceptions_and_still_marks_success():
 
 
 def test_start_survives_ota_check_exception():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events)
     runtime.updater = _FakeUpdater(events, check_error=RuntimeError("check boom"))
 
@@ -350,7 +359,7 @@ def test_start_survives_ota_check_exception():
 
 
 def test_start_records_completed_ota_check_even_when_apply_fails():
-    events = []
+    events: list[str] = []
     runtime = _runtime(
         events,
         updater=_FakeUpdater([], update_info=_UpdateInfo(), apply_error=RuntimeError("ENOSPC")),
@@ -373,7 +382,7 @@ def test_start_leaves_ota_unchecked_when_offline_or_disabled():
 
 
 def test_start_sets_wifi_country_and_hostname():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events, config=_config(wifi_country="AU"))
 
     start(runtime)
@@ -384,7 +393,7 @@ def test_start_sets_wifi_country_and_hostname():
 
 
 def test_start_warns_when_wifi_country_and_hostname_rejected():
-    events = []
+    events: list[str] = []
     network = _FakeNetwork(country_ok=False, hostname_ok=False)
     runtime = _runtime(events, config=_config(wifi_country="AU"), network=network)
 
@@ -395,7 +404,7 @@ def test_start_warns_when_wifi_country_and_hostname_rejected():
 
 
 def test_start_skips_wifi_country_when_not_configured():
-    events = []
+    events: list[str] = []
     config = _config()
     config.wifi_country = ""
     runtime = _runtime(events, config=config)
@@ -406,7 +415,7 @@ def test_start_skips_wifi_country_when_not_configured():
 
 
 def test_start_warns_when_ntp_sync_fails():
-    events = []
+    events: list[str] = []
     runtime = _runtime(events, clock=_FakeClock(synced=False))
 
     start(runtime)
@@ -417,13 +426,14 @@ def test_start_warns_when_ntp_sync_fails():
 # ---------------------------------------------------------------- run
 
 
-def test_run_passes_runtime_services_to_control_loop(monkeypatch):
-    captured = {}
-    monkeypatch.setattr(
-        "edge.shared.app.startup.run_control_loop",
-        lambda **kwargs: captured.update(kwargs),
-    )
-    events = []
+def test_run_passes_runtime_services_to_control_loop(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, Any] = {}
+
+    def _run_control_loop(**kwargs: Any) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr("edge.shared.app.startup.run_control_loop", _run_control_loop)
+    events: list[str] = []
     runtime = _runtime(events)
 
     run(runtime, max_iterations=5)
@@ -448,17 +458,24 @@ def test_run_passes_runtime_services_to_control_loop(monkeypatch):
 
 
 class _ConfigFs(IFileSystem):
-    def __init__(self, files):
+    def __init__(self, files: dict[str, str]):
         self.files = files
 
-    def read_text(self, path):
+    def read_text(self, path: str) -> str:
         return self.files[path]
 
 
-def test_run_device_loads_config_then_starts_and_runs_with_ota_enabled(monkeypatch):
-    calls = []
-    monkeypatch.setattr(startup, "start", lambda runtime: calls.append(("start", runtime)))
-    monkeypatch.setattr(startup, "run", lambda runtime: calls.append(("run", runtime)))
+def test_run_device_loads_config_then_starts_and_runs_with_ota_enabled(monkeypatch: pytest.MonkeyPatch):
+    calls: list[tuple[str, Any]] = []
+
+    def _start(runtime: Any) -> None:
+        calls.append(("start", runtime))
+
+    def _run(runtime: Any) -> None:
+        calls.append(("run", runtime))
+
+    monkeypatch.setattr(startup, "start", _start)
+    monkeypatch.setattr(startup, "run", _run)
     fs = _ConfigFs(
         {
             "config.json": json.dumps(

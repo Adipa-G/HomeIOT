@@ -1,5 +1,7 @@
 """Tests for MicroPythonNetwork.connect() disconnect-before-reconnect logic."""
 
+from collections.abc import Callable
+import pytest
 from edge.shared.hal.network import MicroPythonNetwork, sanitize_hostname
 from edge.platforms.esp32.hal.network import MicroPythonNetwork as Esp32Network
 from edge.shared.tests.mocks.fake_module import fake_module
@@ -12,39 +14,39 @@ class _FakeWlan:
     PM_PERFORMANCE = 1
     PM_POWERSAVE = 2
 
-    def __init__(self, *, connected=False, status=0):
+    def __init__(self, *, connected: bool = False, status: int = 0):
         self._connected = connected
         self._status = status
-        self.active_calls = []
-        self.connect_calls = []
+        self.active_calls: list[bool] = []
+        self.connect_calls: list[tuple[str, str]] = []
         self.disconnect_calls = 0
-        self.pm_value = None
+        self.pm_value: object = None
 
-    def active(self, enable):
+    def active(self, enable: bool) -> None:
         self.active_calls.append(enable)
 
-    def isconnected(self):
+    def isconnected(self) -> bool:
         # After a successful connect call, consider connected.
         if self.connect_calls and self._status != 1:
             return True
         return self._connected
 
-    def status(self):
+    def status(self) -> int:
         return self._status
 
-    def connect(self, ssid, password):
+    def connect(self, ssid: str, password: str) -> None:
         self.connect_calls.append((ssid, password))
         # Once connect is called, clear the connecting status.
         self._status = 0
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         self.disconnect_calls += 1
         self._status = 0
 
-    def ifconfig(self):
+    def ifconfig(self) -> tuple[str, str, str, str]:
         return ("192.168.1.10", "255.255.255.0", "192.168.1.1", "8.8.8.8")
 
-    def config(self, key=None, **kwargs):
+    def config(self, key: str | None = None, **kwargs: object) -> object:
         if key == "pm":
             return self.pm_value
         if "pm" in kwargs:
@@ -66,7 +68,7 @@ def test_power_save_uses_runtime_wlan_constants():
 
 def test_power_save_reports_unsupported_mode():
     class _NoPowerSaveWlan:
-        def config(self, **_kwargs):
+        def config(self, **_kwargs: object) -> None:
             raise ValueError("pm unsupported")
 
     net = _make_network(_NoPowerSaveWlan())
@@ -89,9 +91,9 @@ def test_esp32_power_save_prefers_named_constants():
 def test_esp32_power_save_uses_known_legacy_values_when_constants_are_missing():
     class _LegacyWlan:
         def __init__(self):
-            self.pm_value = None
+            self.pm_value: object = None
 
-        def config(self, **kwargs):
+        def config(self, **kwargs: object) -> None:
             self.pm_value = kwargs["pm"]
 
     wlan = _LegacyWlan()
@@ -102,9 +104,10 @@ def test_esp32_power_save_uses_known_legacy_values_when_constants_are_missing():
     assert wlan.pm_value == 2
 
 
-def _make_network(wlan):
+def _make_network(wlan: object) -> MicroPythonNetwork:
     net = MicroPythonNetwork()
-    net._wlan = wlan
+    # A fake WLAN isn't the real network.WLAN type.
+    setattr(net, "_wlan", wlan)
     return net
 
 
@@ -148,15 +151,15 @@ def test_connect_survives_wlan_without_disconnect_method():
 
     class _NoDisconnectWlan:
         def __init__(self):
-            self.connect_calls = []
+            self.connect_calls: list[tuple[str, str]] = []
 
-        def active(self, enable):
+        def active(self, enable: bool) -> None:
             pass
 
-        def isconnected(self):
+        def isconnected(self) -> bool:
             return bool(self.connect_calls)
 
-        def connect(self, ssid, password):
+        def connect(self, ssid: str, password: str) -> None:
             self.connect_calls.append((ssid, password))
 
     wlan = _NoDisconnectWlan()
@@ -179,7 +182,7 @@ def test_suspend_disconnects_and_powers_down_radio():
 
 def test_suspend_powers_down_even_when_disconnect_fails():
     class _FailingDisconnectWlan(_FakeWlan):
-        def disconnect(self):
+        def disconnect(self) -> None:
             raise OSError("not connected")
 
     wlan = _FailingDisconnectWlan(connected=False)
@@ -202,15 +205,18 @@ def test_connect_after_suspend_reactivates_radio():
 
 
 class _NeverConnectsWlan(_FakeWlan):
-    def isconnected(self):
+    def isconnected(self) -> bool:
         return False
 
-    def status(self):
+    def status(self) -> int:
         return -2
 
 
-def _no_wait(net):
-    net._sleep_ms = lambda _time_mod, _ms: None
+def _no_wait(net: MicroPythonNetwork) -> None:
+    def no_sleep(_time_mod: object, _ms: int) -> None:
+        pass
+
+    setattr(net, "_sleep_ms", no_sleep)
 
 
 def test_connect_timeout_powers_radio_down_and_reports_status():
@@ -244,7 +250,11 @@ def test_connect_timeout_without_status_method():
         assert "status=None" in str(exc)
 
 
-def _install_network_module(monkeypatch, country=None, rp2_country=None):
+def _install_network_module(
+    monkeypatch: pytest.MonkeyPatch,
+    country: Callable[[str], None] | None = None,
+    rp2_country: Callable[[str], None] | None = None,
+) -> None:
     import sys
 
     network_mod = fake_module("network")
@@ -259,24 +269,24 @@ def _install_network_module(monkeypatch, country=None, rp2_country=None):
         monkeypatch.delitem(sys.modules, "rp2", raising=False)
 
 
-def test_set_country_uses_network_country(monkeypatch):
-    calls = []
+def test_set_country_uses_network_country(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
     _install_network_module(monkeypatch, country=calls.append)
 
     assert MicroPythonNetwork().set_country(" au ") is True
     assert calls == ["AU"]
 
 
-def test_set_country_falls_back_to_rp2_country(monkeypatch):
-    calls = []
+def test_set_country_falls_back_to_rp2_country(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
     _install_network_module(monkeypatch, rp2_country=calls.append)
 
     assert MicroPythonNetwork().set_country("AU") is True
     assert calls == ["AU"]
 
 
-def test_set_country_rejects_invalid_code(monkeypatch):
-    calls = []
+def test_set_country_rejects_invalid_code(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
     _install_network_module(monkeypatch, country=calls.append)
 
     assert MicroPythonNetwork().set_country("AUS") is False
@@ -284,8 +294,8 @@ def test_set_country_rejects_invalid_code(monkeypatch):
     assert calls == []
 
 
-def test_set_country_returns_false_when_setter_fails(monkeypatch):
-    def _fail(_code):
+def test_set_country_returns_false_when_setter_fails(monkeypatch: pytest.MonkeyPatch):
+    def _fail(_code: str) -> None:
         raise ValueError("bad country")
 
     _install_network_module(monkeypatch, country=_fail)
@@ -305,10 +315,10 @@ def test_sanitize_hostname_truncates_without_trailing_hyphen():
     assert len(sanitize_hostname("x" * 100)) == 32
 
 
-def test_set_hostname_uses_network_hostname(monkeypatch):
+def test_set_hostname_uses_network_hostname(monkeypatch: pytest.MonkeyPatch):
     import sys
 
-    calls = []
+    calls: list[str] = []
     network_mod = fake_module("network")
     network_mod.hostname = calls.append
     monkeypatch.setitem(sys.modules, "network", network_mod)
@@ -317,16 +327,16 @@ def test_set_hostname_uses_network_hostname(monkeypatch):
     assert calls == ["pico-garage"]
 
 
-def test_set_hostname_falls_back_to_wlan_config(monkeypatch):
+def test_set_hostname_falls_back_to_wlan_config(monkeypatch: pytest.MonkeyPatch):
     import sys
 
     monkeypatch.setitem(sys.modules, "network", fake_module("network"))
 
     class _HostnameWlan:
         def __init__(self):
-            self.values = {}
+            self.values: dict[str, object] = {}
 
-        def config(self, **kwargs):
+        def config(self, **kwargs: object) -> None:
             if "dhcp_hostname" in kwargs:
                 raise ValueError("unknown config param")
             self.values.update(kwargs)
@@ -338,8 +348,8 @@ def test_set_hostname_falls_back_to_wlan_config(monkeypatch):
     assert wlan.values == {"hostname": "esp32-lounge"}
 
 
-def test_set_hostname_rejects_empty_name(monkeypatch):
-    calls = []
+def test_set_hostname_rejects_empty_name(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
     _install_network_module(monkeypatch)
     import sys
     setattr(sys.modules["network"], "hostname", calls.append)

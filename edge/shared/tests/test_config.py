@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 import json
 
 import pytest
@@ -8,7 +9,7 @@ from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_system import MockSystem
 
 
-def _write_config(fs: MockFileSystem, payload: dict) -> None:
+def _write_config(fs: MockFileSystem, payload: Mapping[str, object]) -> None:
     fs.write_text("config.json", json.dumps(payload))
 
 

@@ -224,7 +224,7 @@ The `demo-sensor` readings cycle through the configured threshold bands, includi
 ### Code Conventions
 
 - **C# / API**: One class per file, `PascalCase` file names, records for DTOs, `snake_case` JSON properties
-- **Python / Edge**: MicroPython-compatible, pytest tests in `edge/shared/tests/`, type-checked with `pyright` (standard mode)
+- **Python / Edge**: MicroPython-compatible, pytest tests in `edge/shared/tests/`, type-checked with `pyright` (strict mode)
 - **TypeScript / Web**: React components in `src/components/`, pages in `src/pages/`
 
 See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed conventions.
