@@ -137,7 +137,7 @@ def main():
             time.sleep_ms(RETRY_DELAY_MS)  # pyright: ignore[reportAttributeAccessIssue]
         else:
             time.sleep(RETRY_DELAY_MS / 1000)
-        import machine  # pyright: ignore[reportMissingImports]
+        import machine
 
         machine.reset()
 

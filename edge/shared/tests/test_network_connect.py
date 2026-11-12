@@ -78,7 +78,7 @@ def test_power_save_reports_unsupported_mode():
 def test_esp32_power_save_prefers_named_constants():
     wlan = _FakeWlan()
     net = Esp32Network()
-    net._wlan = wlan
+    setattr(net, "_wlan", wlan)
 
     assert net.get_power_save_modes()["modem"] == wlan.PM_PERFORMANCE
     assert net.get_power_save_modes()["powersave"] == wlan.PM_POWERSAVE
@@ -96,7 +96,7 @@ def test_esp32_power_save_uses_known_legacy_values_when_constants_are_missing():
 
     wlan = _LegacyWlan()
     net = Esp32Network()
-    net._wlan = wlan
+    setattr(net, "_wlan", wlan)
 
     assert net.set_power_save("light") is True
     assert wlan.pm_value == 2

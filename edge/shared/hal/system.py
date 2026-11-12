@@ -5,23 +5,21 @@ from edge.shared.hal.interfaces import ISystem
 
 class MicroPythonSystem(ISystem):
     def __init__(self):
-        try:
-            import utime as _time  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            import time as _time
+        import time as _time
+
         self._time = _time
         self._boot_ms = self.time_ms()
 
     def reset(self) -> None:
         try:
-            import machine  # pyright: ignore[reportMissingImports]
+            import machine
         except ImportError as exc:  # pragma: no cover - desktop fallback
             raise RuntimeError("machine module is not available") from exc
         machine.reset()
 
     def unique_id(self) -> str:
         try:
-            import machine  # pyright: ignore[reportMissingImports]
+            import machine
         except ImportError:  # pragma: no cover - desktop fallback
             return "desktop-test-device"
         return binascii.hexlify(machine.unique_id()).decode("ascii")
@@ -64,7 +62,7 @@ class MicroPythonSystem(ISystem):
     def light_sleep_ms(self, milliseconds: int) -> bool:
         lightsleep = None
         try:
-            import machine  # pyright: ignore[reportMissingImports]
+            import machine
             lightsleep = getattr(machine, "lightsleep", None)
         except ImportError:  # pragma: no cover - desktop fallback
             pass
@@ -87,7 +85,7 @@ class MicroPythonSystem(ISystem):
 
     def reset_cause(self) -> str:
         try:
-            import machine  # pyright: ignore[reportMissingImports]
+            import machine
         except ImportError:  # pragma: no cover - desktop fallback
             return "unknown"
         try:
@@ -104,7 +102,7 @@ class MicroPythonSystem(ISystem):
         capabilities["lightsleep"] = False
         capabilities["deepsleep"] = False
         try:
-            import machine  # pyright: ignore[reportMissingImports]
+            import machine
             capabilities["lightsleep"] = callable(getattr(machine, "lightsleep", None))
             capabilities["deepsleep"] = callable(getattr(machine, "deepsleep", None))
         except ImportError:  # pragma: no cover - desktop fallback
@@ -133,7 +131,7 @@ class MicroPythonSystem(ISystem):
 
     def sync_time(self) -> bool:
         try:
-            import ntptime  # pyright: ignore[reportMissingImports]
+            import ntptime
             ntptime.settime()
             return True
         except Exception:  # pragma: no cover - desktop fallback
@@ -154,6 +152,6 @@ class MicroPythonSystem(ISystem):
         return tuple(self._time.gmtime()[:6])
 
     def set_utc_datetime(self, parts) -> None:
-        import machine  # pyright: ignore[reportMissingImports]
+        import machine
         year, month, day, hour, minute, second, weekday = parts
         machine.RTC().datetime((year, month, day, weekday, hour, minute, second, 0))

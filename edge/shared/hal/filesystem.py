@@ -1,7 +1,4 @@
-try:
-    import uos as _os  # pyright: ignore[reportMissingImports]
-except ImportError:  # pragma: no cover - desktop fallback
-    import os as _os
+import os as _os
 
 from edge.shared.hal.interfaces import IFileSystem
 

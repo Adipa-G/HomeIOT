@@ -192,15 +192,8 @@ class Updater:
         Returns True if config.json was staged (caller must validate it).
         Raises RuntimeError or ValueError on any stream or hash error.
         """
-        try:
-            import uhashlib as _hashlib  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            import hashlib as _hashlib
-
-        try:
-            from ubinascii import hexlify as _hexlify  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            from binascii import hexlify as _hexlify
+        import hashlib as _hashlib
+        from binascii import hexlify as _hexlify
 
         def _hex(digest):
             return str(_hexlify(digest), "ascii")

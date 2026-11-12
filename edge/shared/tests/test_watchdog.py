@@ -9,7 +9,7 @@ from edge.shared.tests.mocks.fake_module import fake_module
 
 class _FakeTime(types.ModuleType):
     def __init__(self):
-        super().__init__("utime")
+        super().__init__("time")
         self.now = 0
 
     def ticks_ms(self):
@@ -72,7 +72,7 @@ def _watchdog_class(hardware_max_ms=None):
 @pytest.fixture
 def fake_time(monkeypatch):
     clock = _FakeTime()
-    monkeypatch.setitem(sys.modules, "utime", clock)
+    monkeypatch.setitem(sys.modules, "time", clock)
     return clock
 
 

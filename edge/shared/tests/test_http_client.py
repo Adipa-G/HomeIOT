@@ -7,7 +7,7 @@ from edge.shared.hal.interfaces import HttpResponse
 
 
 class FakeResponse:
-    """Mimics urequests.Response: .content closes the socket and sets raw=None."""
+    """Mimics MicroPython requests.Response: .content closes the socket and sets raw=None."""
 
     def __init__(self, status_code, body):
         self.status_code = status_code

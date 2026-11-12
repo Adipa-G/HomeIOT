@@ -5,7 +5,7 @@ _POST_OTA_TIMEOUT_S = 10
 
 
 class StreamingResponse:
-    """Wraps a raw socket from urequests for incremental body reading."""
+    """Wraps a raw socket from MicroPython requests for incremental body reading."""
 
     def __init__(self, sock, status_code: int):
         self.status_code = status_code
@@ -39,9 +39,9 @@ def _set_socket_timeout(timeout_s: int) -> None:
 
 
 def _read_response(response):
-    """Read status, content, and text from a urequests response.
+    """Read status, content, and text from a MicroPython requests response.
 
-    MicroPython's urequests closes the socket inside the .content accessor,
+    MicroPython's requests closes the socket inside the .content accessor,
     so we read status first, then content (which closes the socket), then
     call .close() as a safety net.
     """
@@ -55,30 +55,21 @@ def _read_response(response):
 
 class MicroPythonHttpClient(IHttpClient):
     def get(self, url, headers=None):
-        try:
-            import urequests as requests  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            import requests
+        import requests
 
         _set_socket_timeout(_REQUEST_TIMEOUT_S)
         response = requests.get(url, headers=headers)
         return _read_response(response)
 
     def post(self, url, data, headers=None, timeout_s=None):
-        try:
-            import urequests as requests  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            import requests
+        import requests
 
         _set_socket_timeout(timeout_s if timeout_s is not None else _REQUEST_TIMEOUT_S)
         response = requests.post(url, json=data, headers=headers)
         return _read_response(response)
 
     def get_stream(self, url, headers=None):
-        try:
-            import urequests as requests  # pyright: ignore[reportMissingImports]
-        except ImportError:  # pragma: no cover - desktop fallback
-            import requests
+        import requests
 
         _set_socket_timeout(_REQUEST_TIMEOUT_S)
         response = requests.get(url, headers=headers)
@@ -88,5 +79,5 @@ class MicroPythonHttpClient(IHttpClient):
                 response.close()
             raise OSError("OTA stream request failed with HTTP " + str(status_code))
         # Do NOT access .content — leave the raw socket open for incremental reads.
-        # urequests uses HTTP/1.0, so body ends at connection close (no chunked decoding needed).
+        # MicroPython requests uses HTTP/1.0, so body ends at connection close (no chunked decoding needed).
         return StreamingResponse(response.raw, status_code)
