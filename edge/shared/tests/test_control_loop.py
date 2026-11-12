@@ -1,12 +1,18 @@
+from typing import Any
+
+from edge.shared.app import control_loop as _control_loop
 from edge.shared.app.config import Config
 from edge.shared.app.utc_time import datetime_to_epoch, epoch_to_datetime
 from edge.shared.app.wall_clock import WallClock
-from edge.shared.app.control_loop import (
-    _ControlLoop,
-    _ensure_network_connected,
-    _requested_network_power_mode,
-    run_control_loop,
-)
+from edge.shared.hal.interfaces import ISystem
+
+# The control loop is typed against the real HAL and services. These tests drive it
+# with partial fakes that implement only what each test needs (the loop feature-detects
+# the rest with hasattr), so they call it through Any-typed aliases.
+_ControlLoop: Any = _control_loop._ControlLoop  # pyright: ignore[reportPrivateUsage]
+_ensure_network_connected: Any = _control_loop._ensure_network_connected  # pyright: ignore[reportPrivateUsage]
+_requested_network_power_mode: Any = _control_loop._requested_network_power_mode  # pyright: ignore[reportPrivateUsage]
+run_control_loop: Any = _control_loop.run_control_loop
 
 
 class _FakeSystem:
@@ -1492,7 +1498,7 @@ def test_regular_sleep_does_not_flush_logs_early():
 # Clock sync and queued result tests
 
 
-class _SyncSystem(_ClockSystem):
+class _SyncSystem(_ClockSystem, ISystem):
     """Models the RP2040: the hardware clock reads 2021 until NTP, and stops during light sleep."""
 
     REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))

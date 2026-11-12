@@ -8,7 +8,7 @@ from edge.shared.hal.interfaces import IFileSystem, ISystem, IWatchdog
 WATCHDOG_TIMEOUT_MS = 120000
 
 
-def load_max_attempts(fs, path=CONFIG_PATH, default_value=3):
+def load_max_attempts(fs: IFileSystem, path: str = CONFIG_PATH, default_value: int = 3) -> int:
     if not fs.exists(path):
         return default_value
     try:

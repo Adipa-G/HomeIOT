@@ -203,6 +203,9 @@ class _Logger:
     def warn(self, message, context=None):
         self.warnings.append((message, context or {}))
 
+    def error(self, message, context=None):
+        pass
+
 
 def test_module_package_is_streamed_and_hash_recorded():
     http = MockHttpClient()

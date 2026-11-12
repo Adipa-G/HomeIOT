@@ -1,4 +1,5 @@
 from edge.shared.app.config import Config
+from edge.shared.app.logger import EdgeLogger
 from edge.shared.app.presence import PresenceService
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 from edge.shared.tests.mocks.mock_network import MockNetwork
@@ -152,6 +153,20 @@ def test_heartbeat_triggers_reboot_at_10_consecutive_failures():
     # 10th failure should trigger reset
     service.heartbeat()
     assert service.consecutive_heartbeat_failures == 10
+    assert system.reset_calls == 1
+
+
+def test_heartbeat_reboot_logs_through_edge_logger():
+    # EdgeLogger has no critical(); the reboot message must use a method it does have.
+    http = MockHttpClient()
+    system = MockSystem()
+    logger = EdgeLogger(system=system)
+    service = PresenceService(http=http, network=MockNetwork(), system=system, config=_config(), logger=logger)
+    http.add_json_response("POST", "http://localhost:8000/api/devices/heartbeat", 500, {})
+
+    for _ in range(10):
+        service.heartbeat()
+
     assert system.reset_calls == 1
 
 

@@ -2,11 +2,24 @@ import json
 
 from edge.shared.app.config import Config
 from edge.shared.app.endpoints import HEARTBEAT_PATH, REGISTER_DEVICE_PATH
-from edge.shared.hal.interfaces import IHttpClient, INetwork, ISystem
+from edge.shared.hal.interfaces import HttpResponse, IHttpClient, INetwork, ISystem
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any
+
+    from edge.shared.app.protocols import Logger
 
 
 class PresenceService:
-    def __init__(self, http: IHttpClient, network: INetwork, system: ISystem, config: Config, logger=None):
+    def __init__(
+        self,
+        http: IHttpClient,
+        network: INetwork,
+        system: ISystem,
+        config: Config,
+        logger: "Logger | None" = None,
+    ):
         self._http = http
         self._network = network
         self._system = system
@@ -42,7 +55,7 @@ class PresenceService:
                 self.consecutive_heartbeat_failures += 1
             self._log_warn("Heartbeat failed", {"status_code": response.status_code, "failure_count": self.consecutive_heartbeat_failures})
             if self.consecutive_heartbeat_failures == 10 and not self._reboot_triggered:
-                self._log_critical("Heartbeat failed 10 times consecutively, initiating device reboot", {})
+                self._log_error("Heartbeat failed 10 times consecutively, initiating device reboot", {})
                 self._reboot_triggered = True
                 self._system.reset()
         else:
@@ -50,7 +63,7 @@ class PresenceService:
             self._reboot_triggered = False
         return ok
 
-    def heartbeat_with_metadata(self):
+    def heartbeat_with_metadata(self) -> "dict[str, Any] | None":
         response = self._post_heartbeat()
         if response.status_code != 200:
             self._log_warn("Heartbeat failed", {"status_code": response.status_code})
@@ -61,7 +74,7 @@ class PresenceService:
             self._log_warn("Heartbeat metadata parse failed")
             return {}
 
-    def _post_heartbeat(self):
+    def _post_heartbeat(self) -> HttpResponse:
         url = self._config.api_url + HEARTBEAT_PATH
         payload = {
             "device_id": self._config.device_id,
@@ -73,7 +86,7 @@ class PresenceService:
         self._log_info("Sending heartbeat", {"url": url})
         return self._http.post(url, payload, headers=self._auth_headers())
 
-    def run_heartbeat_loop(self, interval_ms: int, max_iterations=None) -> None:
+    def run_heartbeat_loop(self, interval_ms: int, max_iterations: int | None = None) -> None:
         count = 0
         self._log_info("Heartbeat loop started", {"interval_ms": interval_ms})
         while True:
@@ -82,24 +95,25 @@ class PresenceService:
             if max_iterations is not None and count >= max_iterations:
                 self._log_info("Heartbeat loop completed", {"iterations": count})
                 return
-            if self._logger is not None:
-                self._logger.tick()
+            tick = getattr(self._logger, "tick", None)  # EdgeLogger only
+            if callable(tick):
+                tick()
             self._system.sleep_ms(interval_ms)
 
-    def _auth_headers(self):
+    def _auth_headers(self) -> dict[str, str]:
         return {
             "X-Device-ID": self._config.device_id,
             "X-Api-Key": self._config.api_key,
         }
 
-    def _log_info(self, message: str, context=None) -> None:
+    def _log_info(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.info(message, context)
 
-    def _log_warn(self, message: str, context=None) -> None:
+    def _log_warn(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.warn(message, context)
 
-    def _log_critical(self, message: str, context=None) -> None:
+    def _log_error(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
-            self._logger.critical(message, context)
+            self._logger.error(message, context)

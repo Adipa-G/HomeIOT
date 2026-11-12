@@ -15,19 +15,19 @@ class DeviceRuntime:
 
     def __init__(
         self,
-        fs,
-        system,
-        http,
-        network,
-        watchdog,
-        config,
-        logger,
-        clock,
-        boot_manager,
-        presence,
-        updater,
-        device_control,
-        module_runtime,
+        fs: IFileSystem,
+        system: ISystem,
+        http: IHttpClient,
+        network: INetwork,
+        watchdog: IWatchdog,
+        config: Config,
+        logger: EdgeLogger,
+        clock: WallClock,
+        boot_manager: BootManager,
+        presence: PresenceService,
+        updater: Updater | None,
+        device_control: DeviceControlClient,
+        module_runtime: ModuleRuntime,
     ):
         self.fs = fs
         self.system = system
@@ -246,7 +246,7 @@ def _check_for_update(runtime: DeviceRuntime) -> None:
             logger.warn("OTA apply threw exception", {"error": str(exc)})
 
 
-def _feed_watchdog(watchdog) -> None:
+def _feed_watchdog(watchdog: IWatchdog) -> None:
     try:
         watchdog.feed()
     except Exception:

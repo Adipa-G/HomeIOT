@@ -1,7 +1,12 @@
 import json
 
+from edge.shared.app.json_util import as_dict
 from edge.shared.app.secret_crypto import decrypt_secret
 from edge.shared.hal.interfaces import IFileSystem, ISystem
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any
 
 
 CONFIG_PATH = "config.json"
@@ -10,6 +15,14 @@ CONFIG_STAGING_PATH = "config_staging.json"
 
 DEFAULT_WIFI_COUNTRY = "AU"
 PLACEHOLDER_PREFIX = "replace-with-"
+
+
+def _json_object(raw: "Any", what: str) -> "dict[str, Any]":
+    """Return a decoded JSON value as a dict, or raise ValueError if it isn't an object."""
+    obj = as_dict(raw)
+    if obj is None:
+        raise ValueError(what + " must be an object")
+    return obj
 
 
 def normalize_wifi_country(value: object) -> str:
@@ -25,11 +38,11 @@ def normalize_wifi_country(value: object) -> str:
 class LoggingConfig:
     def __init__(
         self,
-        enabled_uplink=True,
-        buffer_max_bytes=4096,
-        flush_interval_ms=30000,
-        flush_timeout_s=10,
-        min_level="INFO",
+        enabled_uplink: bool = True,
+        buffer_max_bytes: int = 4096,
+        flush_interval_ms: int = 30000,
+        flush_timeout_s: int = 10,
+        min_level: str = "INFO",
     ):
         self.enabled_uplink = bool(enabled_uplink)
         self.buffer_max_bytes = int(buffer_max_bytes)
@@ -41,18 +54,18 @@ class LoggingConfig:
 class PowerConfig:
     def __init__(
         self,
-        enabled=True,
-        production_sleep_min_ms=500,
-        production_sleep_max_ms=5000,
-        development_sleep_min_ms=50,
-        development_sleep_max_ms=1000,
-        network_retry_base_ms=5000,
-        network_retry_max_ms=60000,
-        wifi_power_save_enabled=False,
-        wifi_power_save_production_mode="modem",
-        wifi_power_save_development_mode="none",
-        radio_off_sleep_enabled=False,
-        radio_off_sleep_min_ms=15000,
+        enabled: bool = True,
+        production_sleep_min_ms: int = 500,
+        production_sleep_max_ms: int = 5000,
+        development_sleep_min_ms: int = 50,
+        development_sleep_max_ms: int = 1000,
+        network_retry_base_ms: int = 5000,
+        network_retry_max_ms: int = 60000,
+        wifi_power_save_enabled: bool = False,
+        wifi_power_save_production_mode: str = "modem",
+        wifi_power_save_development_mode: str = "none",
+        radio_off_sleep_enabled: bool = False,
+        radio_off_sleep_min_ms: int = 15000,
     ):
         self.enabled = bool(enabled)
         self.production_sleep_min_ms = int(production_sleep_min_ms)
@@ -71,20 +84,20 @@ class PowerConfig:
 class Config:
     def __init__(
         self,
-        device_id,
-        api_url,
-        api_key,
-        wifi_ssid,
-        wifi_password,
-        heartbeat_interval_ms,
-        max_boot_attempts,
-        dev_poll_interval_ms=2000,
-        module_assignment_poll_interval_ms=60000,
-        ota_poll_interval_ms=3600000,
-        current_version="0.0.0",
-        logging=None,
-        power=None,
-        wifi_country=None,
+        device_id: str,
+        api_url: str,
+        api_key: str,
+        wifi_ssid: str,
+        wifi_password: str,
+        heartbeat_interval_ms: int,
+        max_boot_attempts: int,
+        dev_poll_interval_ms: int = 2000,
+        module_assignment_poll_interval_ms: int = 60000,
+        ota_poll_interval_ms: int = 3600000,
+        current_version: str = "0.0.0",
+        logging: LoggingConfig | None = None,
+        power: PowerConfig | None = None,
+        wifi_country: str | None = None,
     ):
         self.device_id = str(device_id)
         self.api_url = str(api_url)
@@ -138,11 +151,10 @@ class Config:
         )
 
     @staticmethod
-    def _load_logging_config(payload) -> LoggingConfig:
-        if payload is None:
+    def _load_logging_config(raw: "Any") -> LoggingConfig:
+        if raw is None:
             return LoggingConfig()
-        if not isinstance(payload, dict):
-            raise ValueError("logging config must be an object")
+        payload = _json_object(raw, "logging config")
 
         return LoggingConfig(
             enabled_uplink=bool(payload.get("enabled_uplink", True)),
@@ -153,11 +165,10 @@ class Config:
         )
 
     @staticmethod
-    def _load_power_config(payload) -> PowerConfig:
-        if payload is None:
+    def _load_power_config(raw: "Any") -> PowerConfig:
+        if raw is None:
             return PowerConfig()
-        if not isinstance(payload, dict):
-            raise ValueError("power config must be an object")
+        payload = _json_object(raw, "power config")
 
         production_sleep_min_ms = max(50, int(payload.get("production_sleep_min_ms", 500)))
         production_sleep_max_ms = max(production_sleep_min_ms, int(payload.get("production_sleep_max_ms", 5000)))
@@ -183,19 +194,18 @@ class Config:
         )
 
     @staticmethod
-    def _resolve_secret(data: dict, key_name: str, system) -> str:
+    def _resolve_secret(data: "dict[str, Any]", key_name: str, system: ISystem | None) -> str:
         plaintext_value = data.get(key_name)
         if plaintext_value is not None:
             return plaintext_value
 
         enc_key = key_name + "_enc"
-        payload = data.get(enc_key)
-        if payload is None:
+        raw = data.get(enc_key)
+        if raw is None:
             raise ValueError("Missing config secret: " + key_name)
-        if not isinstance(payload, dict):
-            raise ValueError("Encrypted secret payload must be an object: " + enc_key)
+        payload = _json_object(raw, "Encrypted secret payload " + enc_key)
 
-        bindings = []
+        bindings: list[str] = []
         device_id = data.get("device_id")
         if device_id:
             bindings.append(str(device_id))

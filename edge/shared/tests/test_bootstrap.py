@@ -200,9 +200,26 @@ def test_bundle_bootstrap_files_exist_and_are_not_shipped_as_firmware():
         assert rel_path not in release
 
 
+def _is_type_checking_block(node: ast.AST) -> bool:
+    return isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING"
+
+
+def _runtime_nodes(tree: ast.AST):
+    """Walk tree, skipping `if TYPE_CHECKING:` bodies (type-only imports never run)."""
+    pending = [tree]
+    while pending:
+        node = pending.pop()
+        yield node
+        for child in ast.iter_child_nodes(node):
+            if _is_type_checking_block(child):
+                pending.extend(getattr(child, "orelse", []))
+            else:
+                pending.append(child)
+
+
 def _edge_imports(path: Path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
+    for node in _runtime_nodes(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("edge."):
             yield node.module
         elif isinstance(node, ast.Import):

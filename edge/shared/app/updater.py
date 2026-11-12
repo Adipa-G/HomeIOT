@@ -5,9 +5,18 @@ from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.boot_manager import ROOT_FILES_DIR
 from edge.shared.app.config import CONFIG_PATH, CONFIG_STAGING_PATH, Config
 from edge.shared.app.endpoints import OTA_CHECK_PATH, OTA_STREAM_PATH
+from edge.shared.app.json_util import as_dict
 from edge.shared.app.safe_io import atomic_write_bytes
 from edge.shared.app.secret_crypto import encrypt_secret
-from edge.shared.hal.interfaces import IFileSystem, IHttpClient, ISystem
+from edge.shared.hal.interfaces import IFileSystem, IHttpClient, IStreamingResponse, ISystem, IWatchdog
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from collections.abc import Callable, Iterator
+    from types import ModuleType
+    from typing import Any
+
+    from edge.shared.app.protocols import Hasher, Logger
 
 # Keys in the config "power" block that belong to the device, not the release.
 DEVICE_LOCAL_POWER_KEYS = ("radio_off_sleep_enabled",)
@@ -18,16 +27,16 @@ class _HashingChunkReader:
 
     Designed to be passed directly to IFileSystem.write_chunks() so the data is
     written to disk one chunk at a time — no large contiguous bytearray needed.
-    .digest is populated after the iterator is exhausted.
+    .digest is populated after the iterator is exhausted (empty until then).
     """
 
-    def __init__(self, frame_reader, size, hashlib_module):
+    def __init__(self, frame_reader: "_StreamFrameReader", size: int, hashlib_module: "ModuleType"):
         self._frame_reader = frame_reader
         self._size = size
-        self._h = hashlib_module.sha256()
-        self.digest = None
+        self._h: "Hasher" = hashlib_module.sha256()
+        self.digest = b""
 
-    def __iter__(self):
+    def __iter__(self) -> "Iterator[bytes | memoryview]":
         for chunk in self._frame_reader.read_chunks(self._size):
             self._h.update(chunk)
             yield chunk
@@ -48,7 +57,7 @@ class _StreamFrameReader:
         <SIZE raw bytes of file content>
     """
 
-    def __init__(self, streaming_response, on_progress=None):
+    def __init__(self, streaming_response: IStreamingResponse, on_progress: "Callable[[], None] | None" = None):
         self._resp = streaming_response
         self._buf = b""
         self._chunk_buf = bytearray(_READ_CHUNK_SIZE)
@@ -66,7 +75,7 @@ class _StreamFrameReader:
                 raise RuntimeError("Unexpected EOF in OTA stream")
             self._buf = self._buf + chunk
 
-    def read_chunks(self, size: int, chunk_size: int = _READ_CHUNK_SIZE):
+    def read_chunks(self, size: int, chunk_size: int = _READ_CHUNK_SIZE) -> "Iterator[bytes | memoryview]":
         """Yield raw bytes in up-to chunk_size pieces until exactly *size* bytes have been yielded."""
         remaining = size
         # Drain any bytes already pulled into the header look-ahead buffer.
@@ -97,7 +106,7 @@ class IncompatibleReleaseError(ValueError):
     """The release contains .mpy files this firmware cannot load."""
 
 
-def import_probe(directory):
+def import_probe(directory: str) -> None:
     """Import mpy_probe from directory, so the firmware's own loader checks the .mpy format."""
     sys.path.insert(0, directory)
     try:
@@ -108,7 +117,7 @@ def import_probe(directory):
 
 
 class UpdateInfo:
-    def __init__(self, available, version, manifest):
+    def __init__(self, available: bool, version: str, manifest: "list[Any]"):
         self.available = bool(available)
         self.version = str(version)
         self.manifest = list(manifest)
@@ -124,9 +133,9 @@ class Updater:
         boot_manager: BootManager,
         staging_root: str = "app_staging",
         platform: str = "esp32",
-        logger=None,
-        watchdog=None,
-        probe=None,
+        logger: "Logger | None" = None,
+        watchdog: IWatchdog | None = None,
+        probe: "Callable[[str], None] | None" = None,
     ):
         self._fs = fs
         self._http = http
@@ -144,7 +153,7 @@ class Updater:
         # Release this firmware can't load; not retried until the next reboot.
         self._rejected_version = None
 
-    def check(self):
+    def check(self) -> UpdateInfo | None:
         url = self._config.api_url + OTA_CHECK_PATH + "?version=" + self._config.current_version
         headers = self._auth_headers()
         headers["X-Current-Version"] = self._config.current_version
@@ -215,9 +224,10 @@ class Updater:
         self._boot_manager.set_new_version(version)
         self._log_info("OTA apply complete, resetting", {"version": version, "free_bytes": self._system.free_memory_bytes()})
 
-        if self._logger is not None and hasattr(self._logger, "flush"):
+        flush = getattr(self._logger, "flush", None)  # EdgeLogger only
+        if callable(flush):
             try:
-                self._logger.flush("ota")
+                flush("ota")
             except Exception:
                 pass
             
@@ -233,7 +243,7 @@ class Updater:
         import hashlib as _hashlib
         from binascii import hexlify as _hexlify
 
-        def _hex(digest):
+        def _hex(digest: bytes) -> str:
             return str(_hexlify(digest), "ascii")
 
         url = self._config.api_url + OTA_STREAM_PATH + "?version=" + update_info.version
@@ -362,7 +372,7 @@ class Updater:
         except Exception:
             pass
 
-    def _auth_headers(self):
+    def _auth_headers(self) -> dict[str, str]:
         return {
             "X-Device-ID": self._config.device_id,
             "X-Api-Key": self._config.api_key,
@@ -407,15 +417,15 @@ class Updater:
             return ""
         return path.rsplit("/", 1)[0]
 
-    def _log_info(self, message: str, context=None) -> None:
+    def _log_info(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.info(message, context)
 
-    def _log_warn(self, message: str, context=None) -> None:
+    def _log_warn(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.warn(message, context)
 
-    def _log_error(self, message: str, context=None) -> None:
+    def _log_error(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.error(message, context)
 
@@ -452,12 +462,12 @@ class Updater:
 
         # Per-device power settings: a value already on the device always wins; the
         # release value only seeds devices that do not have one yet.
-        active_power = active.get("power")
-        if isinstance(active_power, dict):
+        active_power = as_dict(active.get("power"))
+        if active_power is not None:
             for key in DEVICE_LOCAL_POWER_KEYS:
                 if isinstance(active_power.get(key), bool):
-                    staged_power = staged.get("power")
-                    if not isinstance(staged_power, dict):
+                    staged_power = as_dict(staged.get("power"))
+                    if staged_power is None:
                         staged_power = {}
                         staged["power"] = staged_power
                     staged_power[key] = active_power[key]

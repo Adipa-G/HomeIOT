@@ -19,6 +19,7 @@
     "edge/shared/app/__init__.py",
     "edge/shared/app/secret_crypto.py",
     "edge/shared/app/safe_io.py",
+    "edge/shared/app/json_util.py",
     "edge/shared/app/config.py",
     "edge/shared/app/endpoints.py",
     "edge/shared/app/boot_manager.py",

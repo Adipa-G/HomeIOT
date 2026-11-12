@@ -1,19 +1,30 @@
 import json
 
+from edge.shared.app.config import Config
+from edge.shared.app.json_util import as_dict, as_list
 from edge.shared.app.safe_io import atomic_write_text
+from edge.shared.app.wall_clock import WallClock
+from edge.shared.hal.interfaces import IFileSystem, ISystem
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from collections.abc import Callable
+    from typing import Any
+
+    from edge.shared.app.protocols import Logger, ModuleHost
 
 
 class ModuleSchedule:
     def __init__(
         self,
-        module_id,
-        version,
-        interval_ms,
-        timeout_ms,
-        entrypoint="run",
-        next_due_ms=0,
-        run_seq=0,
-        variables=None,
+        module_id: str,
+        version: str,
+        interval_ms: int,
+        timeout_ms: int,
+        entrypoint: str = "run",
+        next_due_ms: int = 0,
+        run_seq: int = 0,
+        variables: "dict[str, Any] | None" = None,
     ):
         self.module_id = str(module_id)
         self.version = str(version)
@@ -22,24 +33,24 @@ class ModuleSchedule:
         self.entrypoint = str(entrypoint)
         self.next_due_ms = int(next_due_ms)
         self.run_seq = int(run_seq)
-        self.variables = variables or {}
+        self.variables: "dict[str, Any]" = variables or {}
 
 
 class ModuleRuntime:
     def __init__(
         self,
-        system,
-        device_control,
-        config,
-        fs=None,
-        logger=None,
-        utc_now_iso=None,
-        timeout_marker_path="module_timeout_pending.json",
-        pending_module_status_path="module_status_pending.json",
-        quarantine_root="modules_cache",
-        quarantine_threshold=3,
-        pending_results_max=30,
-        clock=None,
+        system: ISystem,
+        device_control: "ModuleHost",
+        config: Config,
+        fs: IFileSystem | None = None,
+        logger: "Logger | None" = None,
+        utc_now_iso: "Callable[[], str] | None" = None,
+        timeout_marker_path: str = "module_timeout_pending.json",
+        pending_module_status_path: str = "module_status_pending.json",
+        quarantine_root: str = "modules_cache",
+        quarantine_threshold: int = 3,
+        pending_results_max: int = 30,
+        clock: WallClock | None = None,
     ):
         self._system = system
         self._device_control = device_control
@@ -52,14 +63,14 @@ class ModuleRuntime:
         self._pending_module_status_path = pending_module_status_path
         self._quarantine_root = quarantine_root
         self._quarantine_threshold = quarantine_threshold
-        self._modules = {}
+        self._modules: dict[str, ModuleSchedule] = {}
         # Results that failed to upload because the network was down. Kept in RAM
         # only (no flash wear); lost on reset. Each entry keeps the run's tick
         # readings so results stamped before the first NTP sync can be re-dated.
-        self._pending_results = []
+        self._pending_results: "list[dict[str, Any]]" = []
         self._pending_results_max = max(1, int(pending_results_max))
 
-    def flush_pending_timeout_result(self):
+    def flush_pending_timeout_result(self) -> bool:
         payload = self._load_timeout_marker()
         if not payload:
             return False
@@ -73,7 +84,7 @@ class ModuleRuntime:
             return True
         return False
 
-    def flush_pending_module_status(self):
+    def flush_pending_module_status(self) -> bool:
         payload = self._load_module_status_marker()
         if not payload:
             return False
@@ -90,11 +101,11 @@ class ModuleRuntime:
             return True
         return False
 
-    def update_assignment(self, assignment_payload, now_ms=None):
+    def update_assignment(self, assignment_payload: "Any", now_ms: int | None = None) -> dict[str, int]:
         now = self._system.time_ms() if now_ms is None else now_ms
         incoming = self._extract_modules(assignment_payload)
 
-        next_state = {}
+        next_state: dict[str, ModuleSchedule] = {}
         for item in incoming:
             module_id = str(item.get("module_id", "")).strip()
             version = str(item.get("version", "")).strip()
@@ -123,7 +134,7 @@ class ModuleRuntime:
                 next_due_ms = now
                 self._ack_module_reenabled(module_id, version)
 
-            variables = item.get("variables") or {}
+            variables: "dict[str, Any]" = as_dict(item.get("variables")) or {}
 
             next_state[module_id] = ModuleSchedule(
                 module_id=module_id,
@@ -139,7 +150,7 @@ class ModuleRuntime:
         self._modules = next_state
         return {"assigned": len(self._modules)}
 
-    def tick(self, now_ms=None):
+    def tick(self, now_ms: int | None = None) -> dict[str, int]:
         now = self._system.time_ms() if now_ms is None else now_ms
         executed = 0
         success = 0
@@ -186,7 +197,7 @@ class ModuleRuntime:
             "reset_requested": False,
         }
 
-    def _run_one(self, schedule):
+    def _run_one(self, schedule: ModuleSchedule) -> dict[str, str]:
         start_ms = self._system.time_ms()
         start_utc = self._utc_now_iso()
         run_id = self._next_run_id(schedule, start_ms)
@@ -200,7 +211,7 @@ class ModuleRuntime:
         self._save_quarantine(schedule.module_id, q)
 
         status = "success"
-        output = {}
+        output: "dict[str, Any]" = {}
         error_message = None
 
         self._log_info(
@@ -210,7 +221,7 @@ class ModuleRuntime:
 
         try:
             entrypoint = self._load_entrypoint(schedule)
-            context = {
+            context: "dict[str, Any]" = {
                 "module_id": schedule.module_id,
                 "module_version": schedule.version,
                 "device_id": self._config.device_id,
@@ -264,7 +275,7 @@ class ModuleRuntime:
                     "Module quarantined after repeated failures",
                     {"module_id": schedule.module_id, "failed_start_count": count},
                 )
-                status_payload = {
+                status_payload: "dict[str, Any]" = {
                     "device_id": self._config.device_id,
                     "module_id": schedule.module_id,
                     "module_version": schedule.version,
@@ -280,7 +291,7 @@ class ModuleRuntime:
                 if not ok:
                     self._persist_module_status_marker(status_payload)
 
-        payload = {
+        payload: "dict[str, Any]" = {
             "device_id": self._config.device_id,
             "module_id": schedule.module_id,
             "module_version": schedule.version,
@@ -316,13 +327,13 @@ class ModuleRuntime:
 
         return {"status": status, "run_id": run_id}
 
-    def _load_entrypoint(self, schedule):
+    def _load_entrypoint(self, schedule: ModuleSchedule) -> "Callable[[dict[str, Any]], Any]":
         package = self._device_control.get_cached_module_package(schedule.module_id, schedule.version)
         if package is None:
             raise FileNotFoundError(
                 "Module package not cached for " + schedule.module_id + "@" + schedule.version
             )
-        scope = {}
+        scope: "dict[str, Any]" = {}
         preamble = self._build_variable_preamble(schedule.variables)
         if preamble:
             exec(preamble, scope, scope)
@@ -344,16 +355,16 @@ class ModuleRuntime:
         return entrypoint
 
     @staticmethod
-    def _build_variable_preamble(variables):
+    def _build_variable_preamble(variables: "dict[str, Any]") -> str:
         if not variables:
             return ""
-        lines = []
+        lines: list[str] = []
         for name, value in variables.items():
             lines.append(str(name) + " = " + ModuleRuntime._python_literal(value))
         return "\n".join(lines) + "\n"
 
     @staticmethod
-    def _python_literal(value):
+    def _python_literal(value: "Any") -> str:
         if value is None:
             return "None"
         if isinstance(value, bool):
@@ -370,54 +381,57 @@ class ModuleRuntime:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         return '"' + escaped + '"'
 
-    def get_next_due_ms(self):
-        next_due = None
+    def get_next_due_ms(self) -> int | None:
+        next_due: int | None = None
         for schedule in self._modules.values():
             if next_due is None or self._system.ticks_diff(schedule.next_due_ms, next_due) < 0:
                 next_due = schedule.next_due_ms
         return next_due
 
-    def get_upcoming_modules(self, next_wake_ms):
-        result = []
+    def get_upcoming_modules(self, next_wake_ms: int) -> list[dict[str, str]]:
+        result: list[dict[str, str]] = []
         for schedule in self._modules.values():
             if self._system.ticks_diff(schedule.next_due_ms, next_wake_ms) <= 0:
                 result.append({"module_id": schedule.module_id, "version": schedule.version})
         return result
 
     @staticmethod
-    def _normalize_output(returned):
+    def _normalize_output(returned: "Any") -> "dict[str, Any]":
         if returned is None:
             return {}
-        if isinstance(returned, dict):
-            return returned
+        output = as_dict(returned)
+        if output is not None:
+            return output
         return {"result": returned}
 
-    def _next_run_id(self, schedule, start_ms):
+    def _next_run_id(self, schedule: ModuleSchedule, start_ms: int) -> str:
         schedule.run_seq += 1
         return schedule.module_id + ":" + schedule.version + ":" + str(start_ms) + ":" + str(schedule.run_seq)
 
     @staticmethod
-    def _extract_modules(assignment_payload):
-        if not assignment_payload or not isinstance(assignment_payload, dict):
+    def _extract_modules(assignment_payload: "Any") -> "list[Any]":
+        payload = as_dict(assignment_payload) if assignment_payload else None
+        if payload is None:
             return []
-        if isinstance(assignment_payload.get("modules"), list):
-            return assignment_payload.get("modules") or []
-        if assignment_payload.get("module_id") and assignment_payload.get("version"):
-            return [assignment_payload]
+        modules = as_list(payload.get("modules"))
+        if modules is not None:
+            return modules
+        if payload.get("module_id") and payload.get("version"):
+            return [payload]
         return []
 
-    def _clock_now_iso(self):
+    def _clock_now_iso(self) -> str:
         if self._clock is not None:
             now = self._clock.now_iso()
             if now is not None:
                 return now
         return self._default_utc_now_iso()
 
-    def _clock_synced(self):
+    def _clock_synced(self) -> bool:
         return self._clock is not None and self._clock.is_synced()
 
     @staticmethod
-    def _default_utc_now_iso():
+    def _default_utc_now_iso() -> str:
         try:
             import time
             parts = time.gmtime()
@@ -428,7 +442,7 @@ class ModuleRuntime:
             return "1970-01-01T00:00:00Z"
 
     @staticmethod
-    def _format_exception(exc):
+    def _format_exception(exc: BaseException) -> str:
         try:
             import traceback
             details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
@@ -438,7 +452,7 @@ class ModuleRuntime:
             details = details[:2000] + "..."
         return details
 
-    def _report_result(self, payload, queue_entry=None):
+    def _report_result(self, payload: "dict[str, Any]", queue_entry: "dict[str, Any] | None" = None) -> bool:
         try:
             ok = self._device_control.report_module_result(payload)
             if not ok:
@@ -454,7 +468,7 @@ class ModuleRuntime:
                 return False
             return True
         except Exception as exc:
-            context = {
+            context: "dict[str, Any]" = {
                 "module_id": payload.get("module_id"),
                 "module_version": payload.get("module_version"),
                 "run_id": payload.get("run_id"),
@@ -467,7 +481,7 @@ class ModuleRuntime:
             self._log_warn("Module result upload threw exception", context)
             return False
 
-    def _queue_result(self, entry):
+    def _queue_result(self, entry: "dict[str, Any]") -> None:
         self._pending_results.append(entry)
         if len(self._pending_results) > self._pending_results_max:
             dropped = self._pending_results.pop(0)
@@ -476,7 +490,7 @@ class ModuleRuntime:
                 {"run_id": dropped["payload"].get("run_id"), "max": self._pending_results_max},
             )
 
-    def _redate_if_needed(self, entry):
+    def _redate_if_needed(self, entry: "dict[str, Any]") -> None:
         """Replace pre-sync timestamps with times derived from the run's tick readings."""
         if entry.get("clock_synced") or self._clock is None or not self._clock_synced():
             return
@@ -485,7 +499,7 @@ class ModuleRuntime:
         payload["finished_at_utc"] = self._clock.iso_at_ticks(entry["finished_ticks"])
         entry["clock_synced"] = True
 
-    def flush_pending_results(self):
+    def flush_pending_results(self) -> int:
         """Upload results queued while offline, oldest first. Returns how many were stored."""
         uploaded = 0
         while self._pending_results:
@@ -513,8 +527,8 @@ class ModuleRuntime:
             )
         return uploaded
 
-    def _ack_module_reenabled(self, module_id, version):
-        payload = {
+    def _ack_module_reenabled(self, module_id: str, version: str) -> None:
+        payload: "dict[str, Any]" = {
             "device_id": self._config.device_id,
             "module_id": module_id,
             "module_version": version,
@@ -530,11 +544,11 @@ class ModuleRuntime:
 
     # ------------------------------------------------------------------ quarantine state
 
-    def _quarantine_path(self, module_id):
+    def _quarantine_path(self, module_id: str) -> str:
         return self._quarantine_root + "/" + str(module_id) + "/quarantine.json"
 
-    def _load_quarantine(self, module_id):
-        default = {
+    def _load_quarantine(self, module_id: str) -> "dict[str, Any]":
+        default: "dict[str, Any]" = {
             "failed_start_count": 0,
             "disabled": False,
             "disabled_reason": None,
@@ -548,14 +562,14 @@ class ModuleRuntime:
             return default
         try:
             raw = self._fs.read_text(path)
-            state = json.loads(raw)
-            if isinstance(state, dict):
+            state = as_dict(json.loads(raw))
+            if state is not None:
                 return state
         except Exception as exc:
             self._log_warn("Failed to load quarantine state", {"module_id": module_id, "error": str(exc)})
         return default
 
-    def _save_quarantine(self, module_id, state):
+    def _save_quarantine(self, module_id: str, state: "dict[str, Any]") -> None:
         if self._fs is None:
             return
         try:
@@ -563,7 +577,7 @@ class ModuleRuntime:
         except Exception as exc:
             self._log_warn("Failed to persist quarantine state", {"module_id": module_id, "error": str(exc)})
 
-    def _clear_quarantine(self, module_id):
+    def _clear_quarantine(self, module_id: str) -> None:
         if self._fs is None:
             return
         path = self._quarantine_path(module_id)
@@ -575,7 +589,7 @@ class ModuleRuntime:
 
     # ------------------------------------------------------------------ pending module-status marker
 
-    def _persist_module_status_marker(self, payload):
+    def _persist_module_status_marker(self, payload: "dict[str, Any]") -> None:
         if self._fs is None:
             return
         try:
@@ -583,19 +597,19 @@ class ModuleRuntime:
         except Exception as exc:
             self._log_warn("Failed to persist module-status marker", {"error": str(exc)})
 
-    def _load_module_status_marker(self):
+    def _load_module_status_marker(self) -> "dict[str, Any] | None":
         if self._fs is None or not self._fs.exists(self._pending_module_status_path):
             return None
         try:
             raw = self._fs.read_text(self._pending_module_status_path)
-            payload = json.loads(raw)
-            if isinstance(payload, dict):
+            payload = as_dict(json.loads(raw))
+            if payload is not None:
                 return payload
         except Exception as exc:
             self._log_warn("Failed to load module-status marker", {"error": str(exc)})
         return None
 
-    def _clear_module_status_marker(self):
+    def _clear_module_status_marker(self) -> None:
         if self._fs is None:
             return
         try:
@@ -609,7 +623,7 @@ class ModuleRuntime:
 
     # ------------------------------------------------------------------ timeout marker
 
-    def _persist_timeout_marker(self, payload):
+    def _persist_timeout_marker(self, payload: "dict[str, Any]") -> None:
         if self._fs is None:
             return
         try:
@@ -617,19 +631,19 @@ class ModuleRuntime:
         except Exception as exc:
             self._log_warn("Failed to persist timeout marker", {"error": str(exc)})
 
-    def _load_timeout_marker(self):
+    def _load_timeout_marker(self) -> "dict[str, Any] | None":
         if self._fs is None or not self._fs.exists(self._timeout_marker_path):
             return None
         try:
             raw = self._fs.read_text(self._timeout_marker_path)
-            payload = json.loads(raw)
-            if isinstance(payload, dict):
+            payload = as_dict(json.loads(raw))
+            if payload is not None:
                 return payload
         except Exception as exc:
             self._log_warn("Failed to load timeout marker", {"error": str(exc)})
         return None
 
-    def _clear_timeout_marker(self):
+    def _clear_timeout_marker(self) -> None:
         if self._fs is None:
             return
         try:
@@ -638,16 +652,16 @@ class ModuleRuntime:
         except Exception as exc:
             self._log_warn("Failed to clear timeout marker", {"error": str(exc)})
 
-    def _log_info(self, message, context=None):
+    def _log_info(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.info(message, context)
 
-    def _log_warn(self, message, context=None):
+    def _log_warn(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.warn(message, context)
 
 
-def _collect_garbage():
+def _collect_garbage() -> None:
     try:
         import gc
         gc.collect()

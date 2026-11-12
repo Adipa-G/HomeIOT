@@ -44,6 +44,7 @@ typeCheckingMode = "standard"
 strict = [
     "bootstrap",
     "platforms",
+    "shared/app",
     "shared/hal",
     "shared/tests/mocks",
     "simulator",

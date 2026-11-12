@@ -16,8 +16,14 @@ class _FakeLogger:
     def __init__(self):
         self.warn_calls = 0
 
+    def info(self, *_args, **_kwargs):
+        pass
+
     def warn(self, *_args, **_kwargs):
         self.warn_calls += 1
+
+    def error(self, *_args, **_kwargs):
+        pass
 
 
 def test_execute_dev_command_success_reports_result():

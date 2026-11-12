@@ -4,6 +4,12 @@ from edge.shared.app.config import CONFIG_PATH, CONFIG_PREV_PATH, CONFIG_STAGING
 from edge.shared.hal.interfaces import IFileSystem, ISystem
 from edge.shared.app.safe_io import atomic_write_bytes, atomic_write_text
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any
+
+    from edge.shared.app.protocols import Logger
+
 # OTA stages the root entry points (boot.py, main.py) in this folder inside the app
 # tree. They are copied to the filesystem root only when the app is swapped, and the
 # outgoing ones are saved in app_prev, so entry points always match the app version.
@@ -23,7 +29,7 @@ class BootManager:
         config_path: str = CONFIG_PATH,
         config_prev_path: str = CONFIG_PREV_PATH,
         config_staging_path: str = CONFIG_STAGING_PATH,
-        logger=None,
+        logger: "Logger | None" = None,
     ):
         self._fs = fs
         self._system = system
@@ -37,7 +43,7 @@ class BootManager:
         self._config_staging_path = config_staging_path
         self._logger = logger
 
-    def on_boot(self):
+    def on_boot(self) -> "dict[str, Any]":
         state = self._load_state()
         state["boot_count"] += 1
         state["boot_succeeded"] = False
@@ -61,7 +67,7 @@ class BootManager:
 
         return state
 
-    def get_state(self):
+    def get_state(self) -> "dict[str, Any]":
         return self._load_state()
 
     def discard_app_backup(self) -> bool:
@@ -162,17 +168,17 @@ class BootManager:
         self._save_state(state)
         self._system.reset()
 
-    def _log_info(self, message: str, context=None) -> None:
+    def _log_info(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.info(message, context)
 
-    def _log_warn(self, message: str, context=None) -> None:
+    def _log_warn(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.warn(message, context)
 
-    def _load_state(self):
+    def _load_state(self) -> "dict[str, Any]":
         if not self._fs.exists(self._state_path):
-            default_state = {
+            default_state: "dict[str, Any]" = {
                 "boot_count": 0,
                 "boot_succeeded": False,
                 "current_version": "0.0.0",
@@ -185,8 +191,8 @@ class BootManager:
             self._save_state(default_state)
             return default_state
 
-        state = json.loads(self._fs.read_text(self._state_path))
-        defaults = {
+        state: "dict[str, Any]" = json.loads(self._fs.read_text(self._state_path))
+        defaults: "dict[str, Any]" = {
             "boot_count": 0,
             "boot_succeeded": False,
             "current_version": "0.0.0",
@@ -205,7 +211,7 @@ class BootManager:
             self._save_state(state)
         return state
 
-    def _save_state(self, state) -> None:
+    def _save_state(self, state: "dict[str, Any]") -> None:
         atomic_write_text(self._fs, self._state_path, json.dumps(state))
 
     def _promote_config(self) -> None:

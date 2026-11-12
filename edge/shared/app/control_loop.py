@@ -1,5 +1,19 @@
+from edge.shared.app.config import Config
 from edge.shared.app.dev_command_runtime import execute_dev_command
+from edge.shared.app.device_control import DeviceControlClient
+from edge.shared.app.json_util import as_dict
+from edge.shared.app.logger import EdgeLogger
+from edge.shared.app.module_runtime import ModuleRuntime
+from edge.shared.app.presence import PresenceService
+from edge.shared.app.updater import Updater
 from edge.shared.app.wall_clock import WallClock
+from edge.shared.hal.interfaces import INetwork, ISystem, IWatchdog
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any
+
+    from edge.shared.app.protocols import Logger
 
 
 NETWORK_RETRY_BASE_MS = 5000
@@ -22,19 +36,19 @@ TIME_SYNC_FAILURE_LOG_EVERY = 10
 
 
 def run_control_loop(
-    system,
-    presence,
-    device_control,
-    module_runtime,
-    logger,
-    config,
-    network=None,
-    watchdog=None,
-    updater=None,
-    max_iterations=None,
-    clock=None,
-    ota_checked=False,
-):
+    system: ISystem,
+    presence: PresenceService,
+    device_control: DeviceControlClient,
+    module_runtime: ModuleRuntime,
+    logger: EdgeLogger,
+    config: Config,
+    network: INetwork | None = None,
+    watchdog: IWatchdog | None = None,
+    updater: Updater | None = None,
+    max_iterations: int | None = None,
+    clock: WallClock | None = None,
+    ota_checked: bool = False,
+) -> None:
     """Run the device main loop.
 
     ota_checked: the caller already ran an OTA check, so wait one poll interval
@@ -61,17 +75,17 @@ class _ControlLoop:
 
     def __init__(
         self,
-        system,
-        presence,
-        device_control,
-        module_runtime,
-        logger,
-        config,
-        network,
-        watchdog,
-        updater,
-        clock,
-        ota_checked,
+        system: ISystem,
+        presence: PresenceService,
+        device_control: DeviceControlClient,
+        module_runtime: ModuleRuntime,
+        logger: EdgeLogger,
+        config: Config,
+        network: INetwork | None,
+        watchdog: IWatchdog | None,
+        updater: Updater | None,
+        clock: WallClock | None,
+        ota_checked: bool,
     ):
         if clock is None and hasattr(system, "sync_time"):
             clock = WallClock(system)
@@ -103,18 +117,18 @@ class _ControlLoop:
         self.radio_off_sleep_min_ms = getattr(power_cfg, "radio_off_sleep_min_ms", RADIO_OFF_SLEEP_MIN_MS)
 
         self.connected = network is None
-        self.network_retry_interval_ms = self.network_retry_base_ms
+        self.network_retry_interval_ms: int = self.network_retry_base_ms
         self.next_network_retry_ms = 0
-        self.last_applied_power_mode = None
+        self.last_applied_power_mode: str | None = None
 
         self.next_heartbeat_ms = 0
         self.next_dev_poll_ms = 0
         self.next_module_poll_ms = 0
         self.next_ota_poll_ms = system.ticks_add(system.time_ms(), self.ota_poll_interval_ms) if ota_checked else 0
-        self.next_time_sync_ms = None
+        self.next_time_sync_ms: int | None = None
 
-        self.last_dev_revision_hash = None
-        self.last_assignment_hash = None
+        self.last_dev_revision_hash: str | None = None
+        self.last_assignment_hash: str | None = None
 
         sleep_capabilities = self._log_sleep_capabilities()
         self._log_wifi_power_save_modes()
@@ -126,14 +140,14 @@ class _ControlLoop:
 
     # ------------------------------------------------------------------ loop
 
-    def run(self, max_iterations=None):
+    def run(self, max_iterations: int | None = None) -> None:
         iterations = 0
         while max_iterations is None or iterations < max_iterations:
             if not self._run_once():
                 return
             iterations += 1
 
-    def _run_once(self):
+    def _run_once(self) -> bool:
         """One loop iteration. Returns False when a module requested a device reset."""
         now = self.system.time_ms()
         if self.clock is not None:
@@ -156,7 +170,7 @@ class _ControlLoop:
         self._sleep(sleep_ms)
         return True
 
-    def _service_server(self, now):
+    def _service_server(self, now: int) -> None:
         """Everything that needs the API: runs only while the network is up."""
         if self.network is not None:
             self.next_time_sync_ms = _maybe_sync_time(
@@ -174,7 +188,7 @@ class _ControlLoop:
 
     # ------------------------------------------------------------------ network
 
-    def _maintain_network(self, now):
+    def _maintain_network(self, now: int) -> None:
         state = _ensure_network_connected(
             network=self.network,
             config=self.config,
@@ -195,7 +209,9 @@ class _ControlLoop:
             self.next_network_retry_ms = state["next_retry_ms"]
             self.network_retry_interval_ms = state["retry_interval_ms"]
 
-    def _apply_power_mode(self):
+    def _apply_power_mode(self) -> None:
+        if self.network is None:
+            return
         requested = _requested_network_power_mode(self.config, self.mode)
         if requested != self.last_applied_power_mode:
             if _try_apply_network_power_mode(self.network, requested, self.logger):
@@ -203,7 +219,7 @@ class _ControlLoop:
 
     # ------------------------------------------------------------------ server tasks
 
-    def _flush_pending_module_data(self):
+    def _flush_pending_module_data(self) -> None:
         self._call_optional(
             self.module_runtime, "flush_pending_timeout_result", "Pending timeout result flush failed"
         )
@@ -212,7 +228,7 @@ class _ControlLoop:
         )
         self._call_optional(self.module_runtime, "flush_pending_results", "Pending module result flush failed")
 
-    def _send_heartbeat(self, now):
+    def _send_heartbeat(self, now: int) -> None:
         try:
             metadata = self.presence.heartbeat_with_metadata()
         except Exception as exc:
@@ -228,7 +244,7 @@ class _ControlLoop:
         self._prefetch_upcoming_modules()
         self._feed_watchdog()
 
-    def _apply_heartbeat_metadata(self, metadata):
+    def _apply_heartbeat_metadata(self, metadata: "dict[str, Any]") -> None:
         server_mode = str(metadata.get("mode", self.mode))
         if server_mode != self.mode:
             self.logger.info("Mode changed", {"from": self.mode, "to": server_mode})
@@ -240,7 +256,7 @@ class _ControlLoop:
             int(metadata.get("module_assignment_poll_interval_ms", self.module_poll_interval_ms)),
         )
 
-    def _prefetch_upcoming_modules(self):
+    def _prefetch_upcoming_modules(self) -> None:
         """Ask the server to prepare code for modules that will run before the next heartbeat."""
         upcoming = self.module_runtime.get_upcoming_modules(next_wake_ms=self.next_heartbeat_ms)
         if not upcoming:
@@ -260,7 +276,7 @@ class _ControlLoop:
         except Exception as exc:
             self.logger.warn("Module prefetch failed", {"error": str(exc)})
 
-    def _poll_module_assignment(self, now):
+    def _poll_module_assignment(self, now: int) -> None:
         try:
             assignment = self.device_control.get_module_assignment(self.last_assignment_hash)
         except Exception as exc:
@@ -274,22 +290,25 @@ class _ControlLoop:
         self.next_module_poll_ms = self.system.ticks_add(now, self.module_poll_interval_ms)
         self._feed_watchdog()
 
-    def _poll_ota_update(self, now):
+    def _poll_ota_update(self, now: int) -> None:
+        updater = self.updater
+        if updater is None:
+            return
         try:
-            update_info = self.updater.check()
+            update_info = updater.check()
         except Exception as exc:
             self.logger.warn("OTA check threw exception", {"error": str(exc)})
             update_info = None
         if update_info is not None:
             self.logger.info("OTA update available", {"version": update_info.version})
             try:
-                self.updater.apply(update_info)
+                updater.apply(update_info)
             except Exception as exc:
                 self.logger.warn("OTA apply threw exception", {"error": str(exc)})
         self.next_ota_poll_ms = self.system.ticks_add(now, self.ota_poll_interval_ms)
         self._feed_watchdog()
 
-    def _poll_dev_command(self, now):
+    def _poll_dev_command(self, now: int) -> None:
         try:
             command = self.device_control.get_next_dev_command(self.last_dev_revision_hash)
         except Exception as exc:
@@ -300,7 +319,7 @@ class _ControlLoop:
         self.next_dev_poll_ms = self.system.ticks_add(now, self.dev_poll_interval_ms)
         self._feed_watchdog()
 
-    def _run_dev_command(self, command):
+    def _run_dev_command(self, command: "dict[str, Any]") -> None:
         self.last_dev_revision_hash = command.get("revision_hash", self.last_dev_revision_hash)
         result = execute_dev_command(
             system=self.system,
@@ -320,7 +339,7 @@ class _ControlLoop:
 
     # ------------------------------------------------------------------ sleep
 
-    def _sleep_duration_ms(self, now):
+    def _sleep_duration_ms(self, now: int) -> int:
         """Time until the nearest deadline, clamped to the current mode's sleep bounds."""
         candidates = [self.next_heartbeat_ms, self.next_module_poll_ms]
         if self.network is not None and not self.connected:
@@ -338,13 +357,13 @@ class _ControlLoop:
             return max(self.development_sleep_min_ms, min(self.development_sleep_max_ms, remaining_ms))
         return max(self.production_sleep_min_ms, min(self.production_sleep_max_ms, remaining_ms))
 
-    def _sleep(self, sleep_ms):
+    def _sleep(self, sleep_ms: int) -> None:
         if self.radio_off_sleep_enabled and self.mode != "development" and sleep_ms >= self.radio_off_sleep_min_ms:
             self._radio_off_sleep(sleep_ms)
         else:
             _sleep(self.system, self.watchdog, self.logger, sleep_ms, self.sleep_chunk_ms)
 
-    def _radio_off_sleep(self, sleep_ms):
+    def _radio_off_sleep(self, sleep_ms: int) -> None:
         """Power the WiFi radio down and light-sleep; falls back to regular sleep if that fails."""
         was_connected = self.connected
         if was_connected:
@@ -373,7 +392,7 @@ class _ControlLoop:
             self.next_network_retry_ms = self.system.time_ms()
             self.network_retry_interval_ms = self.network_retry_base_ms
 
-    def _record_light_sleep_result(self, stats):
+    def _record_light_sleep_result(self, stats: dict[str, int]) -> None:
         if stats["effective_steps"] > 0:
             self.light_sleep_failures = 0
             # The RP2040 RTC stops during light sleep; put the right time back
@@ -391,18 +410,20 @@ class _ControlLoop:
 
     # ------------------------------------------------------------------ helpers
 
-    def _log_sleep_capabilities(self):
-        if not hasattr(self.system, "get_sleep_capabilities"):
+    def _log_sleep_capabilities(self) -> "dict[str, Any] | None":
+        # Not part of ISystem; only the MicroPython HAL provides it.
+        get_sleep_capabilities = getattr(self.system, "get_sleep_capabilities", None)
+        if not callable(get_sleep_capabilities):
             return None
         try:
-            capabilities = self.system.get_sleep_capabilities()
+            capabilities = as_dict(get_sleep_capabilities())
             self.logger.info("CPU sleep capabilities", capabilities)
             return capabilities
         except Exception as exc:
             self.logger.warn("CPU sleep capability detection failed", {"error": str(exc)})
             return None
 
-    def _log_wifi_power_save_modes(self):
+    def _log_wifi_power_save_modes(self) -> None:
         if self.network is None or not hasattr(self.network, "get_power_save_modes"):
             return
         try:
@@ -410,10 +431,10 @@ class _ControlLoop:
         except Exception as exc:
             self.logger.warn("WiFi power-save capability detection failed", {"error": str(exc)})
 
-    def _is_due(self, now, deadline_ms):
+    def _is_due(self, now: int, deadline_ms: int) -> bool:
         return self.system.ticks_diff(now, deadline_ms) >= 0
 
-    def _call_optional(self, target, method_name, failure_message):
+    def _call_optional(self, target: object, method_name: str, failure_message: str) -> None:
         if not hasattr(target, method_name):
             return
         try:
@@ -421,11 +442,11 @@ class _ControlLoop:
         except Exception as exc:
             self.logger.warn(failure_message, {"error": str(exc)})
 
-    def _feed_watchdog(self):
+    def _feed_watchdog(self) -> None:
         _feed_watchdog(self.watchdog, self.logger)
 
 
-def _requested_network_power_mode(config, mode):
+def _requested_network_power_mode(config: Config, mode: str) -> str:
     power_cfg = getattr(config, "power", None)
     if power_cfg is None or not getattr(power_cfg, "wifi_power_save_enabled", False):
         return "none"
@@ -436,7 +457,7 @@ def _requested_network_power_mode(config, mode):
     return "powersave" if requested_mode == "light" else requested_mode
 
 
-def _try_apply_network_power_mode(network, mode, logger):
+def _try_apply_network_power_mode(network: INetwork, mode: str, logger: "Logger") -> bool:
     if not hasattr(network, "set_power_save"):
         return False
     try:
@@ -452,16 +473,16 @@ def _try_apply_network_power_mode(network, mode, logger):
 
 
 def _ensure_network_connected(
-    network,
-    config,
-    logger,
-    system,
-    now_ms,
-    next_retry_ms,
-    retry_interval_ms,
-    retry_base_ms,
-    retry_max_ms,
-):
+    network: INetwork | None,
+    config: Config,
+    logger: "Logger",
+    system: ISystem,
+    now_ms: int,
+    next_retry_ms: int,
+    retry_interval_ms: int,
+    retry_base_ms: int,
+    retry_max_ms: int,
+) -> "dict[str, Any]":
     if network is None:
         return {
             "connected": True,
@@ -511,28 +532,31 @@ def _ensure_network_connected(
         }
 
 
-def _safe_watchdog_feed(watchdog, logger):
+def _safe_watchdog_feed(watchdog: IWatchdog, logger: "Logger") -> None:
     try:
         watchdog.feed()
     except Exception as exc:
         logger.warn("Watchdog feed failed", {"error": str(exc)})
 
 
-def _feed_watchdog(watchdog, logger):
+def _feed_watchdog(watchdog: IWatchdog | None, logger: "Logger") -> None:
     if watchdog is not None:
         _safe_watchdog_feed(watchdog, logger)
 
 
-def _flush_logs(logger, reason):
-    if not hasattr(logger, "flush"):
+def _flush_logs(logger: "Logger", reason: str) -> None:
+    flush = getattr(logger, "flush", None)  # EdgeLogger only
+    if not callable(flush):
         return
     try:
-        logger.flush(reason)
+        flush(reason)
     except Exception:
         pass
 
 
-def _maybe_sync_time(clock, system, logger, now_ms, next_sync_ms):
+def _maybe_sync_time(
+    clock: WallClock | None, system: ISystem, logger: "Logger", now_ms: int, next_sync_ms: int | None
+) -> int | None:
     """Sync the wall clock over NTP while connected; returns the next sync deadline.
 
     Until NTP has succeeded since boot the time is unset or only taken from the
@@ -562,7 +586,7 @@ def _maybe_sync_time(clock, system, logger, now_ms, next_sync_ms):
     return system.ticks_add(now_ms, TIME_SYNC_RETRY_MS)
 
 
-def _watchdog_feed_interval_ms(watchdog, logger):
+def _watchdog_feed_interval_ms(watchdog: IWatchdog | None, logger: "Logger") -> int | None:
     if watchdog is None or not hasattr(watchdog, "get_feed_interval_ms"):
         return None
     try:
@@ -575,23 +599,31 @@ def _watchdog_feed_interval_ms(watchdog, logger):
     return int(interval_ms)
 
 
-def _radio_off_sleep_available(power_cfg, system, network, sleep_capabilities, min_sleep_ms, logger):
+def _radio_off_sleep_available(
+    power_cfg: "Any",
+    system: ISystem,
+    network: INetwork | None,
+    sleep_capabilities: "Any",
+    min_sleep_ms: int,
+    logger: "Logger",
+) -> bool:
     if power_cfg is None or not getattr(power_cfg, "radio_off_sleep_enabled", False):
         return False
     if network is None or not hasattr(network, "suspend") or not hasattr(system, "light_sleep_ms"):
         logger.warn("Radio-off sleep unsupported by HAL; using regular sleep")
         return False
-    if isinstance(sleep_capabilities, dict) and sleep_capabilities.get("lightsleep") is False:
+    capabilities = as_dict(sleep_capabilities)
+    if capabilities is not None and capabilities.get("lightsleep") is False:
         logger.warn(
             "Radio-off sleep unsupported: light sleep unavailable; using regular sleep",
-            {"reason": sleep_capabilities.get("lightsleep_disabled", "no machine.lightsleep")},
+            {"reason": capabilities.get("lightsleep_disabled", "no machine.lightsleep")},
         )
         return False
     logger.info("Radio-off light sleep enabled", {"min_sleep_ms": min_sleep_ms})
     return True
 
 
-def _next_module_due_ms(module_runtime, logger):
+def _next_module_due_ms(module_runtime: ModuleRuntime, logger: "Logger") -> int | None:
     if not hasattr(module_runtime, "get_next_due_ms"):
         return None
     try:
@@ -601,7 +633,9 @@ def _next_module_due_ms(module_runtime, logger):
         return None
 
 
-def _suspend_network(network, logger):
+def _suspend_network(network: INetwork | None, logger: "Logger") -> bool:
+    if network is None:
+        return False
     try:
         network.suspend()
         return True
@@ -610,7 +644,7 @@ def _suspend_network(network, logger):
         return False
 
 
-def _sleep(system, watchdog, logger, duration_ms, chunk_ms):
+def _sleep(system: ISystem, watchdog: IWatchdog | None, logger: "Logger", duration_ms: int, chunk_ms: int | None) -> None:
     if not chunk_ms or duration_ms <= chunk_ms:
         system.sleep_ms(duration_ms)
         return
@@ -624,7 +658,9 @@ def _sleep(system, watchdog, logger, duration_ms, chunk_ms):
             _feed_watchdog(watchdog, logger)
 
 
-def _light_sleep(system, watchdog, logger, duration_ms, chunk_ms):
+def _light_sleep(
+    system: ISystem, watchdog: IWatchdog | None, logger: "Logger", duration_ms: int, chunk_ms: int | None
+) -> dict[str, int]:
     """Light-sleep for duration_ms in watchdog-safe chunks.
 
     Returns step stats; light_slept_ms only counts time spent in steps that
@@ -636,7 +672,7 @@ def _light_sleep(system, watchdog, logger, duration_ms, chunk_ms):
     # but cap iterations in case the tick counter misbehaves.
     max_steps = 4 * (duration_ms // max(1, step_limit_ms) + 1) + 8
     started_ms = system.time_ms()
-    stats = {"steps": 0, "effective_steps": 0, "light_slept_ms": 0}
+    stats: dict[str, int] = {"steps": 0, "effective_steps": 0, "light_slept_ms": 0}
     consecutive_ineffective = 0
 
     for _ in range(max_steps):

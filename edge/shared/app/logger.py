@@ -2,6 +2,11 @@ import json
 
 from edge.shared.app.endpoints import LOGS_PATH
 from edge.shared.app.config import LoggingConfig
+from edge.shared.hal.interfaces import IHttpClient, ISystem
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any
 
 
 _LEVELS = {"INFO": 20, "WARN": 30, "ERROR": 40}
@@ -10,12 +15,12 @@ _LEVELS = {"INFO": 20, "WARN": 30, "ERROR": 40}
 class EdgeLogger:
     def __init__(
         self,
-        system,
-        http=None,
-        device_id="unknown",
-        api_url="",
-        api_key="",
-        logging_config=None,
+        system: ISystem,
+        http: IHttpClient | None = None,
+        device_id: str = "unknown",
+        api_url: str = "",
+        api_key: str = "",
+        logging_config: LoggingConfig | None = None,
     ):
         self._system = system
         self._http = http
@@ -31,29 +36,29 @@ class EdgeLogger:
         self._last_flush_ms = self._system.time_ms()
         self._uplink_paused = False
 
-    def pause_uplink(self):
+    def pause_uplink(self) -> None:
         """Temporarily suppress uplink flushes (e.g. during OTA)."""
         self._uplink_paused = True
 
-    def resume_uplink(self):
+    def resume_uplink(self) -> None:
         """Re-enable uplink flushes after pausing."""
         self._uplink_paused = False
 
-    def info(self, message, context=None):
+    def info(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         self._log("INFO", message, context)
 
-    def warn(self, message, context=None):
+    def warn(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         self._log("WARN", message, context)
 
-    def error(self, message, context=None):
+    def error(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         self._log("ERROR", message, context)
 
-    def tick(self):
+    def tick(self) -> None:
         now = self._system.time_ms()
         if self._system.ticks_diff(now, self._last_flush_ms) >= self._cfg.flush_interval_ms:
             self.flush("interval")
 
-    def flush(self, reason="manual") -> bool:
+    def flush(self, reason: str = "manual") -> bool:
         self._last_flush_ms = self._system.time_ms()
 
         if self._uplink_paused:
@@ -105,7 +110,7 @@ class EdgeLogger:
         self._dropped_count = 0
         return True
 
-    def _log(self, level, message, context=None):
+    def _log(self, level: str, message: str, context: "dict[str, Any] | None" = None) -> None:
         if not self._should_log(level):
             return
 
@@ -165,20 +170,20 @@ class EdgeLogger:
         if len(self._buffer_data) >= self._cfg.buffer_max_bytes:
             self.flush("threshold")
 
-    def _should_log(self, level):
+    def _should_log(self, level: str) -> bool:
         configured = _LEVELS.get(self._cfg.min_level.upper(), _LEVELS["INFO"])
         current = _LEVELS.get(level, _LEVELS["INFO"])
         return current >= configured
 
-    def _decode_buffer(self):
+    def _decode_buffer(self) -> "list[Any]":
         if not self._buffer_data:
             return []
         raw = bytes(self._buffer_data).decode("utf-8")
         return [json.loads(line) for line in raw.strip().split("\n") if line]
 
     @staticmethod
-    def _format_console_event(event):
-        context = event.get("context") or {}
+    def _format_console_event(event: "dict[str, Any]") -> str:
+        context: "dict[str, Any]" = event.get("context") or {}
         ctx = ""
         if context:
             ctx = " | " + json.dumps(context)

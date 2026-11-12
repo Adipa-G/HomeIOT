@@ -16,6 +16,7 @@ from edge.shared.app.updater import (
     _StreamFrameReader,
     import_probe,
 )
+from edge.shared.hal.interfaces import IWatchdog
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient, MockStreamingResponse
 from edge.shared.tests.mocks.mock_system import MockSystem
@@ -335,11 +336,11 @@ class _TrackingLogger:
     def flush(self, reason="manual"):
         self.calls.append(("flush", reason))
         return True
-    def info(self, msg, ctx=None):
+    def info(self, msg, context=None):
         pass
-    def warn(self, msg, ctx=None):
+    def warn(self, msg, context=None):
         pass
-    def error(self, msg, ctx=None):
+    def error(self, msg, context=None):
         pass
 
 
@@ -701,7 +702,7 @@ def test_apply_still_validates_other_files_when_manifest_present():
 
 
 def test_apply_feeds_watchdog_while_streaming():
-    class _CountingWatchdog:
+    class _CountingWatchdog(IWatchdog):
         def __init__(self):
             self.feed_calls = 0
 

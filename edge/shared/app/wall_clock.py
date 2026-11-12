@@ -1,4 +1,5 @@
 from edge.shared.app.utc_time import MIN_SYNCED_YEAR, datetime_to_epoch, epoch_to_datetime, epoch_to_iso
+from edge.shared.hal.interfaces import ISystem
 
 
 class WallClock:
@@ -10,23 +11,23 @@ class WallClock:
     supported ports, so anchor-plus-elapsed-ticks stays correct.
     """
 
-    def __init__(self, system):
+    def __init__(self, system: ISystem):
         self._system = system
-        self._anchor_ms = None
+        self._anchor_ms: int | None = None
         self._anchor_ticks = 0
         self._ntp_synced = False
         self.sync_failures = 0
         if self._system_clock_is_set():
             self._anchor_from_system()
 
-    def is_synced(self):
+    def is_synced(self) -> bool:
         return self._anchor_ms is not None
 
-    def is_ntp_synced(self):
+    def is_ntp_synced(self) -> bool:
         """True once NTP has succeeded since boot (not just a time taken from the RTC)."""
         return self._ntp_synced
 
-    def sync(self):
+    def sync(self) -> bool:
         """Sync over NTP and re-anchor. Returns True on success."""
         try:
             synced = bool(self._system.sync_time())
@@ -39,7 +40,7 @@ class WallClock:
         self.sync_failures += 1
         return False
 
-    def now_ms(self):
+    def now_ms(self) -> int | None:
         """Unix milliseconds, or None before the first sync.
 
         Each call advances the anchor so tick-counter wraparound (about 12 days on
@@ -52,18 +53,18 @@ class WallClock:
         self._anchor_ticks = now
         return self._anchor_ms
 
-    def now_iso(self):
+    def now_iso(self) -> str | None:
         now = self.now_ms()
         return None if now is None else epoch_to_iso(now // 1000)
 
-    def iso_at_ticks(self, ticks):
+    def iso_at_ticks(self, ticks: int) -> str | None:
         """UTC time of an earlier tick reading, or None before the first sync."""
         now = self.now_ms()
         if now is None:
             return None
         return epoch_to_iso((now - self._system.ticks_diff(self._anchor_ticks, ticks)) // 1000)
 
-    def restore_system_clock(self):
+    def restore_system_clock(self) -> bool:
         """Write the tick-derived time back to the hardware RTC so time.time() is right for modules."""
         now = self.now_ms()
         if now is None or not hasattr(self._system, "set_utc_datetime"):
@@ -74,7 +75,7 @@ class WallClock:
         except Exception:
             return False
 
-    def _anchor_from_system(self):
+    def _anchor_from_system(self) -> bool:
         try:
             parts = self._system.utc_datetime()
         except Exception:
@@ -85,7 +86,7 @@ class WallClock:
         self._anchor_ticks = self._system.time_ms()
         return True
 
-    def _system_clock_is_set(self):
+    def _system_clock_is_set(self) -> bool:
         if not hasattr(self._system, "clock_is_set"):
             return False
         try:

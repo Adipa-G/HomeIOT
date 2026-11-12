@@ -1,6 +1,16 @@
 import json
 
+from edge.shared.app.config import Config
+from edge.shared.app.json_util import as_dict, as_list
 from edge.shared.app.safe_io import atomic_write_text
+from edge.shared.hal.interfaces import IFileSystem, IHttpClient, IStreamingResponse
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from collections.abc import Iterator
+    from typing import Any
+
+    from edge.shared.app.protocols import Hasher, Logger
 
 from edge.shared.app.endpoints import (
     DEV_COMMAND_NEXT_PATH,
@@ -14,14 +24,21 @@ from edge.shared.app.endpoints import (
 
 
 class DeviceControlClient:
-    def __init__(self, http, config, fs=None, logger=None, modules_root="modules_cache"):
+    def __init__(
+        self,
+        http: IHttpClient,
+        config: Config,
+        fs: IFileSystem | None = None,
+        logger: "Logger | None" = None,
+        modules_root: str = "modules_cache",
+    ):
         self._http = http
         self._config = config
         self._fs = fs
         self._logger = logger
         self._modules_root = modules_root
 
-    def get_next_dev_command(self, last_revision_hash=None):
+    def get_next_dev_command(self, last_revision_hash: str | None = None) -> "dict[str, Any] | None":
         url = self._with_query(self._config.api_url + DEV_COMMAND_NEXT_PATH, "last_revision_hash", last_revision_hash)
         response = self._http.get(url, headers=self._auth_headers())
         if response.status_code == 204:
@@ -31,13 +48,13 @@ class DeviceControlClient:
             return None
         return self._parse_json(response.text)
 
-    def report_dev_command_result(self, command_id, payload):
+    def report_dev_command_result(self, command_id: str, payload: "dict[str, Any]") -> bool:
         path = DEV_COMMAND_RESULT_PATH_TEMPLATE.replace("{commandId}", str(command_id))
         url = self._config.api_url + path
         response = self._http.post(url, payload, headers=self._auth_headers())
         return response.status_code in (200, 201, 202)
 
-    def get_module_assignment(self, last_assignment_hash=None):
+    def get_module_assignment(self, last_assignment_hash: str | None = None) -> "dict[str, Any] | None":
         url = self._with_query(self._config.api_url + MODULE_ASSIGNMENT_PATH, "last_assignment_hash", last_assignment_hash)
         response = self._http.get(url, headers=self._auth_headers())
         if response.status_code == 204:
@@ -47,7 +64,7 @@ class DeviceControlClient:
             return None
         return self._parse_json(response.text)
 
-    def download_module_package(self, module_id, version, expected_hash=None):
+    def download_module_package(self, module_id: str, version: str, expected_hash: str | None = None) -> bool:
         """Stream the package to flash in small chunks, hashing as it arrives.
 
         The package is never held in RAM as a whole: on a fragmented MicroPython
@@ -98,7 +115,7 @@ class DeviceControlClient:
         atomic_write_text(self._fs, hash_path, digest)
         return True
 
-    def prefetch_server_code(self, modules):
+    def prefetch_server_code(self, modules: "list[Any]") -> bool:
         """Fire-and-forget: ask server to pre-compute variables for upcoming modules."""
         url = self._config.api_url + MODULE_PREFETCH_PATH
         payload = {"modules": modules}
@@ -106,7 +123,7 @@ class DeviceControlClient:
             "Sending module prefetch",
             {
                 "url": url,
-                "module_count": len(modules) if isinstance(modules, list) else 0,
+                "module_count": len(modules),
             },
         )
         response = self._http.post(url, payload, headers=self._auth_headers())
@@ -117,25 +134,27 @@ class DeviceControlClient:
             self._log_warn("Module prefetch request failed", {"status_code": response.status_code})
         return ok
 
-    def report_module_result(self, payload):
+    def report_module_result(self, payload: "dict[str, Any]") -> bool:
         url = self._config.api_url + MODULE_RESULTS_PATH
         response = self._http.post(url, payload, headers=self._auth_headers())
         return response.status_code in (200, 201, 202)
 
-    def report_module_status(self, payload):
+    def report_module_status(self, payload: "dict[str, Any]") -> bool:
         url = self._config.api_url + MODULE_STATUS_PATH
         response = self._http.post(url, payload, headers=self._auth_headers())
         return response.status_code in (200, 201, 202)
 
-    def ensure_assigned_modules_present(self, assignment_payload):
-        modules = []
+    def ensure_assigned_modules_present(self, assignment_payload: "Any") -> dict[str, int]:
+        modules: "list[Any]" = []
         if not assignment_payload:
             return {"checked": 0, "ready": 0}
 
-        if isinstance(assignment_payload, dict) and isinstance(assignment_payload.get("modules"), list):
-            modules = assignment_payload.get("modules") or []
-        elif isinstance(assignment_payload, dict) and assignment_payload.get("module_id"):
-            modules = [assignment_payload]
+        payload = as_dict(assignment_payload)
+        listed = as_list(payload.get("modules")) if payload is not None else None
+        if listed is not None:
+            modules = listed
+        elif payload is not None and payload.get("module_id"):
+            modules = [payload]
 
         checked = 0
         ready = 0
@@ -157,7 +176,7 @@ class DeviceControlClient:
 
         return {"checked": checked, "ready": ready}
 
-    def ensure_module_present(self, module_id, version, expected_hash=None):
+    def ensure_module_present(self, module_id: str, version: str, expected_hash: str | None = None) -> bool:
         if self._fs is None:
             self._log_warn("Module filesystem unavailable", {"module_id": module_id, "version": version})
             return False
@@ -170,7 +189,7 @@ class DeviceControlClient:
 
         return self.download_module_package(module_id, version, expected_hash)
 
-    def _cached_hash_matches(self, package_path, expected_hash):
+    def _cached_hash_matches(self, package_path: str, expected_hash: str | None) -> bool:
         expected = _normalize_hash(expected_hash)
         if not expected:
             return True
@@ -186,7 +205,7 @@ class DeviceControlClient:
         atomic_write_text(self._fs, hash_path, expected)
         return True
 
-    def get_cached_module_package(self, module_id, version):
+    def get_cached_module_package(self, module_id: str, version: str) -> bytes | None:
         if self._fs is None:
             return None
         package_path = self._module_package_path(module_id, version)
@@ -195,52 +214,52 @@ class DeviceControlClient:
         return self._fs.read_bytes(package_path)
 
     @staticmethod
-    def should_execute_dev_command(command, last_revision_hash):
+    def should_execute_dev_command(command: "dict[str, Any] | None", last_revision_hash: str | None) -> bool:
         if not command:
             return False
         if bool(command.get("forceRerun", False)):
             return True
         return command.get("revision_hash") != last_revision_hash
 
-    def _auth_headers(self):
+    def _auth_headers(self) -> dict[str, str]:
         return {
             "X-Device-ID": self._config.device_id,
             "X-Api-Key": self._config.api_key,
         }
 
     @staticmethod
-    def _with_query(base_url, key, value):
+    def _with_query(base_url: str, key: str, value: object) -> str:
         if value is None:
             return base_url
         return base_url + "?" + key + "=" + str(value)
 
     @staticmethod
-    def _parse_json(text):
+    def _parse_json(text: str) -> "Any":
         try:
             return json.loads(text) if text else {}
         except Exception:
             return {}
 
     @staticmethod
-    def _digest_bytes(data):
+    def _digest_bytes(data: bytes) -> str:
         hasher = _sha256()
         hasher.update(data)
         return _hex(hasher.digest())
 
-    def _module_package_path(self, module_id, version):
+    def _module_package_path(self, module_id: str, version: str) -> str:
         return self._modules_root + "/" + str(module_id) + "/" + str(version) + ".pkg"
 
     @staticmethod
-    def _parent_dir(path):
+    def _parent_dir(path: str) -> str:
         if "/" not in path:
             return ""
         return path.rsplit("/", 1)[0]
 
-    def _log_warn(self, message, context=None):
+    def _log_warn(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.warn(message, context)
 
-    def _log_info(self, message, context=None):
+    def _log_info(self, message: str, context: "dict[str, Any] | None" = None) -> None:
         if self._logger is not None:
             self._logger.info(message, context)
 
@@ -249,16 +268,16 @@ _HASH_SUFFIX = ".sha256"
 _PACKAGE_CHUNK_SIZE = 512
 
 
-def _sha256():
+def _sha256() -> "Hasher":
     import hashlib
     return hashlib.sha256()
 
 
-def _hex(digest):
+def _hex(digest: bytes) -> str:
     return "".join("{:02x}".format(byte) for byte in digest)
 
 
-def _normalize_hash(expected_hash):
+def _normalize_hash(expected_hash: object) -> str:
     if not expected_hash:
         return ""
     expected = str(expected_hash)
@@ -267,7 +286,7 @@ def _normalize_hash(expected_hash):
     return expected.strip().lower()
 
 
-def _hashed_chunks(response, hasher):
+def _hashed_chunks(response: IStreamingResponse, hasher: "Hasher") -> "Iterator[memoryview]":
     # One reused buffer: no per-chunk allocations on the device heap.
     mv = memoryview(bytearray(_PACKAGE_CHUNK_SIZE))
     while True:
@@ -278,12 +297,12 @@ def _hashed_chunks(response, hasher):
         yield mv[:n]
 
 
-def _remove_file(fs, path):
+def _remove_file(fs: IFileSystem, path: str) -> None:
     if fs.exists(path) and not fs.is_dir(path):
         fs.remove(path)
 
 
-def _collect_garbage():
+def _collect_garbage() -> None:
     try:
         import gc
         gc.collect()
