@@ -112,7 +112,7 @@ def build(platform: str, version: str, out_root: Path, compile_mpy: bool = False
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     files = _collect_files(root, platform)
-    manifest_items: list[dict] = []
+    manifest_items: list[dict[str, str]] = []
 
     for rel_path, src_path in files.items():
         if not src_path.exists():

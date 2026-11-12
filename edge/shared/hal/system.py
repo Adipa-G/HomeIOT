@@ -97,8 +97,8 @@ class MicroPythonSystem(ISystem):
                 return name.lower()
         return "unknown(" + str(cause) + ")"
 
-    def get_sleep_capabilities(self) -> dict:
-        capabilities = {}
+    def get_sleep_capabilities(self) -> dict[str, object]:
+        capabilities: dict[str, object] = {}
         capabilities["lightsleep"] = False
         capabilities["deepsleep"] = False
         try:

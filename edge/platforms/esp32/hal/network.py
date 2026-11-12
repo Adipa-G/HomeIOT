@@ -8,7 +8,7 @@ class MicroPythonNetwork(_SharedMicroPythonNetwork):
 		"powersave": 2,
 	}
 
-	def get_power_save_modes(self) -> dict:
+	def get_power_save_modes(self) -> dict[str, int]:
 		wlan = self._get_wlan()
 		modes = super().get_power_save_modes()
 		if callable(getattr(wlan, "config", None)) or callable(getattr(wlan, "powersave", None)):
@@ -17,7 +17,7 @@ class MicroPythonNetwork(_SharedMicroPythonNetwork):
 		return modes
 
 	@staticmethod
-	def _set_power_save_value(wlan, pm_value):
+	def _set_power_save_value(wlan: object, pm_value: int) -> None:
 		config = getattr(wlan, "config", None)
 		if callable(config):
 			try:

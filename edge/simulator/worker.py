@@ -5,11 +5,12 @@ Uses mock HAL implementations instead of hardware-specific modules.
 """
 
 import argparse
-import json
+import importlib.util
 import logging
 import signal
 import sys
 from pathlib import Path
+from types import FrameType
 
 # Ensure edge module can be imported
 if "." not in sys.path:
@@ -42,10 +43,10 @@ class SimulatorShutdown(Exception):
     pass
 
 
-def _setup_signal_handlers():
+def _setup_signal_handlers() -> None:
     """Setup graceful shutdown on Ctrl+C."""
 
-    def _signal_handler(signum, frame):
+    def _signal_handler(signum: int, frame: FrameType | None) -> None:
         logger_py.info("Shutdown signal received, stopping simulator...")
         raise SimulatorShutdown()
 
@@ -53,11 +54,9 @@ def _setup_signal_handlers():
     signal.signal(signal.SIGTERM, _signal_handler)
 
 
-def _require_requests():
+def _require_requests() -> None:
     """Exit early: without `requests` every API call fails and the simulator only logs warnings."""
-    try:
-        import requests  # noqa: F401
-    except ImportError:
+    if importlib.util.find_spec("requests") is None:
         logger_py.error(
             "The simulator needs the 'requests' package, which is not installed for %s. "
             "Run `uv sync --project edge` from the repository root, then start the simulator with `uv run --project edge`.",

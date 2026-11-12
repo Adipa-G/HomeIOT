@@ -50,7 +50,7 @@ class INetwork:
     def get_ip(self) -> str:
         raise NotImplementedError()
 
-    def get_power_save_modes(self) -> dict:
+    def get_power_save_modes(self) -> dict[str, int]:
         raise NotImplementedError()
 
     def set_power_save(self, mode: str) -> bool:

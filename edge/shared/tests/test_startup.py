@@ -6,6 +6,11 @@ from edge.shared.app import startup
 from edge.shared.app.startup import DeviceRuntime, create_runtime, run, run_device, start
 from edge.shared.app.updater import Updater
 from edge.shared.app.wall_clock import WallClock
+from edge.shared.hal.interfaces import IFileSystem, ISystem
+from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
+from edge.shared.tests.mocks.mock_http_client import MockHttpClient
+from edge.shared.tests.mocks.mock_network import MockNetwork
+from edge.shared.tests.mocks.mock_watchdog import MockWatchdog
 
 
 def _config(wifi_country=None):
@@ -22,7 +27,7 @@ def _config(wifi_country=None):
     )
 
 
-class _FakeSystem:
+class _FakeSystem(ISystem):
     def reset_cause(self):
         return "pwron_reset"
 
@@ -199,11 +204,11 @@ def _runtime(
 
 def test_create_runtime_wires_shared_clock_into_module_runtime():
     runtime = create_runtime(
-        fs=object(),
+        fs=MockFileSystem(),
         system=_FakeSystem(),
-        http=object(),
-        network=object(),
-        watchdog=object(),
+        http=MockHttpClient(),
+        network=MockNetwork(),
+        watchdog=MockWatchdog(),
         config=_config(),
         platform="esp32",
     )
@@ -215,11 +220,11 @@ def test_create_runtime_wires_shared_clock_into_module_runtime():
 
 def test_create_runtime_builds_updater_for_platform_by_default():
     runtime = create_runtime(
-        fs=object(),
+        fs=MockFileSystem(),
         system=_FakeSystem(),
-        http=object(),
-        network=object(),
-        watchdog=object(),
+        http=MockHttpClient(),
+        network=MockNetwork(),
+        watchdog=MockWatchdog(),
         config=_config(),
         platform="pico",
     )
@@ -230,11 +235,11 @@ def test_create_runtime_builds_updater_for_platform_by_default():
 
 def test_create_runtime_omits_updater_when_ota_disabled():
     runtime = create_runtime(
-        fs=object(),
+        fs=MockFileSystem(),
         system=_FakeSystem(),
-        http=object(),
-        network=object(),
-        watchdog=object(),
+        http=MockHttpClient(),
+        network=MockNetwork(),
+        watchdog=MockWatchdog(),
         config=_config(),
         platform="simulator",
         enable_ota=False,
@@ -439,7 +444,7 @@ def test_run_passes_runtime_services_to_control_loop(monkeypatch):
 # ---------------------------------------------------------------- run_device
 
 
-class _ConfigFs:
+class _ConfigFs(IFileSystem):
     def __init__(self, files):
         self.files = files
 
@@ -470,9 +475,9 @@ def test_run_device_loads_config_then_starts_and_runs_with_ota_enabled(monkeypat
     run_device(
         fs=fs,
         system=_FakeSystem(),
-        http=object(),
-        network=object(),
-        watchdog=object(),
+        http=MockHttpClient(),
+        network=MockNetwork(),
+        watchdog=MockWatchdog(),
         platform="pico",
     )
 

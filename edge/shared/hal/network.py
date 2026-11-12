@@ -133,12 +133,12 @@ class MicroPythonNetwork(INetwork):
     def get_ip(self) -> str:
         return self._get_wlan().ifconfig()[0]
 
-    def get_power_save_modes(self) -> dict:
+    def get_power_save_modes(self) -> dict[str, int]:
         wlan = self._get_wlan()
         if not callable(getattr(wlan, "config", None)):
             return {}
 
-        modes = {}
+        modes: dict[str, int] = {}
         for mode, constant_name in self._POWER_SAVE_CONSTANTS.items():
             if hasattr(wlan, constant_name):
                 modes[mode] = getattr(wlan, constant_name)

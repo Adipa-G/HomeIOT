@@ -21,7 +21,7 @@ class SimulatorNetwork(INetwork):
         """Return simulated IP address."""
         return self._ip
 
-    def get_power_save_modes(self) -> dict:
+    def get_power_save_modes(self) -> dict[str, int]:
         """Return no hardware power modes for the simulator."""
         return {}
 
