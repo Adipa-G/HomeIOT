@@ -15,6 +15,10 @@ dev = [
     "pytest==8.3.5",
     "pytest-mock==3.14.0",
     "pyright==1.1.414",
+    # MicroPython API types for pyright (machine, network, ntptime, ...). Devices run
+    # ESP32 >= 1.30 and Pico W >= 1.28; bump when 1.30 stubs are published.
+    # Pico-only modules are stubbed in typings/.
+    "micropython-esp32-stubs~=1.29.0",
 ]
 
 [tool.uv]
@@ -34,3 +38,6 @@ pythonPlatform = "Linux"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
+stubPath = "typings"
+# MicroPython modules are stub-only (the implementation is in the firmware).
+reportMissingModuleSource = "none"

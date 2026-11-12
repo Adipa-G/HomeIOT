@@ -21,8 +21,8 @@ class MicroPythonWatchdog(IWatchdog):
         cls = self.__class__
         if cls._shared_wdt is None:
             try:
-                import machine  # pyright: ignore[reportMissingImports]
-                import utime as time_mod  # pyright: ignore[reportMissingImports]
+                import machine
+                import time as time_mod
             except ImportError as exc:  # pragma: no cover - desktop fallback
                 raise RuntimeError("machine module is not available") from exc
 
@@ -32,7 +32,7 @@ class MicroPythonWatchdog(IWatchdog):
                 hardware_timeout_ms = min(timeout_ms, int(cls.HARDWARE_MAX_TIMEOUT_MS))
 
             cls._shared_time = time_mod
-            cls._shared_last_feed_ms = time_mod.ticks_ms()
+            cls._shared_last_feed_ms = time_mod.ticks_ms()  # pyright: ignore[reportAttributeAccessIssue]
 
             # Create the extension timer before the WDT: a started WDT cannot be
             # stopped, so a timer failure must leave the device without a WDT

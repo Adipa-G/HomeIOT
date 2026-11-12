@@ -29,12 +29,12 @@ def test_pico_watchdog_extends_long_timeout_with_timer(monkeypatch):
     machine.WDT = WDT
     machine.Timer = Timer
 
-    utime = fake_module("utime")
-    utime.ticks_ms = lambda: 0
-    utime.ticks_diff = lambda a, b: a - b
+    fake_time = fake_module("time")
+    fake_time.ticks_ms = lambda: 0
+    fake_time.ticks_diff = lambda a, b: a - b
 
     monkeypatch.setitem(sys.modules, "machine", machine)
-    monkeypatch.setitem(sys.modules, "utime", utime)
+    monkeypatch.setitem(sys.modules, "time", fake_time)
 
     # Subclass so the class-level shared WDT state does not leak into other tests.
     class _IsolatedPicoWatchdog(PicoWatchdog):

@@ -250,10 +250,7 @@ _PACKAGE_CHUNK_SIZE = 512
 
 
 def _sha256():
-    try:
-        import uhashlib as hashlib  # pyright: ignore[reportMissingImports]
-    except ImportError:  # pragma: no cover - desktop fallback
-        import hashlib
+    import hashlib
     return hashlib.sha256()
 
 
