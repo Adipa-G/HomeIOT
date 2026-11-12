@@ -1,5 +1,6 @@
 import hashlib
 import json
+import sys
 
 from edge.shared.app.secret_crypto import encrypt_secret
 
@@ -7,7 +8,14 @@ import pytest
 
 from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.config import Config
-from edge.shared.app.updater import UpdateInfo, Updater, _StreamFrameReader
+from edge.shared.app.updater import (
+    PROBE_PATH,
+    IncompatibleReleaseError,
+    UpdateInfo,
+    Updater,
+    _StreamFrameReader,
+    import_probe,
+)
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient, MockStreamingResponse
 from edge.shared.tests.mocks.mock_system import MockSystem
@@ -922,3 +930,110 @@ def test_apply_installs_entry_points_with_app_swap():
     assert fs.read_bytes("app/edge/x.py") == b"app-v2"
     assert fs.read_bytes("app_prev/_root/main.py") == b"main-v1"
     assert system.reset_calls == 1
+
+# ---------------------------------------------------------------------------
+# .mpy compatibility probe
+# ---------------------------------------------------------------------------
+
+_CHECK_URL = "http://localhost:8000/api/ota/check?version=1.0.0"
+_PROBE = (PROBE_PATH, b"M\x06\x00\x1f probe")
+
+
+class _Probe:
+    def __init__(self, error=None):
+        self.error = error
+        self.calls = []
+
+    def __call__(self, directory):
+        self.calls.append(directory)
+        if self.error is not None:
+            raise self.error
+
+
+def _probe_updater(fs, http, system, probe):
+    boot_manager = BootManager(fs=fs, system=system, max_attempts=3)
+    return Updater(fs=fs, http=http, system=system, config=_config(), boot_manager=boot_manager, probe=probe)
+
+
+def _release(files):
+    return UpdateInfo(
+        available=True,
+        version="1.1.0",
+        manifest=[{"path": path, "hash": _sha256_hex(data), "size": len(data)} for path, data in files],
+    )
+
+
+def test_apply_installs_release_when_probe_loads():
+    fs, http, system = MockFileSystem(), MockHttpClient(), MockSystem()
+    probe = _Probe()
+    updater = _probe_updater(fs, http, system, probe)
+    files = [_PROBE, ("edge/shared/app/control_loop.mpy", b"compiled"), ("main.py", b"print('new')")]
+    http.add_stream_response(_STREAM_URL, _build_ota_stream(files))
+
+    updater.apply(_release(files))
+
+    assert probe.calls == ["app_staging"]
+    assert fs.read_bytes("app/edge/shared/app/control_loop.mpy") == b"compiled"
+    assert system.reset_calls == 1
+
+
+def test_apply_rejects_release_when_probe_fails_and_keeps_current_app():
+    fs, http, system = MockFileSystem(), MockHttpClient(), MockSystem()
+    updater = _probe_updater(fs, http, system, _Probe(ValueError("incompatible .mpy file")))
+    fs.write_bytes("app/main.py", b"current")
+    files = [_PROBE, ("edge/shared/app/control_loop.mpy", b"compiled"), ("main.py", b"print('new')")]
+    http.add_stream_response(_STREAM_URL, _build_ota_stream(files))
+
+    with pytest.raises(IncompatibleReleaseError, match="mpy_probe.mpy failed to load: incompatible .mpy file"):
+        updater.apply(_release(files))
+
+    assert not fs.exists("app_staging")
+    assert fs.read_bytes("app/main.py") == b"current"
+    assert system.reset_calls == 0
+
+
+def test_check_skips_release_rejected_by_probe():
+    fs, http, system = MockFileSystem(), MockHttpClient(), MockSystem()
+    updater = _probe_updater(fs, http, system, _Probe(ValueError("incompatible .mpy file")))
+    http.add_stream_response(_STREAM_URL, _build_ota_stream([_PROBE]))
+    with pytest.raises(IncompatibleReleaseError):
+        updater.apply(_release([_PROBE]))
+
+    http.add_json_response("GET", _CHECK_URL, 200, {"available": True, "version": "1.1.0", "manifest": []})
+    assert updater.check() is None
+
+    http.add_json_response("GET", _CHECK_URL, 200, {"available": True, "version": "1.2.0", "manifest": []})
+    newer = updater.check()
+    assert newer is not None and newer.version == "1.2.0"
+
+
+def test_apply_without_probe_installs_mpy_release():
+    fs, http, system = MockFileSystem(), MockHttpClient(), MockSystem()
+    updater = _probe_updater(fs, http, system, None)
+    files = [_PROBE, ("edge/shared/app/control_loop.mpy", b"compiled")]
+    http.add_stream_response(_STREAM_URL, _build_ota_stream(files))
+
+    updater.apply(_release(files))
+
+    assert fs.read_bytes("app/mpy_probe.mpy") == _PROBE[1]
+
+
+def test_import_probe_loads_module_from_directory_and_cleans_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    (tmp_path / "mpy_probe.py").write_text("OK = 1\n", encoding="utf-8")
+
+    import_probe(str(tmp_path))
+
+    assert str(tmp_path) not in sys.path
+    assert "mpy_probe" not in sys.modules
+
+
+def test_import_probe_raises_when_module_cannot_load(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    (tmp_path / "mpy_probe.py").write_text("raise ValueError('incompatible .mpy file')\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="incompatible"):
+        import_probe(str(tmp_path))
+
+    assert str(tmp_path) not in sys.path
+    assert "mpy_probe" not in sys.modules

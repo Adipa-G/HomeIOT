@@ -83,6 +83,37 @@ public class BootstrapScriptBuilderTests
         Assert.EndsWith("#@@END\n", script.Content);
     }
 
+    [Fact]
+    public void Build_CompiledRelease_EmbedsMpyAsBase64Lines()
+    {
+        var mpy = Enumerable.Range(0, 120).Select(i => (byte)i).ToArray();
+        var ota = CreateOta(new List<string>());
+        ota.Setup(x => x.ReadReleaseFileText("esp32", "1.2.0", "edge/shared/app/updater.py")).Returns((string?)null);
+        ota.Setup(x => x.ReadReleaseFileBytes("esp32", "1.2.0", "edge/shared/app/updater.mpy")).Returns(mpy);
+
+        var script = new BootstrapScriptBuilder(ota.Object).Build(Data)!;
+
+        var block = "#@@BFILE edge/shared/app/updater.mpy\n"
+            + "#|" + Convert.ToBase64String(mpy, 0, 57) + "\n"
+            + "#|" + Convert.ToBase64String(mpy, 57, 57) + "\n"
+            + "#|" + Convert.ToBase64String(mpy, 114, 6) + "\n"
+            + "#@@END\n";
+        Assert.Contains(block, script.Content);
+        Assert.DoesNotContain("#@@FILE edge/shared/app/updater.py\n", script.Content);
+        Assert.Contains("#@@FILE edge/shared/app/config.py\n", script.Content);
+    }
+
+    [Fact]
+    public void Build_MissingSourceAndCompiledFile_Throws()
+    {
+        var ota = CreateOta(new List<string>());
+        ota.Setup(x => x.ReadReleaseFileText("esp32", "1.2.0", "edge/shared/app/updater.py")).Returns((string?)null);
+        ota.Setup(x => x.ReadReleaseFileBytes("esp32", "1.2.0", It.IsAny<string>())).Returns((byte[]?)null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new BootstrapScriptBuilder(ota.Object).Build(Data));
+        Assert.Contains("edge/shared/app/updater.py", ex.Message);
+    }
+
     private static Mock<IOtaReleaseService> CreateOta(List<string> requested)
     {
         var ota = new Mock<IOtaReleaseService>();

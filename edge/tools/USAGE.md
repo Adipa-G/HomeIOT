@@ -14,17 +14,43 @@ API route policy:
 
 ## Tool 1: build_artifact.py
 
-Build an OTA artifact from the current edge source tree. Copies all deployable files to `api/artifacts/{platform}/{version}/`, computes SHA256 hashes, and writes a `manifest.json`.
+Build an OTA artifact from the current edge source tree. Writes all deployable files to `api/artifacts/{platform}/{version}/`, computes SHA256 hashes, and writes a `manifest.json`. Modules are precompiled to `.mpy` with `mpy-cross` (a dev dependency in `edge/pyproject.toml`), so run it through `uv`:
 
 ```bash
-python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
+uv run --project edge python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
 ```
 
 Custom output directory:
 
 ```bash
-python edge/tools/build_artifact.py --platform esp32 --version 1.0.1 --out api/artifacts
+uv run --project edge python edge/tools/build_artifact.py --platform esp32 --version 1.0.1 --out api/artifacts
 ```
+
+Uncompiled `.py` release (larger; useful when debugging on a device):
+
+```bash
+uv run --project edge python edge/tools/build_artifact.py --platform esp32 --version 1.0.2 --source
+```
+
+### Compiled releases
+
+Compiled releases are about 62% smaller (ESP32: 170 KB to 64 KB), and devices skip compiling modules at import, which lowers peak RAM.
+
+- Modules are bytecode-only `.mpy` (no `-march`), which loads on every port with `.mpy` v6 firmware (MicroPython 1.19+; ESP32 1.30 and Pico W 1.28 are both fine). The firmware must also support 31-bit small ints, which ESP32 and rp2 do.
+- Everything except `boot.py` and `main.py` is compiled; MicroPython runs those two by name, so they stay as `.py`.
+- Every release starts with `mpy_probe.mpy`, a one-line module compiled with the rest of the release. Before installing, the device updater imports it from staging, so the firmware's own loader decides whether it can load the release. If it can't, the device keeps its current version, logs `OTA release is incompatible with this firmware` with the reason, and doesn't download that version again until it reboots.
+- The **Add device** installer embeds compiled modules as base64 and imports the probe before running anything else, so a board with unsupported firmware stops with a clear message instead of a broken install.
+- The probe proves the firmware loads this release's `.mpy` format. It can't catch a bug in the firmware's `.mpy` loader that only shows up for particular code. If that happened on the boot path, the device would need reflashing over USB; that risk is accepted.
+- Empty package `__init__.py` files stay as source; they are smaller than their `.mpy`.
+- Tracebacks keep line numbers and show the release path (e.g. `edge/shared/app/control_loop.py`).
+
+### Rolling out compiled releases for the first time
+
+Devices on releases built before compiled-release support don't have the `.mpy` check, so roll out in this order:
+
+1. Build and publish a **source** release (`--source`) so every device gets the updater that runs the probe.
+2. Build a compiled release and install it on one ESP32 and one Pico W first. Check that both boot, send heartbeats and show no `incompatible` warnings in their logs.
+3. Publish it for the rest of the devices.
 
 Output structure:
 
@@ -61,7 +87,7 @@ Requires:
 Inline code:
 
 ```bash
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
   --api-url http://192.168.68.60:5228 \
   --device-id esp32-001 \
   --code "print('hello from device')"
@@ -70,7 +96,7 @@ python edge/tools/run_dev_command.py \
 Code from file:
 
 ```bash
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
   --api-url http://192.168.68.60:5228 \
   --device-id esp32-001 \
   --code-file my_test_script.py
@@ -79,7 +105,7 @@ python edge/tools/run_dev_command.py \
 Code from stdin:
 
 ```bash
-echo "import gc; print(gc.mem_free())" | python edge/tools/run_dev_command.py \
+echo "import gc; print(gc.mem_free())" | uv run --project edge python edge/tools/run_dev_command.py \
   --api-url http://192.168.68.60:5228 \
   --device-id esp32-001
 ```
@@ -87,7 +113,7 @@ echo "import gc; print(gc.mem_free())" | python edge/tools/run_dev_command.py \
 Custom credentials:
 
 ```bash
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
   --api-url http://192.168.68.60:5228 \
   --device-id esp32-001 \
   --username Admin --password mypassword \
@@ -97,7 +123,7 @@ python edge/tools/run_dev_command.py \
 Adjust polling and timeout:
 
 ```bash
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
   --api-url http://192.168.68.60:5228 \
   --device-id esp32-001 \
   --code "print('slow')" \
@@ -109,7 +135,7 @@ python edge/tools/run_dev_command.py \
 Returning structured data (set `result` variable in your code):
 
 ```bash
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
   --api-url http://192.168.68.60:5228 \
   --device-id esp32-001 \
   --code "import gc; gc.collect(); result = {'free': gc.mem_free(), 'alloc': gc.mem_alloc()}"

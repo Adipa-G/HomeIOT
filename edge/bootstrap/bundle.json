@@ -6,6 +6,7 @@
     "edge/bootstrap/provisioning.py"
   ],
   "release_files": [
+    "mpy_probe.py",
     "config.json",
     "edge/__init__.py",
     "edge/shared/__init__.py",

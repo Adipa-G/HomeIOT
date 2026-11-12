@@ -1,4 +1,5 @@
 import json
+import sys
 
 from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.boot_manager import ROOT_FILES_DIR
@@ -88,6 +89,24 @@ class _StreamFrameReader:
             yield mv[:n]
 
 
+PROBE_MODULE = "mpy_probe"
+PROBE_PATH = PROBE_MODULE + ".mpy"
+
+
+class IncompatibleReleaseError(ValueError):
+    """The release contains .mpy files this firmware cannot load."""
+
+
+def import_probe(directory):
+    """Import mpy_probe from directory, so the firmware's own loader checks the .mpy format."""
+    sys.path.insert(0, directory)
+    try:
+        __import__(PROBE_MODULE)
+    finally:
+        sys.path.remove(directory)
+        sys.modules.pop(PROBE_MODULE, None)
+
+
 class UpdateInfo:
     def __init__(self, available, version, manifest):
         self.available = bool(available)
@@ -107,6 +126,7 @@ class Updater:
         platform: str = "esp32",
         logger=None,
         watchdog=None,
+        probe=None,
     ):
         self._fs = fs
         self._http = http
@@ -117,6 +137,12 @@ class Updater:
         self._platform = platform
         self._logger = logger
         self._watchdog = watchdog
+        if probe is None and sys.implementation.name == "micropython":
+            # CPython (simulator/tests) can't load .mpy, so it skips the probe.
+            probe = import_probe
+        self._probe = probe
+        # Release this firmware can't load; not retried until the next reboot.
+        self._rejected_version = None
 
     def check(self):
         url = self._config.api_url + OTA_CHECK_PATH + "?version=" + self._config.current_version
@@ -132,6 +158,10 @@ class Updater:
         payload = json.loads(response.text)
         if not payload.get("available"):
             self._log_info("No OTA update available")
+            return None
+
+        if self._rejected_version is not None and payload.get("version") == self._rejected_version:
+            self._log_info("Skipping OTA release this firmware cannot load", {"version": self._rejected_version})
             return None
 
         self._log_info("OTA update available", {"version": payload.get("version")})
@@ -151,6 +181,14 @@ class Updater:
 
         try:
             config_staged = self._apply_update_streaming(update_info)
+        except IncompatibleReleaseError as exc:
+            self._clear_staging()
+            self._rejected_version = update_info.version
+            self._log_warn(
+                "OTA release is incompatible with this firmware; staying on current version",
+                {"version": update_info.version, "reason": str(exc), "firmware_mpy": getattr(sys.implementation, "_mpy", None)},
+            )
+            raise
         except Exception:
             # Ensure partial staging is cleaned up on any stream error
             # (hash mismatch already calls _clear_staging internally).
@@ -297,6 +335,11 @@ class Updater:
                         raise ValueError("Hash mismatch for " + rel_path)
                     self._fs.rename(tmp_path, target_path)
                     total_bytes += size
+                    if rel_path == PROBE_PATH and self._probe is not None:
+                        try:
+                            self._probe(self._staging_root)
+                        except Exception as exc:
+                            raise IncompatibleReleaseError(PROBE_PATH + " failed to load: " + str(exc))
 
                 file_count += 1
 

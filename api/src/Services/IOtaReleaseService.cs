@@ -13,6 +13,9 @@ public interface IOtaReleaseService
     /// <summary>Reads a text file from a release, or returns null if the release or file does not exist.</summary>
     string? ReadReleaseFileText(string platform, string version, string relativePath);
 
+    /// <summary>Reads a binary file (e.g. a compiled .mpy module) from a release, or returns null if the release or file does not exist.</summary>
+    byte[]? ReadReleaseFileBytes(string platform, string version, string relativePath);
+
     // Admin
     List<OtaPlatformListItem> ListPlatforms();
     List<OtaReleaseListItem> ListReleases(string platform);

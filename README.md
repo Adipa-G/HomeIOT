@@ -237,7 +237,7 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 
 1. **Publish a firmware release** for the platform (once per version)
    ```bash
-   python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
+   uv run --project edge python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
    ```
    When the API runs elsewhere (e.g. Docker), upload the release zip on the **OTA** page instead.
 

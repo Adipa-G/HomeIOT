@@ -1,4 +1,5 @@
 import ast
+import base64
 import functools
 import hashlib
 import json
@@ -63,6 +64,28 @@ def _build_script(provision: dict, platform: str = "esp32") -> str:
         lines.append(loader.FILE_MARKER + rel_path)
         for line in src.read_text(encoding="utf-8").splitlines():
             lines.append(loader.LINE_MARKER + line)
+        lines.append(loader.END_MARKER)
+    return "\n".join(lines) + "\n"
+
+
+def _build_script_from_release(provision: dict, artifact_dir: Path) -> str:
+    """Mirror of BootstrapScriptBuilder reading a built release: .py as text, else .mpy as base64."""
+    lines = [(ROOT / BUNDLE["loader"]).read_text(encoding="utf-8").rstrip("\n"), ""]
+    lines.append(loader.PROVISION_MARKER + json.dumps(provision, ensure_ascii=False))
+    for rel_path in BUNDLE["bootstrap_files"]:
+        lines.append(loader.FILE_MARKER + rel_path)
+        lines += [loader.LINE_MARKER + line for line in (ROOT / rel_path).read_text(encoding="utf-8").splitlines()]
+        lines.append(loader.END_MARKER)
+    for rel_path in BUNDLE["release_files"]:
+        source = artifact_dir / rel_path
+        if source.exists():
+            lines.append(loader.FILE_MARKER + rel_path)
+            lines += [loader.LINE_MARKER + line for line in source.read_text(encoding="utf-8").splitlines()]
+        else:
+            compiled = rel_path[: -len(".py")] + ".mpy"
+            data = (artifact_dir / compiled).read_bytes()
+            lines.append(loader.BINARY_FILE_MARKER + compiled)
+            lines += [loader.LINE_MARKER + base64.b64encode(data[i : i + 57]).decode() for i in range(0, len(data), 57)]
         lines.append(loader.END_MARKER)
     return "\n".join(lines) + "\n"
 
@@ -209,10 +232,15 @@ def test_bundle_covers_bootstrap_import_closure():
 # ---------------------------------------------------------------- loader
 
 
+def _utf8_text_open(path, mode="r"):
+    # MicroPython always uses UTF-8; CPython on Windows would default to cp1252.
+    return open(path, mode) if "b" in mode else open(path, mode, encoding="utf-8")
+
+
 def test_extract_payload_writes_embedded_files(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     # MicroPython always uses UTF-8; CPython on Windows would default to cp1252.
-    monkeypatch.setattr(loader, "open", functools.partial(open, encoding="utf-8"), raising=False)
+    monkeypatch.setattr(loader, "open", _utf8_text_open, raising=False)
     provision = _provision()
     Path("main.py").write_text(_build_script(provision), encoding="utf-8")
 
@@ -261,6 +289,90 @@ def test_extract_payload_rejects_corrupt_payloads(tmp_path, monkeypatch, content
 
     with pytest.raises(ValueError, match=message):
         loader.extract_payload(os)
+
+
+def test_extract_payload_writes_compiled_release_files(tmp_path, monkeypatch):
+    artifact_dir = build_artifact.build("esp32", "1.0.0", tmp_path / "artifacts", compile_mpy=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(loader, "open", _utf8_text_open, raising=False)
+    script = _build_script_from_release(_provision(), artifact_dir)
+    Path("main.py").write_text(script, encoding="utf-8")
+    compile(script, "main.py", "exec")
+
+    loader.extract_payload(os)
+
+    compiled = [p for p in BUNDLE["release_files"] if not (artifact_dir / p).exists()]
+    assert {"mpy_probe.py", "edge/shared/app/updater.py", "edge/shared/app/boot_manager.py"} <= set(compiled)
+    for rel_path in BUNDLE["release_files"]:
+        if rel_path in compiled:
+            shipped = rel_path[: -len(".py")] + ".mpy"
+            assert (tmp_path / loader.LIB_DIR / shipped).read_bytes() == (artifact_dir / shipped).read_bytes()
+        else:
+            extracted = (tmp_path / loader.LIB_DIR / rel_path).read_text(encoding="utf-8")
+            assert extracted.splitlines() == (artifact_dir / rel_path).read_text(encoding="utf-8").splitlines()
+
+
+def _compiled_installer(provision: dict) -> str:
+    probe = base64.b64encode(b"M\x06\x00\x1f probe").decode()
+    return "\n".join([
+        loader.PROVISION_MARKER + json.dumps(provision),
+        loader.BINARY_FILE_MARKER + "mpy_probe.mpy",
+        loader.LINE_MARKER + probe,
+        loader.END_MARKER,
+        loader.FILE_MARKER + "config.json",
+        loader.LINE_MARKER + json.dumps(TEMPLATE),
+        loader.END_MARKER,
+    ]) + "\n"
+
+
+def test_loader_run_stops_before_install_when_probe_fails(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    Path("main.py").write_text(_compiled_installer(_provision()), encoding="utf-8")
+    calls = []
+
+    def failing_probe(lib_dir):
+        calls.append(lib_dir)
+        raise ValueError("This firmware can't load the installer's compiled modules")
+
+    with pytest.raises(ValueError, match="can't load the installer's compiled modules"):
+        loader.run(os_mod=os, services=(MockFileSystem(), MockSystem(), MockNetwork(), MockHttpClient()), probe=failing_probe)
+
+    assert calls == [loader.LIB_DIR]
+    assert (tmp_path / loader.LIB_DIR / "mpy_probe.mpy").read_bytes() == b"M\x06\x00\x1f probe"
+
+
+def test_loader_run_skips_probe_for_source_installer(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    Path("main.py").write_text(_build_script(_provision()), encoding="utf-8")
+    fs, system, network, http = MockFileSystem(), MockSystem(), MockNetwork(), MockHttpClient()
+    _mock_ota(http)
+    calls = []
+
+    loader.run(os_mod=os, services=(fs, system, network, http), probe=calls.append)
+
+    assert calls == []
+    assert system.reset_calls == 1
+
+
+def test_import_probe_explains_failure_and_cleans_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    (tmp_path / "mpy_probe.py").write_text("raise ValueError('incompatible .mpy file')\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"can't load the installer's compiled modules \(incompatible .mpy file\)"):
+        loader.import_probe(str(tmp_path))
+
+    assert "mpy_probe" not in sys.modules
+
+
+def test_import_probe_accepts_loadable_module(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    (tmp_path / "mpy_probe.py").write_text("OK = 1\n", encoding="utf-8")
+
+    loader.import_probe(str(tmp_path))
+
+    assert "mpy_probe" not in sys.modules
 
 
 def test_loader_run_installs_release_and_cleans_up(tmp_path, monkeypatch):

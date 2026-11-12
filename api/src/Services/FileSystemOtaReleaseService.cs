@@ -144,6 +144,18 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
 
     public string? ReadReleaseFileText(string platform, string version, string relativePath)
     {
+        var fullPath = ResolveReleaseFile(platform, version, relativePath);
+        return fullPath is null ? null : File.ReadAllText(fullPath, Encoding.UTF8);
+    }
+
+    public byte[]? ReadReleaseFileBytes(string platform, string version, string relativePath)
+    {
+        var fullPath = ResolveReleaseFile(platform, version, relativePath);
+        return fullPath is null ? null : File.ReadAllBytes(fullPath);
+    }
+
+    private string? ResolveReleaseFile(string platform, string version, string relativePath)
+    {
         var cleanPath = relativePath.Replace('\\', '/').Trim();
         if (!IsSafeRelativePath(cleanPath))
         {
@@ -152,12 +164,7 @@ public sealed class FileSystemOtaReleaseService : IOtaReleaseService
 
         var releaseRoot = Path.Combine(_artifactRoot, platform, version);
         var fullPath = TryResolveSafePath(releaseRoot, cleanPath);
-        if (fullPath is null || !File.Exists(fullPath))
-        {
-            return null;
-        }
-
-        return File.ReadAllText(fullPath, Encoding.UTF8);
+        return fullPath is not null && File.Exists(fullPath) ? fullPath : null;
     }
 
     // ──────────────────────────────────────────────

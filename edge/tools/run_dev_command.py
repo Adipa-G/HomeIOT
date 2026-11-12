@@ -8,19 +8,19 @@ for testing module logic before deploying it.
 Usage examples
 --------------
 # Inline one-liner
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
     --api-url http://192.168.68.60:5228 \
     --device-id esp32-001 \
     --code "print('hello from device')"
 
 # Read code from a .py file
-python edge/tools/run_dev_command.py \
+uv run --project edge python edge/tools/run_dev_command.py \
     --api-url http://192.168.68.60:5228 \
     --device-id esp32-001 \
     --code-file my_test_script.py
 
 # Read code from stdin (custom credentials)
-echo "import gc; print(gc.mem_free())" | python edge/tools/run_dev_command.py \\
+echo "import gc; print(gc.mem_free())" | uv run --project edge python edge/tools/run_dev_command.py \\
     --api-url http://192.168.68.60:5228 \
     --device-id esp32-001 \
     --username Admin --password 123
