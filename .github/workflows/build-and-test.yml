@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
           working-directory: edge
           enable-cache: true
-          cache-dependency-glob: edge/uv.lock
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: uv sync --locked

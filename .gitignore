@@ -73,3 +73,4 @@ TestResults/
 /api/src/wwwroot/**/*
 /hardware/tap_timer/kicad-pcb-design/.history
 /hardware/tap_timer/kicad-pcb-design/fp-info-cache
+/hardware/tempreature_fan_controller/kicad-pcb-design/.history
