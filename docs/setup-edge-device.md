@@ -195,9 +195,9 @@ Without a physical device, you can run the edge control loop on your PC.
 
 1. **Install dependencies**
    ```bash
-   uv sync
+   uv sync --project edge
    ```
-   Run this from the repository root. It creates `.venv` from `pyproject.toml`, including the `requests` package the simulator's CPython HTTP client uses and the edge test tools.
+   Run this from the repository root. It creates `edge/.venv` from `edge/pyproject.toml`, including the `requests` package the simulator's CPython HTTP client uses and the edge test tools.
 
 2. **Create the simulator config**
    ```bash
@@ -211,7 +211,7 @@ Without a physical device, you can run the edge control loop on your PC.
 
 3. **Run the simulator**
    ```bash
-   uv run python edge/simulator/worker.py --config simulator-config.json
+   uv run --project edge python edge/simulator/worker.py --config simulator-config.json
    ```
 
 4. **View in dashboard.** Open the web UI, go to **Devices**, and select your simulator device to see logs, heartbeats and module assignments.
@@ -228,7 +228,7 @@ Without a physical device, you can run the edge control loop on your PC.
 ### CLI Options
 
 ```bash
-uv run python edge/simulator/worker.py \
+uv run --project edge python edge/simulator/worker.py \
   --config simulator-config.json \      # Config file path (default: config.json; falls back to the template if missing)
   --device-id test-device-001 \          # Override device ID from config
   --api-url http://your-api:5228 \      # Override API URL from config
@@ -239,7 +239,7 @@ uv run python edge/simulator/worker.py \
 ### Troubleshooting the Simulator
 
 **`The simulator needs the 'requests' package` / `No module named 'requests'`:**
-- The Python running the simulator doesn't have the dependencies. Run `uv sync` from the repository root, then start the simulator with `uv run python edge/simulator/worker.py ...` so it uses `.venv`.
+- The Python running the simulator doesn't have the dependencies. Run `uv sync --project edge` from the repository root, then start the simulator with `uv run --project edge python edge/simulator/worker.py ...` so it uses `edge/.venv`.
 
 **`401 Unauthorized` / device not shown:**
 - The device ID must already exist on the server, and the API key must match it. Self-registration is disabled.

@@ -147,8 +147,8 @@ graph TB
 git clone <repo-url>
 cd HomeIOT
 
-# Setup Python environment for edge tools (creates .venv from pyproject.toml and uv.lock)
-uv sync
+# Setup Python environment for edge tools (creates edge/.venv from edge/pyproject.toml and edge/uv.lock)
+uv sync --project edge
 
 # Setup Node dependencies for Web UI (optional for dev)
 cd web-ui
@@ -174,10 +174,10 @@ All code changes require corresponding tests. Run the full test suite:
 dotnet test api/tests/homeiot.api.tests.csproj
 
 # Edge tests (Python)
-uv run pytest edge
+uv run --project edge pytest edge
 
-# Edge type check (Python, config in pyproject.toml)
-uv run pyright
+# Edge type check (Python, config in edge/pyproject.toml)
+uv run --project edge pyright -p edge
 # Web UI tests (optional)
 cd web-ui && npm test
 ```
@@ -205,7 +205,7 @@ cd web-ui && npm test
 5. **Run tests** to verify changes
    ```bash
    # Terminal 1: dotnet test api/tests/homeiot.api.tests.csproj
-   # Terminal 2: uv run pytest edge
+   # Terminal 2: uv run --project edge pytest edge
    # Terminal 3: npm test (in web-ui)
    ```
 
@@ -216,7 +216,7 @@ To load the demo device, module, variables, and visualizations, set `Development
 The root `simulator-config.json` is configured for the seeded device (`simulator-device-1`). After starting the API, run the simulator from the repository root:
 
 ```bash
-uv run python -m edge.simulator.worker --config simulator-config.json
+uv run --project edge python -m edge.simulator.worker --config simulator-config.json
 ```
 
 The `demo-sensor` readings cycle through the configured threshold bands, including the default color below the first threshold. Let the simulator run for a few cycles to see the visualization colors and build chart history. The seed does not generate the simulator config; see [Server Setup](docs/setup-server.md) for the seed credentials and setup details.
