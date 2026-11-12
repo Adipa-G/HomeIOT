@@ -1,3 +1,10 @@
+# Type-only imports: MicroPython has no typing/collections.abc, so this block never runs
+# on a device. Annotations that use these names are strings.
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
 class IFileSystem:
     def read_text(self, path: str) -> str:
         raise NotImplementedError()
@@ -17,7 +24,7 @@ class IFileSystem:
     def is_dir(self, path: str) -> bool:
         raise NotImplementedError()
 
-    def listdir(self, path: str):
+    def listdir(self, path: str) -> list[str]:
         raise NotImplementedError()
 
     def mkdir(self, path: str) -> None:
@@ -35,7 +42,7 @@ class IFileSystem:
     def rename(self, src: str, dst: str) -> None:
         raise NotImplementedError()
 
-    def write_chunks(self, path: str, chunks) -> None:
+    def write_chunks(self, path: str, chunks: "Iterable[bytes | bytearray | memoryview]") -> None:
         """Write an iterable of bytes chunks to path without buffering all at once."""
         raise NotImplementedError()
 
@@ -79,21 +86,37 @@ class HttpResponse:
         self.content = content
 
 
+class IStreamingResponse:
+    """Body of a streaming GET, read incrementally."""
+
+    status_code: int
+
+    def read(self, n: int) -> bytes:
+        raise NotImplementedError()
+
+    def readinto(self, buf: bytearray | memoryview) -> int:
+        """Fill buf with up to len(buf) bytes; returns 0 at end of stream."""
+        raise NotImplementedError()
+
+    def close(self) -> None:
+        raise NotImplementedError()
+
+
 class IHttpClient:
-    def get(self, url: str, headers=None) -> HttpResponse:
+    def get(self, url: str, headers: dict[str, str] | None = None) -> HttpResponse:
         raise NotImplementedError()
 
     def post(
         self,
         url: str,
-        data,
-        headers=None,
-        timeout_s=None,
+        data: object,
+        headers: dict[str, str] | None = None,
+        timeout_s: float | None = None,
     ) -> HttpResponse:
         raise NotImplementedError()
 
-    def get_stream(self, url: str, headers=None):
-        """Open a streaming GET request. Returns an object with read(n) and close() methods."""
+    def get_stream(self, url: str, headers: dict[str, str] | None = None) -> IStreamingResponse:
+        """Open a streaming GET request."""
         raise NotImplementedError()
 
 
@@ -144,11 +167,11 @@ class ISystem:
         """True once the wall clock holds a real date (i.e. it has been synced)."""
         raise NotImplementedError()
 
-    def utc_datetime(self) -> tuple:
+    def utc_datetime(self) -> tuple[int, ...]:
         """Current hardware clock as (year, month, day, hour, minute, second) in UTC."""
         raise NotImplementedError()
 
-    def set_utc_datetime(self, parts) -> None:
+    def set_utc_datetime(self, parts: tuple[int, ...]) -> None:
         """Set the hardware clock from (year, month, day, hour, minute, second, weekday) in UTC."""
         raise NotImplementedError()
 
@@ -160,6 +183,6 @@ class IWatchdog:
     def feed(self) -> None:
         raise NotImplementedError()
 
-    def get_feed_interval_ms(self):
+    def get_feed_interval_ms(self) -> int | None:
         """Longest safe gap between feeds while sleeping, or None if no limit applies."""
         raise NotImplementedError()

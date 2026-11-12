@@ -1,12 +1,18 @@
 from edge.shared.hal.interfaces import INetwork
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see interfaces.py
+    from types import ModuleType
+
+    from network import WLAN
+
 # MicroPython ports cap the hostname at 32 bytes (MICROPY_PY_NETWORK_HOSTNAME_MAX_LEN).
 HOSTNAME_MAX_LEN = 32
 
 
-def sanitize_hostname(value, max_len=HOSTNAME_MAX_LEN) -> str:
+def sanitize_hostname(value: object, max_len: int = HOSTNAME_MAX_LEN) -> str:
     """Convert value into an RFC 1123 hostname label (a-z, 0-9, '-')."""
-    chars = []
+    chars: list[str] = []
     for ch in str(value or "").lower():
         if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
             chars.append(ch)
@@ -118,7 +124,7 @@ class MicroPythonNetwork(INetwork):
         return False
 
     @staticmethod
-    def _read_status(wlan):
+    def _read_status(wlan: object) -> object:
         status = getattr(wlan, "status", None)
         if not callable(status):
             return None
@@ -160,7 +166,7 @@ class MicroPythonNetwork(INetwork):
             return False
 
     @staticmethod
-    def _set_power_save_value(wlan, pm_value):
+    def _set_power_save_value(wlan: "WLAN", pm_value: int) -> None:
         wlan.config(pm=pm_value)
 
     def interface_active(self, enable: bool) -> None:
@@ -177,17 +183,17 @@ class MicroPythonNetwork(INetwork):
         wlan.active(False)
 
     @staticmethod
-    def _ticks_ms(time_mod):
+    def _ticks_ms(time_mod: "ModuleType") -> int:
         if hasattr(time_mod, "ticks_ms"):
             return time_mod.ticks_ms()
         return int(time_mod.time() * 1000)
 
     @staticmethod
-    def _ticks_diff(newer, older):
+    def _ticks_diff(newer: int, older: int) -> int:
         return newer - older
 
     @staticmethod
-    def _sleep_ms(time_mod, milliseconds):
+    def _sleep_ms(time_mod: "ModuleType", milliseconds: int) -> None:
         if hasattr(time_mod, "sleep_ms"):
             time_mod.sleep_ms(milliseconds)
         else:

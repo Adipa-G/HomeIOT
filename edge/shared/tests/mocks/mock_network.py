@@ -2,13 +2,13 @@ from edge.shared.hal.interfaces import INetwork
 
 
 class MockNetwork(INetwork):
-    def __init__(self, ip="192.168.1.20"):
+    def __init__(self, ip: str = "192.168.1.20"):
         self.connected = False
         self.ip = ip
-        self.connect_calls = []
+        self.connect_calls: list[tuple[str, str, int]] = []
         self.suspend_calls = 0
-        self.country = None
-        self.hostname = None
+        self.country: str | None = None
+        self.hostname: str | None = None
 
     def set_country(self, country: str) -> bool:
         self.country = country

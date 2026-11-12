@@ -1,10 +1,11 @@
 import io
 import json
+from typing import Any
 
-from edge.shared.hal.interfaces import HttpResponse, IHttpClient
+from edge.shared.hal.interfaces import HttpResponse, IHttpClient, IStreamingResponse
 
 
-class MockStreamingResponse:
+class MockStreamingResponse(IStreamingResponse):
     """In-memory streaming response backed by BytesIO for tests."""
 
     def __init__(self, data: bytes, status_code: int = 200):
@@ -14,7 +15,7 @@ class MockStreamingResponse:
     def read(self, n: int) -> bytes:
         return self._stream.read(n)
 
-    def readinto(self, buf) -> int:
+    def readinto(self, buf: bytearray | memoryview) -> int:
         data = self._stream.read(len(buf))
         n = len(data)
         buf[:n] = data
@@ -26,11 +27,12 @@ class MockStreamingResponse:
 
 class MockHttpClient(IHttpClient):
     def __init__(self):
-        self.calls = []
-        self._responses = {}
-        self._stream_responses = {}
+        # (method, url, JSON body or None, headers); bodies are arbitrary JSON.
+        self.calls: list[tuple[str, str, Any, dict[str, str]]] = []
+        self._responses: dict[tuple[str, str], HttpResponse] = {}
+        self._stream_responses: dict[str, MockStreamingResponse] = {}
 
-    def add_json_response(self, method: str, url: str, status_code: int, payload):
+    def add_json_response(self, method: str, url: str, status_code: int, payload: object) -> None:
         body = json.dumps(payload)
         self._responses[(method.upper(), url)] = HttpResponse(
             status_code=status_code,
@@ -38,25 +40,31 @@ class MockHttpClient(IHttpClient):
             content=body.encode("utf-8"),
         )
 
-    def add_bytes_response(self, method: str, url: str, status_code: int, content: bytes):
+    def add_bytes_response(self, method: str, url: str, status_code: int, content: bytes) -> None:
         self._responses[(method.upper(), url)] = HttpResponse(
             status_code=status_code,
             text=content.decode("utf-8", errors="ignore"),
             content=content,
         )
 
-    def add_stream_response(self, url: str, data: bytes, status_code: int = 200):
+    def add_stream_response(self, url: str, data: bytes, status_code: int = 200) -> None:
         self._stream_responses[url] = MockStreamingResponse(data, status_code)
 
-    def get(self, url, headers=None):
+    def get(self, url: str, headers: dict[str, str] | None = None) -> HttpResponse:
         self.calls.append(("GET", url, None, headers or {}))
         return self._responses.get(("GET", url), HttpResponse(404, "", b""))
 
-    def post(self, url, data, headers=None, timeout_s=None):
+    def post(
+        self,
+        url: str,
+        data: object,
+        headers: dict[str, str] | None = None,
+        timeout_s: float | None = None,
+    ) -> HttpResponse:
         self.calls.append(("POST", url, data, headers or {}))
         return self._responses.get(("POST", url), HttpResponse(200, "{}", b"{}"))
 
-    def get_stream(self, url, headers=None):
+    def get_stream(self, url: str, headers: dict[str, str] | None = None) -> MockStreamingResponse:
         self.calls.append(("GET_STREAM", url, None, headers or {}))
         resp = self._stream_responses.get(url)
         if resp is None:

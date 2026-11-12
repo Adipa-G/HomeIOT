@@ -42,8 +42,10 @@ pythonPlatform = "Linux"
 typeCheckingMode = "standard"
 # Folders moved to strict mode so far; add one at a time as each is fully typed.
 strict = [
-    "platforms/*/hal",
-    "platforms/*/src",
+    "bootstrap",
+    "platforms",
+    "shared/hal",
+    "shared/tests/mocks",
     "simulator",
     "tools",
 ]

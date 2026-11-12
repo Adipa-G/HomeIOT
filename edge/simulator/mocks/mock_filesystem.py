@@ -45,7 +45,7 @@ class SimulatorFileSystem(IFileSystem):
     def rename(self, src: str, dst: str) -> None:
         Path(src).rename(dst)
 
-    def write_chunks(self, path: str, chunks: Iterable[bytes]) -> None:
+    def write_chunks(self, path: str, chunks: Iterable[bytes | bytearray | memoryview]) -> None:
         """Write an iterable of bytes chunks to path without buffering all at once."""
         with open(path, "wb") as f:
             for chunk in chunks:

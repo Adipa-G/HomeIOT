@@ -8,6 +8,13 @@
 # Contains plaintext credentials - do not share or commit the generated file.
 import sys
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device
+    from collections.abc import Callable
+    from types import ModuleType
+
+    from edge.shared.hal.interfaces import IFileSystem, IHttpClient, INetwork, ISystem
+
 LIB_DIR = "bootstrap_lib"
 SELF_PATH = "main.py"
 TEMPLATE_NAME = "config.json"
@@ -21,14 +28,14 @@ LINE_MARKER = "#|"
 END_MARKER = "#@@END"
 
 
-def _is_dir(os_mod, path):
+def _is_dir(os_mod: "ModuleType", path: str) -> bool:
     try:
         return (os_mod.stat(path)[0] & 0x4000) == 0x4000
     except OSError:
         return False
 
 
-def _exists(os_mod, path):
+def _exists(os_mod: "ModuleType", path: str) -> bool:
     try:
         os_mod.stat(path)
         return True
@@ -36,7 +43,7 @@ def _exists(os_mod, path):
         return False
 
 
-def _makedirs(os_mod, path):
+def _makedirs(os_mod: "ModuleType", path: str) -> None:
     current = ""
     for part in path.split("/"):
         if not part:
@@ -46,7 +53,7 @@ def _makedirs(os_mod, path):
             os_mod.mkdir(current)
 
 
-def remove_tree(os_mod, path):
+def remove_tree(os_mod: "ModuleType", path: str) -> None:
     if not _exists(os_mod, path):
         return
     if _is_dir(os_mod, path):
@@ -57,7 +64,7 @@ def remove_tree(os_mod, path):
         os_mod.remove(path)
 
 
-def import_probe(lib_dir):
+def import_probe(lib_dir: str) -> None:
     """Import the release's mpy_probe so the firmware's own loader checks the .mpy format."""
     if lib_dir not in sys.path:
         sys.path.insert(0, lib_dir)
@@ -72,7 +79,7 @@ def import_probe(lib_dir):
         sys.modules.pop(PROBE_MODULE, None)
 
 
-def extract_payload(os_mod, source_path=SELF_PATH, lib_dir=LIB_DIR):
+def extract_payload(os_mod: "ModuleType", source_path: str = SELF_PATH, lib_dir: str = LIB_DIR) -> str | None:
     """Unpack the comment-encoded payload of source_path into lib_dir.
 
     Returns the raw provisioning JSON string (or None when absent). Reading
@@ -120,7 +127,13 @@ def extract_payload(os_mod, source_path=SELF_PATH, lib_dir=LIB_DIR):
     return provision
 
 
-def run(os_mod=None, services=None, source_path=SELF_PATH, lib_dir=LIB_DIR, probe=None):
+def run(
+    os_mod: "ModuleType | None" = None,
+    services: "tuple[IFileSystem, ISystem, INetwork, IHttpClient] | None" = None,
+    source_path: str = SELF_PATH,
+    lib_dir: str = LIB_DIR,
+    probe: "Callable[[str], None] | None" = None,
+) -> None:
     import json
 
     if os_mod is None:
@@ -154,18 +167,18 @@ def run(os_mod=None, services=None, source_path=SELF_PATH, lib_dir=LIB_DIR, prob
     run_bootstrap(fs, system, network, http, provision, template)
 
 
-def main():
+def main() -> None:
     try:
         run()
     except Exception as exc:
         print("[bootstrap] Install failed:", exc)
         if hasattr(sys, "print_exception"):
-            sys.print_exception(exc)  # pyright: ignore[reportAttributeAccessIssue]
+            getattr(sys, "print_exception")(exc)  # MicroPython-only
         print("[bootstrap] Retrying in", RETRY_DELAY_MS // 1000, "seconds (Ctrl-C to stop)")
         import time
 
         if hasattr(time, "sleep_ms"):
-            time.sleep_ms(RETRY_DELAY_MS)  # pyright: ignore[reportAttributeAccessIssue]
+            getattr(time, "sleep_ms")(RETRY_DELAY_MS)  # MicroPython-only
         else:
             time.sleep(RETRY_DELAY_MS / 1000)
         import machine

@@ -2,6 +2,10 @@ import os as _os
 
 from edge.shared.hal.interfaces import IFileSystem
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see interfaces.py
+    from collections.abc import Iterable
+
 
 class MicroPythonFileSystem(IFileSystem):
     def read_text(self, path: str) -> str:
@@ -59,7 +63,7 @@ class MicroPythonFileSystem(IFileSystem):
     def rename(self, src: str, dst: str) -> None:
         _os.rename(src, dst)
 
-    def write_chunks(self, path: str, chunks) -> None:
+    def write_chunks(self, path: str, chunks: "Iterable[bytes | bytearray | memoryview]") -> None:
         with open(path, "wb") as handle:
             for chunk in chunks:
                 handle.write(chunk)

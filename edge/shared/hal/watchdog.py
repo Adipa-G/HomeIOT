@@ -1,17 +1,23 @@
 from edge.shared.hal.interfaces import IWatchdog
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see interfaces.py
+    from types import ModuleType
+
+    from machine import WDT, Timer
+
 
 class MicroPythonWatchdog(IWatchdog):
     # Largest timeout the hardware WDT accepts (None = no limit). Longer requested
     # timeouts are extended in software: a hard timer keeps feeding the hardware
     # WDT only while feed() keeps being called within the requested timeout.
-    HARDWARE_MAX_TIMEOUT_MS = None
+    HARDWARE_MAX_TIMEOUT_MS: int | None = None
 
-    _shared_wdt = None
-    _shared_timer = None
-    _shared_time = None
-    _shared_timeout_ms = None
-    _shared_hardware_timeout_ms = None
+    _shared_wdt: "WDT | None" = None
+    _shared_timer: "Timer | None" = None
+    _shared_time: "ModuleType | None" = None
+    _shared_timeout_ms: int | None = None
+    _shared_hardware_timeout_ms: int | None = None
     _shared_last_feed_ms = 0
 
     def __init__(self):
@@ -22,7 +28,7 @@ class MicroPythonWatchdog(IWatchdog):
         if cls._shared_wdt is None:
             try:
                 import machine
-                import time as time_mod
+                import time
             except ImportError as exc:  # pragma: no cover - desktop fallback
                 raise RuntimeError("machine module is not available") from exc
 
@@ -31,8 +37,9 @@ class MicroPythonWatchdog(IWatchdog):
             if cls.HARDWARE_MAX_TIMEOUT_MS is not None:
                 hardware_timeout_ms = min(timeout_ms, int(cls.HARDWARE_MAX_TIMEOUT_MS))
 
+            time_mod = time
             cls._shared_time = time_mod
-            cls._shared_last_feed_ms = time_mod.ticks_ms()  # pyright: ignore[reportAttributeAccessIssue]
+            cls._shared_last_feed_ms = getattr(time_mod, "ticks_ms")()  # MicroPython-only
 
             # Create the extension timer before the WDT: a started WDT cannot be
             # stopped, so a timer failure must leave the device without a WDT
@@ -62,19 +69,21 @@ class MicroPythonWatchdog(IWatchdog):
                 cls._shared_last_feed_ms = cls._shared_time.ticks_ms()
             target.feed()
 
-    def get_feed_interval_ms(self):
+    def get_feed_interval_ms(self) -> int | None:
         cls = self.__class__
         if cls._shared_wdt is None or cls._shared_hardware_timeout_ms is None:
             return None
         return max(1, cls._shared_hardware_timeout_ms // 2)
 
     @classmethod
-    def _create_extension_timer(cls, machine, time_mod, timeout_ms, hardware_timeout_ms):
+    def _create_extension_timer(
+        cls, machine: "ModuleType", time_mod: "ModuleType", timeout_ms: int, hardware_timeout_ms: int
+    ) -> "Timer":
         ticks_ms = time_mod.ticks_ms
         ticks_diff = time_mod.ticks_diff
 
         # Runs in hard-IRQ context on rp2: must not allocate.
-        def _on_timer(_timer):
+        def _on_timer(_timer: object) -> None:
             wdt = cls._shared_wdt
             if wdt is not None and ticks_diff(ticks_ms(), cls._shared_last_feed_ms) < timeout_ms:
                 wdt.feed()

@@ -4,8 +4,9 @@ from edge.shared.hal.interfaces import ISystem
 class MockSystem(ISystem):
     def __init__(self):
         self.reset_calls = 0
-        self.sleep_calls = []
-        self.light_sleep_calls = []
+        self.sleep_calls: list[int] = []
+        self.light_sleep_calls: list[int] = []
+        self.rtc_writes: list[tuple[int, ...]] = []
         self._time_ms = 1000
         self._boot_ms = 1000
 
@@ -47,8 +48,8 @@ class MockSystem(ISystem):
     def clock_is_set(self) -> bool:
         return True
 
-    def utc_datetime(self) -> tuple:
+    def utc_datetime(self) -> tuple[int, ...]:
         return (2026, 10, 24, 0, 0, self._time_ms // 1000 % 60)
 
-    def set_utc_datetime(self, parts) -> None:
-        self.rtc_writes = getattr(self, "rtc_writes", []) + [parts]
+    def set_utc_datetime(self, parts: tuple[int, ...]) -> None:
+        self.rtc_writes.append(parts)
