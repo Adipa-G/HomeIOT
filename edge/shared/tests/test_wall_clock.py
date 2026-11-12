@@ -9,17 +9,17 @@ REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))
 class _System(ISystem):
     """Tick counter set by the test; the hardware clock reads 2021 until NTP and can be frozen."""
 
-    def __init__(self, clock_set=False, sync_ok=True):
+    def __init__(self, clock_set: bool = False, sync_ok: bool = True):
         self.ticks = 0
         self.clock_set = clock_set
         self.sync_ok = sync_ok
         self.frozen_rtc_s: int | None = None
-        self.rtc_writes = []
+        self.rtc_writes: list[tuple[int, ...]] = []
 
     def time_ms(self):
         return self.ticks
 
-    def ticks_diff(self, a, b):
+    def ticks_diff(self, a: int, b: int) -> int:
         return a - b
 
     def clock_is_set(self):
@@ -37,7 +37,7 @@ class _System(ISystem):
         seconds = self.frozen_rtc_s if self.frozen_rtc_s is not None else REAL_BOOT_S + self.ticks // 1000
         return epoch_to_datetime(seconds)[:6]
 
-    def set_utc_datetime(self, parts):
+    def set_utc_datetime(self, parts: tuple[int, ...]) -> None:
         self.rtc_writes.append(parts)
 
 

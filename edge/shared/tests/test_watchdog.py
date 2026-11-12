@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from typing import Any
 import sys
 import types
 
@@ -12,21 +14,23 @@ class _FakeTime(types.ModuleType):
         super().__init__("time")
         self.now = 0
 
-    def ticks_ms(self):
+    def ticks_ms(self) -> int:
         return self.now
 
     @staticmethod
-    def ticks_diff(a, b):
+    def ticks_diff(a: int, b: int) -> int:
         return a - b
 
 
-def _fake_machine(timer_error=None, wdt_error=None, timer_rejects_hard=False):
+def _fake_machine(
+    timer_error: Exception | None = None, wdt_error: Exception | None = None, timer_rejects_hard: bool = False
+) -> Any:
     machine = fake_module("machine")
     machine.wdts = []
     machine.timers = []
 
     class WDT:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: object, **kwargs: object):
             if wdt_error is not None:
                 raise wdt_error
             self.args = args
@@ -34,13 +38,15 @@ def _fake_machine(timer_error=None, wdt_error=None, timer_rejects_hard=False):
             self.feed_calls = 0
             machine.wdts.append(self)
 
-        def feed(self):
+        def feed(self) -> None:
             self.feed_calls += 1
 
     class Timer:
         PERIODIC = 1
 
-        def __init__(self, timer_id, mode, period, callback, **kwargs):
+        def __init__(
+            self, timer_id: int, mode: int, period: int, callback: Callable[[object], None], **kwargs: object
+        ):
             if timer_error is not None:
                 raise timer_error
             if timer_rejects_hard and "hard" in kwargs:
@@ -53,7 +59,7 @@ def _fake_machine(timer_error=None, wdt_error=None, timer_rejects_hard=False):
             self.deinit_calls = 0
             machine.timers.append(self)
 
-        def deinit(self):
+        def deinit(self) -> None:
             self.deinit_calls += 1
 
     machine.WDT = WDT
@@ -61,7 +67,7 @@ def _fake_machine(timer_error=None, wdt_error=None, timer_rejects_hard=False):
     return machine
 
 
-def _watchdog_class(hardware_max_ms=None):
+def _watchdog_class(hardware_max_ms: int | None = None) -> type[MicroPythonWatchdog]:
     # A fresh subclass per test keeps the class-level shared WDT state isolated.
     class _Watchdog(MicroPythonWatchdog):
         HARDWARE_MAX_TIMEOUT_MS = hardware_max_ms
@@ -70,19 +76,19 @@ def _watchdog_class(hardware_max_ms=None):
 
 
 @pytest.fixture
-def fake_time(monkeypatch):
+def fake_time(monkeypatch: pytest.MonkeyPatch) -> _FakeTime:
     clock = _FakeTime()
     monkeypatch.setitem(sys.modules, "time", clock)
     return clock
 
 
-def _install_machine(monkeypatch, **kwargs):
+def _install_machine(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> Any:
     machine = _fake_machine(**kwargs)
     monkeypatch.setitem(sys.modules, "machine", machine)
     return machine
 
 
-def test_init_passes_timeout_as_keyword_without_extension_timer(monkeypatch, fake_time):
+def test_init_passes_timeout_as_keyword_without_extension_timer(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch)
     watchdog = _watchdog_class()()
 
@@ -103,7 +109,7 @@ def test_feed_is_noop_before_init():
     _watchdog_class()().feed()
 
 
-def test_feed_feeds_hardware_wdt(monkeypatch, fake_time):
+def test_feed_feeds_hardware_wdt(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch)
     watchdog = _watchdog_class()()
     watchdog.init(120000)
@@ -113,7 +119,7 @@ def test_feed_feeds_hardware_wdt(monkeypatch, fake_time):
     assert machine.wdts[0].feed_calls == 1
 
 
-def test_instances_share_one_hardware_wdt(monkeypatch, fake_time):
+def test_instances_share_one_hardware_wdt(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch)
     watchdog_class = _watchdog_class()
     watchdog_class().init(120000)
@@ -126,7 +132,7 @@ def test_instances_share_one_hardware_wdt(monkeypatch, fake_time):
     assert machine.wdts[0].feed_calls == 1
 
 
-def test_long_timeout_uses_hardware_limit_and_hard_extension_timer(monkeypatch, fake_time):
+def test_long_timeout_uses_hardware_limit_and_hard_extension_timer(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch)
     watchdog = _watchdog_class(hardware_max_ms=8000)()
 
@@ -142,7 +148,7 @@ def test_long_timeout_uses_hardware_limit_and_hard_extension_timer(monkeypatch, 
     assert watchdog.get_feed_interval_ms() == 4000
 
 
-def test_timeout_within_hardware_limit_skips_extension_timer(monkeypatch, fake_time):
+def test_timeout_within_hardware_limit_skips_extension_timer(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch)
     watchdog = _watchdog_class(hardware_max_ms=8000)()
 
@@ -152,7 +158,7 @@ def test_timeout_within_hardware_limit_skips_extension_timer(monkeypatch, fake_t
     assert machine.timers == []
 
 
-def test_extension_timer_feeds_only_within_software_timeout(monkeypatch, fake_time):
+def test_extension_timer_feeds_only_within_software_timeout(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch)
     watchdog = _watchdog_class(hardware_max_ms=8000)()
     watchdog.init(120000)
@@ -176,7 +182,7 @@ def test_extension_timer_feeds_only_within_software_timeout(monkeypatch, fake_ti
     assert wdt.feed_calls == 3
 
 
-def test_extension_timer_falls_back_when_hard_is_unsupported(monkeypatch, fake_time):
+def test_extension_timer_falls_back_when_hard_is_unsupported(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch, timer_rejects_hard=True)
     watchdog = _watchdog_class(hardware_max_ms=8000)()
 
@@ -186,7 +192,7 @@ def test_extension_timer_falls_back_when_hard_is_unsupported(monkeypatch, fake_t
     assert len(machine.wdts) == 1
 
 
-def test_timer_failure_leaves_hardware_wdt_disabled(monkeypatch, fake_time):
+def test_timer_failure_leaves_hardware_wdt_disabled(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch, timer_error=RuntimeError("no timers"))
     watchdog_class = _watchdog_class(hardware_max_ms=8000)
     watchdog = watchdog_class()
@@ -199,7 +205,7 @@ def test_timer_failure_leaves_hardware_wdt_disabled(monkeypatch, fake_time):
     assert watchdog.get_feed_interval_ms() is None
 
 
-def test_wdt_failure_stops_extension_timer(monkeypatch, fake_time):
+def test_wdt_failure_stops_extension_timer(monkeypatch: pytest.MonkeyPatch, fake_time: _FakeTime):
     machine = _install_machine(monkeypatch, wdt_error=ValueError("timeout exceeds 8388"))
     watchdog_class = _watchdog_class(hardware_max_ms=8000)
 

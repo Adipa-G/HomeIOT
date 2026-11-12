@@ -1,3 +1,4 @@
+import pytest
 import json
 
 from edge.shared.app import boot_sequence
@@ -6,42 +7,42 @@ from edge.shared.hal.interfaces import IFileSystem, ISystem, IWatchdog
 
 
 class _FakeFs(IFileSystem):
-    def __init__(self, files=None):
+    def __init__(self, files: dict[str, str] | None = None):
         self.files = files or {}
 
-    def exists(self, path):
+    def exists(self, path: str) -> bool:
         return path in self.files
 
-    def read_text(self, path):
+    def read_text(self, path: str) -> str:
         return self.files[path]
 
 
 class _FakeSystem(ISystem):
-    def time_ms(self):
+    def time_ms(self) -> int:
         return 0
 
 
 class _FakeWatchdog(IWatchdog):
-    def __init__(self, error=None):
+    def __init__(self, error: Exception | None = None):
         self.error = error
-        self.init_calls = []
+        self.init_calls: list[int] = []
 
-    def init(self, timeout_ms):
+    def init(self, timeout_ms: int) -> None:
         self.init_calls.append(timeout_ms)
         if self.error is not None:
             raise self.error
 
 
 class _RecordingBootManager:
-    instances = []
+    instances: "list[_RecordingBootManager]" = []
 
-    def __init__(self, fs, system, max_attempts, logger):
+    def __init__(self, fs: IFileSystem, system: ISystem, max_attempts: int, logger: object):
         self.fs = fs
         self.max_attempts = max_attempts
         self.on_boot_calls = 0
         _RecordingBootManager.instances.append(self)
 
-    def on_boot(self):
+    def on_boot(self) -> None:
         self.on_boot_calls += 1
 
 
@@ -61,7 +62,7 @@ def test_load_max_attempts_defaults_when_config_invalid():
     assert load_max_attempts(fs, default_value=4) == 4
 
 
-def test_run_boot_arms_watchdog_and_runs_boot_manager(monkeypatch):
+def test_run_boot_arms_watchdog_and_runs_boot_manager(monkeypatch: pytest.MonkeyPatch):
     _RecordingBootManager.instances = []
     monkeypatch.setattr(boot_sequence, "BootManager", _RecordingBootManager)
     fs = _FakeFs({"config.json": json.dumps({"max_boot_attempts": 7})})
@@ -76,7 +77,7 @@ def test_run_boot_arms_watchdog_and_runs_boot_manager(monkeypatch):
     assert manager.on_boot_calls == 1
 
 
-def test_run_boot_still_runs_boot_manager_when_watchdog_init_fails(monkeypatch):
+def test_run_boot_still_runs_boot_manager_when_watchdog_init_fails(monkeypatch: pytest.MonkeyPatch):
     _RecordingBootManager.instances = []
     monkeypatch.setattr(boot_sequence, "BootManager", _RecordingBootManager)
 

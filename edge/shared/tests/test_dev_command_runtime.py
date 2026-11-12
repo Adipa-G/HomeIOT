@@ -1,13 +1,14 @@
+from typing import Any
 from edge.shared.app.dev_command_runtime import execute_dev_command
 from edge.shared.tests.mocks.mock_system import MockSystem
 
 
 class _FakeDeviceControl:
-    def __init__(self, report_ok=True):
+    def __init__(self, report_ok: bool = True):
         self.report_ok = report_ok
-        self.calls = []
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    def report_dev_command_result(self, command_id, payload):
+    def report_dev_command_result(self, command_id: str, payload: dict[str, Any]) -> bool:
         self.calls.append((command_id, payload))
         return self.report_ok
 
@@ -16,13 +17,13 @@ class _FakeLogger:
     def __init__(self):
         self.warn_calls = 0
 
-    def info(self, *_args, **_kwargs):
+    def info(self, *_args: object) -> None:
         pass
 
-    def warn(self, *_args, **_kwargs):
+    def warn(self, *_args: object) -> None:
         self.warn_calls += 1
 
-    def error(self, *_args, **_kwargs):
+    def error(self, *_args: object) -> None:
         pass
 
 
@@ -127,7 +128,7 @@ def test_execute_dev_command_data_is_none_when_result_not_set():
     system = MockSystem()
     device_control = _FakeDeviceControl(report_ok=True)
 
-    result = execute_dev_command(
+    execute_dev_command(
         system=system,
         device_control=device_control,
         command={"command_id": "cmd-6", "code": "x = 42"},
@@ -142,7 +143,7 @@ def test_execute_dev_command_non_serialisable_result_coerced_to_string():
     system = MockSystem()
     device_control = _FakeDeviceControl(report_ok=True)
 
-    result = execute_dev_command(
+    execute_dev_command(
         system=system,
         device_control=device_control,
         command={"command_id": "cmd-7", "code": "result = object()"},

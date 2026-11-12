@@ -1,6 +1,8 @@
+from collections.abc import Iterable
+from typing import Any
 from edge.shared.app.config import Config
 from edge.shared.app.device_control import DeviceControlClient
-from edge.shared.tests.mocks.mock_http_client import MockHttpClient
+from edge.shared.tests.mocks.mock_http_client import MockHttpClient, MockStreamingResponse
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 
 
@@ -195,15 +197,15 @@ def test_ensure_assigned_modules_present_for_single_module_shape():
 
 class _Logger:
     def __init__(self):
-        self.warnings = []
+        self.warnings: list[tuple[str, dict[str, Any]]] = []
 
-    def info(self, message, context=None):
+    def info(self, message: str, context: dict[str, Any] | None = None) -> None:
         pass
 
-    def warn(self, message, context=None):
+    def warn(self, message: str, context: dict[str, Any] | None = None) -> None:
         self.warnings.append((message, context or {}))
 
-    def error(self, message, context=None):
+    def error(self, message: str, context: dict[str, Any] | None = None) -> None:
         pass
 
 
@@ -232,7 +234,7 @@ def test_cached_package_checked_against_hash_file_without_reading_package():
 
     real_read_bytes = fs.read_bytes
 
-    def fail_package_read(path):
+    def fail_package_read(path: str) -> bytes:
         if path == PACKAGE_PATH:
             raise AssertionError("package should not be read")
         return real_read_bytes(path)
@@ -310,7 +312,7 @@ def test_download_returns_false_when_stream_cannot_open():
     logger = _Logger()
     client = DeviceControlClient(http=http, config=_config(), fs=fs, logger=logger)
 
-    def raise_os_error(url, headers=None):
+    def raise_os_error(url: str, headers: dict[str, str] | None = None) -> MockStreamingResponse:
         raise OSError("HTTP 500")
 
     http.get_stream = raise_os_error
@@ -330,7 +332,7 @@ def test_memory_error_during_download_is_logged_not_raised():
     )
     real_write_chunks = fs.write_chunks
 
-    def write_chunks(path, chunks):
+    def write_chunks(path: str, chunks: Iterable[bytes | bytearray | memoryview]) -> None:
         if path.startswith("modules_cache/temp-sensor/"):
             fs.write_bytes(path, b"partial")
             raise MemoryError("memory allocation failed, allocating 4865 bytes")

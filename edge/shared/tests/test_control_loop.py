@@ -9,44 +9,44 @@ from edge.shared.hal.interfaces import ISystem
 # The control loop is typed against the real HAL and services. These tests drive it
 # with partial fakes that implement only what each test needs (the loop feature-detects
 # the rest with hasattr), so they call it through Any-typed aliases.
-_ControlLoop: Any = _control_loop._ControlLoop  # pyright: ignore[reportPrivateUsage]
-_ensure_network_connected: Any = _control_loop._ensure_network_connected  # pyright: ignore[reportPrivateUsage]
-_requested_network_power_mode: Any = _control_loop._requested_network_power_mode  # pyright: ignore[reportPrivateUsage]
+_ControlLoop: Any = _control_loop._ControlLoop
+_ensure_network_connected: Any = _control_loop._ensure_network_connected
+_requested_network_power_mode: Any = _control_loop._requested_network_power_mode
 run_control_loop: Any = _control_loop.run_control_loop
 
 
 class _FakeSystem:
     def __init__(self):
-        self._time_ms = 0
-        self.sleep_calls = []
+        self._time_ms: int = 0
+        self.sleep_calls: list[int] = []
 
-    def time_ms(self):
+    def time_ms(self) -> int:
         self._time_ms += 100
         return self._time_ms
 
-    def ticks_diff(self, a, b):
+    def ticks_diff(self, a: int, b: int) -> int:
         return a - b
 
-    def ticks_add(self, ticks, delta):
+    def ticks_add(self, ticks: int, delta: int) -> int:
         return ticks + delta
 
-    def uptime_ms(self):
+    def uptime_ms(self) -> int:
         return self._time_ms
 
-    def free_memory_bytes(self):
+    def free_memory_bytes(self) -> int:
         return 65536
 
-    def sleep_ms(self, milliseconds):
+    def sleep_ms(self, milliseconds: int) -> None:
         self.sleep_calls.append(milliseconds)
 
 
 class _FakePresence:
-    def __init__(self, metadata, error=None):
+    def __init__(self, metadata: dict[str, Any] | None, error: Exception | None = None):
         self.metadata = metadata
         self.error = error
         self.calls = 0
 
-    def heartbeat_with_metadata(self):
+    def heartbeat_with_metadata(self) -> dict[str, Any] | None:
         self.calls += 1
         if self.error is not None:
             raise self.error
@@ -56,46 +56,46 @@ class _FakePresence:
 class _SequencePresence:
     """Returns a different metadata dict for each heartbeat call."""
 
-    def __init__(self, sequence):
+    def __init__(self, sequence: list[dict[str, Any]]):
         self._sequence = list(sequence)
         self.calls = 0
 
-    def heartbeat_with_metadata(self):
+    def heartbeat_with_metadata(self) -> dict[str, Any]:
         idx = min(self.calls, len(self._sequence) - 1)
         self.calls += 1
         return self._sequence[idx]
 
 
 class _FakeNetwork:
-    def __init__(self, connected=True, fail_connect=False):
+    def __init__(self, connected: bool = True, fail_connect: bool = False):
         self.connected = connected
         self.fail_connect = fail_connect
         self.connect_calls = 0
 
-    def connect(self, _ssid, _password, timeout_ms=15000):
+    def connect(self, _ssid: str, _password: str, timeout_ms: int = 15000) -> None:
         self.connect_calls += 1
         if self.fail_connect:
             raise RuntimeError("wifi down")
         self.connected = True
 
-    def is_connected(self):
+    def is_connected(self) -> bool:
         return self.connected
 
-    def get_ip(self):
+    def get_ip(self) -> str:
         return "192.168.1.20"
 
 
 class _FakePowerNetwork(_FakeNetwork):
-    def __init__(self, connected=True, fail_connect=False, power_save_result: bool | None = True):
+    def __init__(self, connected: bool = True, fail_connect: bool = False, power_save_result: bool | None = True):
         super().__init__(connected=connected, fail_connect=fail_connect)
-        self.power_modes = []
+        self.power_modes: list[str] = []
         self.power_save_result = power_save_result
 
-    def set_power_save(self, mode):
+    def set_power_save(self, mode: str) -> bool | None:
         self.power_modes.append(mode)
         return self.power_save_result
 
-    def get_power_save_modes(self):
+    def get_power_save_modes(self) -> dict[str, int]:
         return {"none": 0, "modem": 1}
 
 
@@ -103,12 +103,18 @@ class _FakeWatchdog:
     def __init__(self):
         self.feed_calls = 0
 
-    def feed(self):
+    def feed(self) -> None:
         self.feed_calls += 1
 
 
 class _FakeDeviceControl:
-    def __init__(self, assignment=None, command=None, assignment_error=None, dev_error=None):
+    def __init__(
+        self,
+        assignment: dict[str, Any] | None = None,
+        command: dict[str, Any] | None = None,
+        assignment_error: Exception | None = None,
+        dev_error: Exception | None = None,
+    ):
         self.assignment = assignment
         self.command = command
         self.assignment_error = assignment_error
@@ -117,29 +123,29 @@ class _FakeDeviceControl:
         self.dev_calls = 0
         self.ensure_calls = 0
         self.prefetch_calls = 0
-        self.prefetch_payloads = []
+        self.prefetch_payloads: list[list[Any]] = []
 
-    def get_module_assignment(self, _):
+    def get_module_assignment(self, _: object) -> dict[str, Any] | None:
         self.assignment_calls += 1
         if self.assignment_error is not None:
             raise self.assignment_error
         return self.assignment
 
-    def ensure_assigned_modules_present(self, _):
+    def ensure_assigned_modules_present(self, _: object) -> dict[str, int]:
         self.ensure_calls += 1
         return {"checked": 0, "ready": 0}
 
-    def get_next_dev_command(self, _):
+    def get_next_dev_command(self, _: object) -> dict[str, Any] | None:
         self.dev_calls += 1
         if self.dev_error is not None:
             raise self.dev_error
         return self.command
 
     @staticmethod
-    def should_execute_dev_command(command, _):
+    def should_execute_dev_command(command: object, _: object) -> bool:
         return bool(command)
 
-    def prefetch_server_code(self, modules) -> bool:
+    def prefetch_server_code(self, modules: list[Any]) -> bool:
         self.prefetch_calls += 1
         self.prefetch_payloads.append(modules)
         return True
@@ -150,14 +156,14 @@ class _FakeModuleRuntime:
         self.update_calls = 0
         self.tick_calls = 0
 
-    def update_assignment(self, *_args, **_kwargs):
+    def update_assignment(self, *_args: object, **_kwargs: object) -> None:
         self.update_calls += 1
 
-    def tick(self, **_kwargs):
+    def tick(self, **_kwargs: object) -> dict[str, int]:
         self.tick_calls += 1
         return {"reset_requested": False}
 
-    def get_upcoming_modules(self, next_wake_ms=0):
+    def get_upcoming_modules(self, next_wake_ms: int = 0) -> list[dict[str, str]]:
         return []
 
 
@@ -166,34 +172,36 @@ class _FakeLogger:
         self.info_calls = 0
         self.warn_calls = 0
         self.tick_calls = 0
-        self.info_log = []
+        self.info_log: list[tuple[str, Any]] = []
 
-    def info(self, msg, data=None, **_kwargs):
+    def info(self, msg: str, data: Any = None, **_kwargs: object) -> None:
         self.info_calls += 1
         self.info_log.append((msg, data))
 
-    def warn(self, *_args, **_kwargs):
+    def warn(self, msg: str, data: Any = None, **_kwargs: object) -> None:
         self.warn_calls += 1
 
-    def tick(self):
+    def tick(self) -> None:
         self.tick_calls += 1
 
 
 class _FakeUpdater:
-    def __init__(self, update_info=None, check_error=None, apply_error=None):
+    def __init__(
+        self, update_info: Any = None, check_error: Exception | None = None, apply_error: Exception | None = None
+    ):
         self.update_info = update_info
         self.check_error = check_error
         self.apply_error = apply_error
         self.check_calls = 0
         self.apply_calls = 0
 
-    def check(self):
+    def check(self) -> Any:
         self.check_calls += 1
         if self.check_error is not None:
             raise self.check_error
         return self.update_info
 
-    def apply(self, update_info):
+    def apply(self, update_info: object) -> None:
         self.apply_calls += 1
         if self.apply_error is not None:
             raise self.apply_error
@@ -393,12 +401,12 @@ def test_control_loop_flushes_pending_module_status_when_connected():
     logger = _FakeLogger()
     network = _FakeNetwork(connected=True)
 
-    flush_calls = []
+    flush_calls: list[int] = []
 
     class _RuntimeWithFlush(_FakeModuleRuntime):
-        def flush_pending_timeout_result(self):
+        def flush_pending_timeout_result(self) -> None:
             pass
-        def flush_pending_module_status(self):
+        def flush_pending_module_status(self) -> None:
             flush_calls.append(1)
 
     module_runtime = _RuntimeWithFlush()
@@ -863,7 +871,7 @@ def test_prefetch_uses_next_actual_loop_wake_when_sleep_is_clamped():
     logger = _FakeLogger()
 
     class _RuntimeWithImminentModule(_FakeModuleRuntime):
-        def get_upcoming_modules(self, next_wake_ms=0):
+        def get_upcoming_modules(self, next_wake_ms: int = 0) -> list[dict[str, str]]:
             # Simulate a module due at 550ms.
             # With now=100ms and production min sleep=500ms, next loop wake is 600ms,
             # so this should be prefetched.
@@ -897,13 +905,13 @@ def test_prefetch_logs_warning_when_server_rejects_request():
     logger = _FakeLogger()
 
     class _DeviceControlRejectingPrefetch(_FakeDeviceControl):
-        def prefetch_server_code(self, modules):
+        def prefetch_server_code(self, modules: list[Any]) -> bool:
             self.prefetch_calls += 1
             self.prefetch_payloads.append(modules)
             return False
 
     class _RuntimeWithImminentModule(_FakeModuleRuntime):
-        def get_upcoming_modules(self, next_wake_ms=0):
+        def get_upcoming_modules(self, next_wake_ms: int = 0) -> list[dict[str, str]]:
             return [{"module_id": "temp-reader", "version": "1.0.0"}] if next_wake_ms >= 550 else []
 
     device_control = _DeviceControlRejectingPrefetch(assignment=None)
@@ -937,7 +945,7 @@ def test_prefetch_uses_heartbeat_horizon_in_development_mode():
     logger = _FakeLogger()
 
     class _RuntimeDueBeforeHeartbeat(_FakeModuleRuntime):
-        def get_upcoming_modules(self, next_wake_ms=0):
+        def get_upcoming_modules(self, next_wake_ms: int = 0) -> list[dict[str, str]]:
             # With now=100ms, development next loop wake is typically ~150ms
             # (clamped by development min sleep), which is too short.
             # Using heartbeat horizon (~30100ms) should include this module.
@@ -1191,20 +1199,20 @@ def test_control_loop_checks_ota_on_first_iteration_by_default():
 class _ClockSystem(_FakeSystem):
     """Time advances only while sleeping, so sleep durations are exact."""
 
-    def __init__(self, light_sleep_effective=True, early_wake_ms=None):
+    def __init__(self, light_sleep_effective: bool = True, early_wake_ms: int | None = None):
         super().__init__()
-        self.light_sleep_calls = []
+        self.light_sleep_calls: list[int] = []
         self.light_sleep_effective = light_sleep_effective
         self.early_wake_ms = early_wake_ms
 
-    def time_ms(self):
+    def time_ms(self) -> int:
         return self._time_ms
 
-    def sleep_ms(self, milliseconds):
+    def sleep_ms(self, milliseconds: int) -> None:
         self.sleep_calls.append(milliseconds)
         self._time_ms += milliseconds
 
-    def light_sleep_ms(self, milliseconds):
+    def light_sleep_ms(self, milliseconds: int) -> bool:
         self.light_sleep_calls.append(milliseconds)
         if self.early_wake_ms is not None:
             self._time_ms += self.early_wake_ms
@@ -1215,12 +1223,12 @@ class _ClockSystem(_FakeSystem):
 
 
 class _SuspendableNetwork(_FakePowerNetwork):
-    def __init__(self, suspend_error=None, **kwargs):
+    def __init__(self, suspend_error: Exception | None = None, **kwargs: Any):
         super().__init__(**kwargs)
         self.suspend_calls = 0
         self.suspend_error = suspend_error
 
-    def suspend(self):
+    def suspend(self) -> None:
         self.suspend_calls += 1
         if self.suspend_error is not None:
             raise self.suspend_error
@@ -1228,25 +1236,25 @@ class _SuspendableNetwork(_FakePowerNetwork):
 
 
 class _ChunkWatchdog(_FakeWatchdog):
-    def __init__(self, interval_ms):
+    def __init__(self, interval_ms: int | None):
         super().__init__()
         self.interval_ms = interval_ms
 
-    def get_feed_interval_ms(self):
+    def get_feed_interval_ms(self) -> int | None:
         return self.interval_ms
 
 
 class _RecordingLogger(_FakeLogger):
     def __init__(self):
         super().__init__()
-        self.warn_log = []
+        self.warn_log: list[tuple[str, Any]] = []
 
-    def warn(self, msg, data=None, **_kwargs):
+    def warn(self, msg: str, data: Any = None, **_kwargs: object) -> None:
         self.warn_calls += 1
         self.warn_log.append((msg, data))
 
 
-def _radio_off_config():
+def _radio_off_config() -> Config:
     cfg = _config_60s()
     cfg.power.wifi_power_save_production_mode = "powersave"
     cfg.power.radio_off_sleep_enabled = True
@@ -1254,7 +1262,16 @@ def _radio_off_config():
     return cfg
 
 
-def _run_radio_off(system, network, config=None, presence=None, watchdog=None, logger=None, iterations=3, module_runtime=None):
+def _run_radio_off(
+    system: _ClockSystem,
+    network: _FakeNetwork | None,
+    config: Config | None = None,
+    presence: object = None,
+    watchdog: _FakeWatchdog | None = None,
+    logger: _RecordingLogger | None = None,
+    iterations: int = 3,
+    module_runtime: object = None,
+) -> _RecordingLogger:
     logger = logger or _RecordingLogger()
     run_control_loop(
         system=system,
@@ -1465,12 +1482,12 @@ def test_radio_off_sleep_log_reports_zero_light_sleep_when_ineffective():
 
 
 class _FlushRecordingLogger(_RecordingLogger):
-    def __init__(self, network):
+    def __init__(self, network: _FakeNetwork):
         super().__init__()
         self.network = network
-        self.flushes = []
+        self.flushes: list[tuple[str, bool]] = []
 
-    def flush(self, reason="manual"):
+    def flush(self, reason: str = "manual") -> bool:
         self.flushes.append((reason, self.network.connected))
         return True
 
@@ -1503,36 +1520,36 @@ class _SyncSystem(_ClockSystem, ISystem):
 
     REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))
 
-    def __init__(self, clock_set=False, sync_ok=True, **kwargs):
+    def __init__(self, clock_set: bool = False, sync_ok: bool = True, **kwargs: Any):
         super().__init__(**kwargs)
         self.clock_set = clock_set
         self.sync_ok = sync_ok
         self.sync_calls = 0
         self.light_slept_total_ms = 0
-        self.rtc_writes = []
+        self.rtc_writes: list[tuple[int, ...]] = []
 
-    def light_sleep_ms(self, milliseconds):
+    def light_sleep_ms(self, milliseconds: int) -> bool:
         before = self._time_ms
         result = super().light_sleep_ms(milliseconds)
         self.light_slept_total_ms += self._time_ms - before
         return result
 
-    def real_time_s(self):
+    def real_time_s(self) -> int:
         return self.REAL_BOOT_S + self._time_ms // 1000
 
-    def clock_is_set(self):
+    def clock_is_set(self) -> bool:
         return self.clock_set
 
-    def utc_datetime(self):
+    def utc_datetime(self) -> tuple[int, ...]:
         if not self.clock_set:
             return (2021, 1, 1, 0, 0, 0)
         # Frozen during light sleep, so it lags real time by the total slept.
         return epoch_to_datetime(self.real_time_s() - self.light_slept_total_ms // 1000)[:6]
 
-    def set_utc_datetime(self, parts):
+    def set_utc_datetime(self, parts: tuple[int, ...]) -> None:
         self.rtc_writes.append(parts)
 
-    def sync_time(self):
+    def sync_time(self) -> bool:
         self.sync_calls += 1
         if self.sync_ok:
             self.clock_set = True
@@ -1540,7 +1557,14 @@ class _SyncSystem(_ClockSystem, ISystem):
         return self.sync_ok
 
 
-def _run_sync(system, network, iterations, logger=None, module_runtime=None, clock=None):
+def _run_sync(
+    system: _SyncSystem,
+    network: _FakeNetwork | None,
+    iterations: int,
+    logger: _RecordingLogger | None = None,
+    module_runtime: object = None,
+    clock: WallClock | None = None,
+) -> _RecordingLogger:
     logger = logger or _RecordingLogger()
     run_control_loop(
         system=system,
@@ -1690,8 +1714,8 @@ def test_regular_sleep_does_not_touch_hardware_clock():
 # ---------------------------------------------------------------- _ControlLoop steps
 
 
-def _loop(**overrides):
-    deps = {
+def _loop(**overrides: Any) -> Any:
+    deps: dict[str, Any] = {
         "system": _FakeSystem(),
         "presence": _FakePresence({"mode": "production", "next_heartbeat_ms": 30000}),
         "device_control": _FakeDeviceControl(assignment=None),
@@ -1710,7 +1734,7 @@ def _loop(**overrides):
 
 def test_control_loop_stops_when_module_requests_reset():
     class _ResettingRuntime(_FakeModuleRuntime):
-        def tick(self, **_kwargs):
+        def tick(self, **_kwargs: object) -> dict[str, int]:
             self.tick_calls += 1
             return {"reset_requested": self.tick_calls >= 2}
 
@@ -1731,7 +1755,7 @@ def test_control_loop_stops_when_module_requests_reset():
     assert len(system.sleep_calls) == 1
 
 
-def _heartbeat_logs(logger):
+def _heartbeat_logs(logger: _FakeLogger) -> list[str]:
     return [msg for msg, _ in logger.info_log if msg == "Heartbeat sent"]
 
 

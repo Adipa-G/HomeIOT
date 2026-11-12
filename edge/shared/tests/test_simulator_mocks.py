@@ -1,4 +1,5 @@
 """Tests for simulator mock HAL implementations."""
+from pathlib import Path
 import pytest
 from edge.simulator.mocks import (
     SimulatorFileSystem,
@@ -133,7 +134,7 @@ class TestSimulatorWatchdog:
 
 
 class TestSimulatorFileSystem:
-    def test_write_and_read_text(self, tmp_path):
+    def test_write_and_read_text(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_file = tmp_path / "test.txt"
         content = "Hello, simulator!"
@@ -141,7 +142,7 @@ class TestSimulatorFileSystem:
         fs.write_text(str(test_file), content)
         assert fs.read_text(str(test_file)) == content
 
-    def test_write_and_read_bytes(self, tmp_path):
+    def test_write_and_read_bytes(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_file = tmp_path / "test.bin"
         content = b"Binary content"
@@ -149,7 +150,7 @@ class TestSimulatorFileSystem:
         fs.write_bytes(str(test_file), content)
         assert fs.read_bytes(str(test_file)) == content
 
-    def test_exists(self, tmp_path):
+    def test_exists(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_file = tmp_path / "test.txt"
 
@@ -157,7 +158,7 @@ class TestSimulatorFileSystem:
         fs.write_text(str(test_file), "content")
         assert fs.exists(str(test_file))
 
-    def test_is_dir(self, tmp_path):
+    def test_is_dir(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_dir = tmp_path / "testdir"
         test_file = tmp_path / "testfile.txt"
@@ -168,21 +169,21 @@ class TestSimulatorFileSystem:
         assert fs.is_dir(str(test_dir))
         assert not fs.is_dir(str(test_file))
 
-    def test_mkdir(self, tmp_path):
+    def test_mkdir(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_dir = tmp_path / "newdir"
 
         fs.mkdir(str(test_dir))
         assert test_dir.exists()
 
-    def test_makedirs(self, tmp_path):
+    def test_makedirs(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_dir = tmp_path / "parent" / "child" / "grandchild"
 
         fs.makedirs(str(test_dir))
         assert test_dir.exists()
 
-    def test_remove(self, tmp_path):
+    def test_remove(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_file = tmp_path / "test.txt"
         fs.write_text(str(test_file), "content")
@@ -191,7 +192,7 @@ class TestSimulatorFileSystem:
         fs.remove(str(test_file))
         assert not fs.exists(str(test_file))
 
-    def test_listdir(self, tmp_path):
+    def test_listdir(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         fs.write_text(str(tmp_path / "file1.txt"), "content1")
         fs.write_text(str(tmp_path / "file2.txt"), "content2")
@@ -200,7 +201,7 @@ class TestSimulatorFileSystem:
         assert "file1.txt" in files
         assert "file2.txt" in files
 
-    def test_rename(self, tmp_path):
+    def test_rename(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         src = tmp_path / "original.txt"
         dst = tmp_path / "renamed.txt"
@@ -210,7 +211,7 @@ class TestSimulatorFileSystem:
         assert not fs.exists(str(src))
         assert fs.exists(str(dst))
 
-    def test_write_chunks(self, tmp_path):
+    def test_write_chunks(self, tmp_path: Path):
         fs = SimulatorFileSystem()
         test_file = tmp_path / "chunks.bin"
         chunks = [b"Hello, ", b"simulator", b"!"]

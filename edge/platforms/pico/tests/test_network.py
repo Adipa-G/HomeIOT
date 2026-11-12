@@ -1,5 +1,3 @@
-# These tests assert on PicoNetwork's private WLAN handle, which is what suspend() manages.
-# pyright: reportPrivateUsage=false
 from edge.platforms.pico.hal.network import PicoNetwork
 
 

@@ -22,7 +22,7 @@ from edge.shared.app.utc_time import (
         "2100-03-01T06:07:08Z",
     ],
 )
-def test_iso_to_epoch_matches_calendar_timegm(value):
+def test_iso_to_epoch_matches_calendar_timegm(value: str):
     expected = calendar.timegm(datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").timetuple())
 
     assert iso_to_epoch(value) == expected
@@ -38,7 +38,7 @@ def test_epoch_to_iso_round_trips_every_day_across_leap_years():
 
 
 @pytest.mark.parametrize("value", [None, "", "2021-01-01", "garbage-value-here!", 12345])
-def test_iso_to_epoch_rejects_malformed(value):
+def test_iso_to_epoch_rejects_malformed(value: object):
     assert iso_to_epoch(value) is None
 
 
