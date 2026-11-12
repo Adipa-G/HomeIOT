@@ -7,6 +7,7 @@ from edge.shared.app.module_runtime import ModuleRuntime
 from edge.shared.app.presence import PresenceService
 from edge.shared.app.updater import Updater
 from edge.shared.app.wall_clock import WallClock
+from edge.shared.hal.interfaces import IFileSystem, IHttpClient, INetwork, ISystem, IWatchdog
 
 
 class DeviceRuntime:
@@ -45,7 +46,16 @@ class DeviceRuntime:
         self.ota_checked = False
 
 
-def create_runtime(fs, system, http, network, watchdog, config, platform, enable_ota=True) -> DeviceRuntime:
+def create_runtime(
+    fs: IFileSystem,
+    system: ISystem,
+    http: IHttpClient,
+    network: INetwork,
+    watchdog: IWatchdog,
+    config: Config,
+    platform: str,
+    enable_ota: bool = True,
+) -> DeviceRuntime:
     """Wire up the logger and services. ``enable_ota=False`` leaves ``updater`` as None."""
     clock = WallClock(system)
     logger = EdgeLogger(
@@ -147,7 +157,7 @@ def start(runtime: DeviceRuntime) -> None:
     logger.flush("startup")
 
 
-def run(runtime: DeviceRuntime, max_iterations=None) -> None:
+def run(runtime: DeviceRuntime, max_iterations: int | None = None) -> None:
     run_control_loop(
         system=runtime.system,
         presence=runtime.presence,
@@ -164,7 +174,15 @@ def run(runtime: DeviceRuntime, max_iterations=None) -> None:
     )
 
 
-def run_device(fs, system, http, network, watchdog, platform, config_path=CONFIG_PATH) -> None:
+def run_device(
+    fs: IFileSystem,
+    system: ISystem,
+    http: IHttpClient,
+    network: INetwork,
+    watchdog: IWatchdog,
+    platform: str,
+    config_path: str = CONFIG_PATH,
+) -> None:
     """main.py path for real hardware: load config, boot, then run the control loop forever."""
     config = Config.load(fs, path=config_path, system=system)
     runtime = create_runtime(

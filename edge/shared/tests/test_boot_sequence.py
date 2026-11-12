@@ -2,9 +2,10 @@ import json
 
 from edge.shared.app import boot_sequence
 from edge.shared.app.boot_sequence import WATCHDOG_TIMEOUT_MS, load_max_attempts, run_boot
+from edge.shared.hal.interfaces import IFileSystem, ISystem, IWatchdog
 
 
-class _FakeFs:
+class _FakeFs(IFileSystem):
     def __init__(self, files=None):
         self.files = files or {}
 
@@ -15,12 +16,12 @@ class _FakeFs:
         return self.files[path]
 
 
-class _FakeSystem:
+class _FakeSystem(ISystem):
     def time_ms(self):
         return 0
 
 
-class _FakeWatchdog:
+class _FakeWatchdog(IWatchdog):
     def __init__(self, error=None):
         self.error = error
         self.init_calls = []

@@ -3,6 +3,7 @@ import json
 from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.config import CONFIG_PATH, LoggingConfig
 from edge.shared.app.logger import EdgeLogger
+from edge.shared.hal.interfaces import IFileSystem, ISystem, IWatchdog
 
 WATCHDOG_TIMEOUT_MS = 120000
 
@@ -17,7 +18,7 @@ def load_max_attempts(fs, path=CONFIG_PATH, default_value=3):
         return default_value
 
 
-def run_boot(fs, system, watchdog) -> None:
+def run_boot(fs: IFileSystem, system: ISystem, watchdog: IWatchdog) -> None:
     """boot.py path: arm the watchdog and let BootManager count attempts or roll back."""
     logger = EdgeLogger(system=system, logging_config=LoggingConfig(enabled_uplink=False))
 

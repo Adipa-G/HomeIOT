@@ -102,7 +102,7 @@ class Config:
         self.wifi_country = normalize_wifi_country(wifi_country)
 
     @classmethod
-    def load(cls, fs: IFileSystem, path: str = CONFIG_PATH, system=None):
+    def load(cls, fs: IFileSystem, path: str = CONFIG_PATH, system: ISystem | None = None) -> "Config":
         raw = fs.read_text(path)
         data = json.loads(raw)
 

@@ -167,7 +167,7 @@ def _get_jwt_token(api_url: str, username: str, password: str) -> str:
         sys.exit(1)
 
 
-def _print_result(result: dict) -> None:
+def _print_result(result: dict[str, object]) -> None:
     status   = result.get("status", "?")
     exit_code = result.get("exit_code", 0)
     elapsed  = result.get("elapsed_ms", "?")

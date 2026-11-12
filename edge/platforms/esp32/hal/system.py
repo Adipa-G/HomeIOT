@@ -8,8 +8,8 @@ _BROKEN_LIGHTSLEEP_SINCE = (1, 27)
 _BROKEN_LIGHTSLEEP_UNTIL = (1, 29)
 
 
-def _parse_version(value):
-    parts = []
+def _parse_version(value: object) -> tuple[int, ...]:
+    parts: list[int] = []
     for part in str(value or "").split("."):
         digits = ""
         for char in part:
@@ -22,7 +22,7 @@ def _parse_version(value):
     return tuple(parts)
 
 
-def lightsleep_known_broken(capabilities) -> bool:
+def lightsleep_known_broken(capabilities: dict[str, object]) -> bool:
     machine = str(capabilities.get("machine", "")).upper().replace("-", "")
     if not any(chip in machine for chip in _BROKEN_LIGHTSLEEP_CHIPS):
         return False
@@ -36,7 +36,7 @@ class MicroPythonSystem(_SharedMicroPythonSystem):
         super().__init__()
         self._lightsleep_broken = None
 
-    def get_sleep_capabilities(self) -> dict:
+    def get_sleep_capabilities(self) -> dict[str, object]:
         capabilities = super().get_sleep_capabilities()
         if capabilities.get("lightsleep") and lightsleep_known_broken(capabilities):
             capabilities["lightsleep"] = False

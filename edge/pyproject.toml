@@ -20,6 +20,9 @@ dev = [
     # Pico-only modules are stubbed in typings/.
     "micropython-esp32-stubs~=1.29.0",
     "mpy-cross==1.28.*",
+    # CPython requests types for the simulator; takes priority over the MicroPython
+    # requests stub that micropython-esp32-stubs installs.
+    "types-requests>=2.33.0.20261030",
 ]
 
 [tool.uv]
@@ -37,6 +40,13 @@ extraPaths = [".."]
 pythonVersion = "3.11"
 pythonPlatform = "Linux"
 typeCheckingMode = "standard"
+# Folders moved to strict mode so far; add one at a time as each is fully typed.
+strict = [
+    "platforms/*/hal",
+    "platforms/*/src",
+    "simulator",
+    "tools",
+]
 venvPath = "."
 venv = ".venv"
 stubPath = "typings"
