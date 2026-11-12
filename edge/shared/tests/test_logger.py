@@ -1,10 +1,11 @@
 from edge.shared.app.config import LoggingConfig
 from edge.shared.app.endpoints import LOGS_PATH
 from edge.shared.app.logger import EdgeLogger
+from edge.shared.hal.interfaces import IHttpClient, ISystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 
 
-class ControlledSystem:
+class ControlledSystem(ISystem):
     def __init__(self):
         self.now = 0
 
@@ -132,8 +133,8 @@ def test_logger_prints_console_event_with_context(capsys):
 
 
 def test_logger_flush_returns_false_on_transport_exception():
-    class FailingHttpClient:
-        def post(self, url, data, headers=None):
+    class FailingHttpClient(IHttpClient):
+        def post(self, url, data, headers=None, timeout_s=None):
             raise OSError(113)
 
     system = ControlledSystem()

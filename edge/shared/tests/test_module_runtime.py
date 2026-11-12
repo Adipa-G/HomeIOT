@@ -3,6 +3,7 @@ from edge.shared.app.device_control import DeviceControlClient
 from edge.shared.app.module_runtime import ModuleRuntime
 from edge.shared.app.utc_time import datetime_to_epoch, epoch_to_datetime
 from edge.shared.app.wall_clock import WallClock
+from edge.shared.hal.interfaces import ISystem
 from edge.shared.tests.mocks.mock_filesystem import MockFileSystem
 from edge.shared.tests.mocks.mock_http_client import MockHttpClient
 from edge.shared.tests.mocks.mock_system import MockSystem
@@ -819,7 +820,7 @@ def test_result_rejected_by_server_is_not_queued():
     assert runtime.flush_pending_results() == 0
 
 
-class _TickSystem:
+class _TickSystem(ISystem):
     """Tick counter advanced by the test; the hardware clock reads 2021 until NTP."""
 
     REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))

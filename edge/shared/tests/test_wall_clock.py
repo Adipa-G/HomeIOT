@@ -1,11 +1,12 @@
 from edge.shared.app.utc_time import datetime_to_epoch, epoch_to_datetime
 from edge.shared.app.wall_clock import WallClock
+from edge.shared.hal.interfaces import ISystem
 
 
 REAL_BOOT_S = datetime_to_epoch((2026, 10, 22, 0, 0, 0))
 
 
-class _System:
+class _System(ISystem):
     """Tick counter set by the test; the hardware clock reads 2021 until NTP and can be frozen."""
 
     def __init__(self, clock_set=False, sync_ok=True):

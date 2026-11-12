@@ -7,7 +7,7 @@ time.mktime() is avoided because its epoch differs between MicroPython ports.
 MIN_SYNCED_YEAR = 2024
 
 
-def _days_from_civil(year, month, day):
+def _days_from_civil(year: int, month: int, day: int) -> int:
     if month <= 2:
         year -= 1
     era = (year if year >= 0 else year - 399) // 400
@@ -17,7 +17,7 @@ def _days_from_civil(year, month, day):
     return era * 146097 + day_of_era - 719468
 
 
-def _civil_from_days(days):
+def _civil_from_days(days: int) -> tuple[int, int, int]:
     days += 719468
     era = (days if days >= 0 else days - 146096) // 146097
     day_of_era = days - era * 146097
@@ -32,13 +32,13 @@ def _civil_from_days(days):
     return year, month, day
 
 
-def datetime_to_epoch(parts):
+def datetime_to_epoch(parts: tuple[int, ...]) -> int:
     """(year, month, day, hour, minute, second, ...) in UTC to Unix seconds."""
     year, month, day, hour, minute, second = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
     return _days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second
 
 
-def epoch_to_datetime(seconds):
+def epoch_to_datetime(seconds: float) -> tuple[int, int, int, int, int, int, int]:
     """Unix seconds to (year, month, day, hour, minute, second, weekday) in UTC; Monday is 0."""
     seconds = int(seconds)
     days = seconds // 86400
@@ -48,7 +48,7 @@ def epoch_to_datetime(seconds):
     return (year, month, day, remainder // 3600, (remainder % 3600) // 60, remainder % 60, (days + 3) % 7)
 
 
-def iso_to_epoch(value):
+def iso_to_epoch(value: object) -> int | None:
     """Parse 'YYYY-MM-DDTHH:MM:SSZ' to Unix seconds, or None if malformed."""
     if not isinstance(value, str) or len(value) < 19:
         return None
@@ -64,7 +64,7 @@ def iso_to_epoch(value):
     return _days_from_civil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second
 
 
-def epoch_to_iso(seconds):
+def epoch_to_iso(seconds: float) -> str:
     seconds = int(seconds)
     days = seconds // 86400
     remainder = seconds - days * 86400

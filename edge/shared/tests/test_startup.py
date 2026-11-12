@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from edge.shared.app.config import Config
 from edge.shared.app.module_runtime import ModuleRuntime
@@ -179,10 +180,11 @@ def _runtime(
     presence_error=None,
     updater=_DEFAULT_UPDATER,
     module_error=None,
-):
+) -> Any:
+    # Any: the runtime is built from fakes, and tests read their recorded state back through it.
     if updater is _DEFAULT_UPDATER:
         updater = _FakeUpdater(events)
-    return DeviceRuntime(
+    fakes: dict[str, Any] = dict(
         fs=object(),
         system=_FakeSystem(),
         http=object(),
@@ -197,6 +199,7 @@ def _runtime(
         device_control=object(),
         module_runtime=_FakeModuleRuntime(events, module_error),
     )
+    return DeviceRuntime(**fakes)
 
 
 # ---------------------------------------------------------------- create_runtime

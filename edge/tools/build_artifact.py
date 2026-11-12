@@ -91,7 +91,8 @@ def _collect_files(root: Path, platform: str) -> dict[str, Path]:
 
 def _add_dir(src_dir: Path, base: Path, prefix: str, out: dict[str, Path]) -> None:
     for item in sorted(src_dir.rglob("*")):
-        if "__pycache__" in item.parts or item.suffix == ".pyc" or not item.is_file():
+        # .pyi stubs are for the type checker only and never ship.
+        if "__pycache__" in item.parts or item.suffix in (".pyc", ".pyi") or not item.is_file():
             continue
         rel = item.relative_to(base)
         key = f"{prefix}/{rel.as_posix()}"

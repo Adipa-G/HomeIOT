@@ -1,4 +1,20 @@
-def execute_dev_command(system, device_control, command, logger=None, utc_now_iso=None):
+from edge.shared.hal.interfaces import ISystem
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from collections.abc import Callable
+    from typing import Any
+
+    from edge.shared.app.protocols import DevCommandReporter, Logger
+
+
+def execute_dev_command(
+    system: ISystem,
+    device_control: "DevCommandReporter",
+    command: "dict[str, Any]",
+    logger: "Logger | None" = None,
+    utc_now_iso: "Callable[[], str] | None" = None,
+) -> "dict[str, Any]":
     utc_now = utc_now_iso or _default_utc_now_iso
 
     command_id = command.get("command_id")
@@ -14,13 +30,13 @@ def execute_dev_command(system, device_control, command, logger=None, utc_now_is
     stdout_text = ""
     stderr_text = ""
 
-    stdout_lines = []
+    stdout_lines: list[str] = []
 
-    def _capture_print(*args, **kwargs):  # noqa: ARG001
+    def _capture_print(*args: object, **kwargs: object) -> None:  # noqa: ARG001
         stdout_lines.append(" ".join(str(value) for value in args))
 
     code = str(command.get("code") or "")
-    scope = {"print": _capture_print}
+    scope: "dict[str, Any]" = {"print": _capture_print}
     try:
         try:
             exec(code, scope, scope)  # noqa: S102
@@ -98,7 +114,7 @@ def execute_dev_command(system, device_control, command, logger=None, utc_now_is
     return {"status": status, "reported": reported, "payload": payload}
 
 
-def _format_exception(exc):
+def _format_exception(exc: BaseException) -> str:
     try:
         import traceback
 
@@ -108,25 +124,26 @@ def _format_exception(exc):
     return _truncate(details, 4000)
 
 
-def _truncate(text, max_len):
+def _truncate(text: str | None, max_len: int) -> str:
     value = text or ""
     if len(value) <= max_len:
         return value
     return value[:max_len] + "..."
 
 
-def _extract_result(scope):
+def _extract_result(scope: "dict[str, Any]") -> object:
     if "result" not in scope:
         return None
     value = scope["result"]
     # Accept dicts, lists, strings, numbers, booleans, None as-is.
     if isinstance(value, (dict, list, str, int, float, bool, type(None))):
-        return value
+        # isinstance() narrows Any to dict[Unknown, Unknown] etc.; any JSON value is fine here.
+        return value  # pyright: ignore[reportUnknownVariableType]
     # Fallback: coerce to string so the payload is always serialisable.
     return str(value)
 
 
-def _default_utc_now_iso():
+def _default_utc_now_iso() -> str:
     try:
         import time
 
@@ -143,6 +160,6 @@ def _default_utc_now_iso():
         return "1970-01-01T00:00:00Z"
 
 
-def _log_warn(logger, message, context=None):
+def _log_warn(logger: "Logger | None", message: str, context: "dict[str, Any] | None" = None) -> None:
     if logger is not None:
         logger.warn(message, context)

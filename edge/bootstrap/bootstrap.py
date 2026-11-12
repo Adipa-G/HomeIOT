@@ -9,14 +9,9 @@ from edge.shared.hal.interfaces import IFileSystem, IHttpClient, INetwork, ISyst
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
-    from typing import Any, Protocol
+    from typing import Any
 
-    class _Logger(Protocol):
-        """The logging calls the bootstrap makes (ConsoleLogger, EdgeLogger or a test logger)."""
-
-        def info(self, message: str, context: dict[str, object] | None = None) -> None: ...
-
-        def warn(self, message: str, context: dict[str, object] | None = None) -> None: ...
+    from edge.shared.app.protocols import Logger
 
 
 WIFI_CONNECT_ATTEMPTS = 3
@@ -75,7 +70,7 @@ def write_config(fs: IFileSystem, provision: dict[str, str], template: "dict[str
 
 
 def connect_wifi(
-    network: INetwork, system: ISystem, config: Config, logger: "_Logger", attempts: int = WIFI_CONNECT_ATTEMPTS
+    network: INetwork, system: ISystem, config: Config, logger: "Logger", attempts: int = WIFI_CONNECT_ATTEMPTS
 ) -> None:
     country = getattr(config, "wifi_country", None)
     if country and hasattr(network, "set_country") and not network.set_country(country):
@@ -106,7 +101,7 @@ def run_bootstrap(
     http: IHttpClient,
     provision: dict[str, str],
     template: "dict[str, Any]",
-    logger: "_Logger | None" = None,
+    logger: "Logger | None" = None,
 ) -> None:
     """Write config.json, then install the latest release through the regular OTA updater.
 
