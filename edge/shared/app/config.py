@@ -12,7 +12,7 @@ DEFAULT_WIFI_COUNTRY = "AU"
 PLACEHOLDER_PREFIX = "replace-with-"
 
 
-def normalize_wifi_country(value) -> str:
+def normalize_wifi_country(value: object) -> str:
     """Return a two-letter country code, or DEFAULT_WIFI_COUNTRY when unset or a placeholder."""
     if not isinstance(value, str):
         return DEFAULT_WIFI_COUNTRY

@@ -1,10 +1,12 @@
+from collections.abc import Iterable
+
 from edge.shared.hal.interfaces import IFileSystem
 
 
 class MockFileSystem(IFileSystem):
     def __init__(self):
-        self.files = {}
-        self.directories = {""}
+        self.files: dict[str, bytes] = {}
+        self.directories: set[str] = {""}
 
     def read_text(self, path: str) -> str:
         return self.read_bytes(path).decode("utf-8")
@@ -32,10 +34,10 @@ class MockFileSystem(IFileSystem):
     def is_dir(self, path: str) -> bool:
         return self._normalize(path) in self.directories
 
-    def listdir(self, path: str):
+    def listdir(self, path: str) -> list[str]:
         path = self._normalize(path)
         prefix = path + "/" if path else ""
-        out = set()
+        out: set[str] = set()
 
         for directory in self.directories:
             if directory.startswith(prefix) and directory != path:
@@ -108,7 +110,7 @@ class MockFileSystem(IFileSystem):
             return
         raise FileNotFoundError(src)
 
-    def write_chunks(self, path: str, chunks) -> None:
+    def write_chunks(self, path: str, chunks: Iterable[bytes | bytearray | memoryview]) -> None:
         buf = bytearray()
         for chunk in chunks:
             buf.extend(chunk)

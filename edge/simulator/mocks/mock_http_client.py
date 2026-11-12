@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
-from edge.shared.hal.interfaces import IHttpClient, HttpResponse
+from edge.shared.hal.interfaces import IHttpClient, IStreamingResponse, HttpResponse
 
 if TYPE_CHECKING:
     # Imported lazily at runtime so the worker can report a missing install itself.
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 _REQUEST_TIMEOUT_S = 30
 
 
-class StreamingResponseWrapper:
+class StreamingResponseWrapper(IStreamingResponse):
     """Wraps requests.Response for streaming."""
 
     def __init__(self, response: requests.Response):

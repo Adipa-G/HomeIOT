@@ -3,7 +3,7 @@ from edge.shared.hal.interfaces import IWatchdog
 
 class MockWatchdog(IWatchdog):
     def __init__(self):
-        self.timeout_ms = None
+        self.timeout_ms: int | None = None
         self.feed_calls = 0
 
     def init(self, timeout_ms: int) -> None:
@@ -12,5 +12,5 @@ class MockWatchdog(IWatchdog):
     def feed(self) -> None:
         self.feed_calls += 1
 
-    def get_feed_interval_ms(self):
+    def get_feed_interval_ms(self) -> int | None:
         return None

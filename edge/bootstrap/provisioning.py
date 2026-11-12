@@ -1,6 +1,10 @@
 from edge.shared.app.config import normalize_wifi_country
 from edge.shared.app.secret_crypto import SCHEME, encrypt_secret
 
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any
+
 
 DEFAULT_LOGGING = {
     "enabled_uplink": True,
@@ -11,23 +15,23 @@ DEFAULT_LOGGING = {
 
 
 def build_device_config(
-    template,
-    device_id,
-    api_url,
-    api_key,
-    wifi_ssid,
-    wifi_password,
-    current_version="0.0.0",
-    heartbeat_interval_ms=None,
-    max_boot_attempts=None,
-    wifi_country=None,
-):
+    template: "dict[str, Any]",
+    device_id: str,
+    api_url: str,
+    api_key: str,
+    wifi_ssid: str,
+    wifi_password: str,
+    current_version: str = "0.0.0",
+    heartbeat_interval_ms: int | None = None,
+    max_boot_attempts: int | None = None,
+    wifi_country: str | None = None,
+) -> "dict[str, Any]":
     """Return a device config dict built from a platform config template.
 
     Secrets are encrypted with the device id as binding so plaintext never
     lands in config.json. Used by the first-boot bootstrap on the device.
     """
-    config = dict(template)
+    config: "dict[str, Any]" = dict(template)
     config["device_id"] = str(device_id)
     config["api_url"] = str(api_url).rstrip("/")
     config.pop("api_key", None)

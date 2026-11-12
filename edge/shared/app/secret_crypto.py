@@ -5,7 +5,7 @@ SCHEME = "uid-sha256-xor-v1"
 SALT = b"homeiot-config-secrets-v1"
 
 
-def encrypt_secret(plaintext: str, binding_value: str, field_name: str) -> dict:
+def encrypt_secret(plaintext: str, binding_value: str, field_name: str) -> dict[str, str]:
     nonce = _random_bytes(16)
     key = _derive_key(binding_value, field_name)
     plaintext_bytes = plaintext.encode("utf-8")
@@ -21,7 +21,7 @@ def encrypt_secret(plaintext: str, binding_value: str, field_name: str) -> dict:
     }
 
 
-def decrypt_secret(payload: dict, binding_value: str, field_name: str) -> str:
+def decrypt_secret(payload: dict[str, str], binding_value: str, field_name: str) -> str:
     scheme = payload.get("scheme")
     if scheme != SCHEME:
         raise ValueError("Unsupported secret scheme: " + str(scheme))

@@ -5,6 +5,18 @@ from edge.shared.app.boot_manager import BootManager
 from edge.shared.app.config import CONFIG_PATH, Config
 from edge.shared.app.safe_io import atomic_write_text
 from edge.shared.app.updater import Updater
+from edge.shared.hal.interfaces import IFileSystem, IHttpClient, INetwork, ISystem
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
+    from typing import Any, Protocol
+
+    class _Logger(Protocol):
+        """The logging calls the bootstrap makes (ConsoleLogger, EdgeLogger or a test logger)."""
+
+        def info(self, message: str, context: dict[str, object] | None = None) -> None: ...
+
+        def warn(self, message: str, context: dict[str, object] | None = None) -> None: ...
 
 
 WIFI_CONNECT_ATTEMPTS = 3
@@ -15,27 +27,27 @@ DNS_LOOKUP_ERRORS = (-2, -202)
 
 
 class ConsoleLogger:
-    def info(self, message, context=None):
+    def info(self, message: str, context: dict[str, object] | None = None) -> None:
         self._write("INFO", message, context)
 
-    def warn(self, message, context=None):
+    def warn(self, message: str, context: dict[str, object] | None = None) -> None:
         self._write("WARN", message, context)
 
-    def error(self, message, context=None):
+    def error(self, message: str, context: dict[str, object] | None = None) -> None:
         self._write("ERROR", message, context)
 
-    def flush(self, reason=None):
+    def flush(self, reason: str | None = None) -> None:
         pass
 
     @staticmethod
-    def _write(level, message, context):
+    def _write(level: str, message: str, context: dict[str, object] | None) -> None:
         if context:
             print("[bootstrap] " + level + " " + message + " " + json.dumps(context))
         else:
             print("[bootstrap] " + level + " " + message)
 
 
-def create_device_services():
+def create_device_services() -> tuple[IFileSystem, ISystem, INetwork, IHttpClient]:
     """Instantiate the shared MicroPython HAL used by the real firmware."""
     from edge.shared.hal.filesystem import MicroPythonFileSystem
     from edge.shared.hal.http_client import MicroPythonHttpClient
@@ -45,7 +57,7 @@ def create_device_services():
     return MicroPythonFileSystem(), MicroPythonSystem(), MicroPythonNetwork(), MicroPythonHttpClient()
 
 
-def write_config(fs, provision, template):
+def write_config(fs: IFileSystem, provision: dict[str, str], template: "dict[str, Any]") -> None:
     missing = [key for key in REQUIRED_PROVISION_KEYS if key not in provision]
     if missing:
         raise ValueError("Missing provisioning fields: " + ", ".join(missing))
@@ -62,7 +74,9 @@ def write_config(fs, provision, template):
     atomic_write_text(fs, CONFIG_PATH, json.dumps(config))
 
 
-def connect_wifi(network, system, config, logger, attempts=WIFI_CONNECT_ATTEMPTS):
+def connect_wifi(
+    network: INetwork, system: ISystem, config: Config, logger: "_Logger", attempts: int = WIFI_CONNECT_ATTEMPTS
+) -> None:
     country = getattr(config, "wifi_country", None)
     if country and hasattr(network, "set_country") and not network.set_country(country):
         logger.warn("WiFi country not applied", {"country": country})
@@ -85,7 +99,15 @@ def connect_wifi(network, system, config, logger, attempts=WIFI_CONNECT_ATTEMPTS
     raise RuntimeError("Unable to connect to WiFi: " + str(last_error))
 
 
-def run_bootstrap(fs, system, network, http, provision, template, logger=None):
+def run_bootstrap(
+    fs: IFileSystem,
+    system: ISystem,
+    network: INetwork,
+    http: IHttpClient,
+    provision: dict[str, str],
+    template: "dict[str, Any]",
+    logger: "_Logger | None" = None,
+) -> None:
     """Write config.json, then install the latest release through the regular OTA updater.
 
     On success Updater.apply() overwrites main.py/boot.py with the firmware
