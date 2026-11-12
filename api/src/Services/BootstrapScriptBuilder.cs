@@ -9,16 +9,21 @@ namespace HomeIOT.Api.Services;
 
 /// <summary>
 /// Generates the self-extracting first-boot main.py. The output is the loader from
-/// edge/bootstrap/loader.py followed by a comment-encoded payload (provisioning JSON and
-/// source files) that the loader unpacks on the device. Firmware modules are taken from
+/// edge/bootstrap/loader.py followed by a comment-encoded payload (provisioning JSON,
+/// source files, and base64-encoded .mpy files from compiled releases) that the loader
+/// unpacks on the device. Firmware modules are taken from
 /// the latest OTA release so the installer always matches the firmware it installs.
 /// </summary>
 public sealed class BootstrapScriptBuilder : IBootstrapScriptBuilder
 {
     public const string ProvisionMarker = "#@@PROVISION ";
     public const string FileMarker = "#@@FILE ";
+    public const string BinaryFileMarker = "#@@BFILE ";
     public const string LineMarker = "#|";
     public const string EndMarker = "#@@END";
+
+    // 57 raw bytes encode to exactly 76 base64 characters, so every line decodes on its own.
+    private const int BinaryBytesPerLine = 57;
 
     private const string ResourcePrefix = "bootstrap/";
 
@@ -58,13 +63,40 @@ public sealed class BootstrapScriptBuilder : IBootstrapScriptBuilder
 
         foreach (var path in bundle.ReleaseFiles)
         {
-            var content = _otaReleaseService.ReadReleaseFileText(data.Platform, version, path)
-                ?? throw new InvalidOperationException(
+            var content = _otaReleaseService.ReadReleaseFileText(data.Platform, version, path);
+            if (content is not null)
+            {
+                AppendFile(builder, path, content);
+                continue;
+            }
+
+            // Compiled releases ship modules as .mpy instead of .py.
+            var compiledPath = path.EndsWith(".py", StringComparison.Ordinal) ? path[..^3] + ".mpy" : null;
+            var compiled = compiledPath is null
+                ? null
+                : _otaReleaseService.ReadReleaseFileBytes(data.Platform, version, compiledPath);
+            if (compiled is null)
+            {
+                throw new InvalidOperationException(
                     $"Release {data.Platform}/{version} is missing '{path}' required by the bootstrap installer.");
-            AppendFile(builder, path, content);
+            }
+
+            AppendBinaryFile(builder, compiledPath!, compiled);
         }
 
         return new BootstrapScript(version, builder.ToString());
+    }
+
+    private static void AppendBinaryFile(StringBuilder builder, string path, byte[] content)
+    {
+        builder.Append(BinaryFileMarker).Append(path).Append('\n');
+        for (var offset = 0; offset < content.Length; offset += BinaryBytesPerLine)
+        {
+            var length = Math.Min(BinaryBytesPerLine, content.Length - offset);
+            builder.Append(LineMarker).Append(Convert.ToBase64String(content, offset, length)).Append('\n');
+        }
+
+        builder.Append(EndMarker).Append('\n');
     }
 
     private static void AppendFile(StringBuilder builder, string path, string content)

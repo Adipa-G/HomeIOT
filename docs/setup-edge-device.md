@@ -20,7 +20,7 @@ Skip this step if the OTA page already lists a release for your platform.
 
 1. Build the release from the edge source tree:
    ```bash
-   python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
+   uv run --project edge python edge/tools/build_artifact.py --platform esp32 --version 1.0.0
    ```
 2. Make it available to the API:
    - **API running from source:** nothing more to do. The release is written to `api/artifacts/{platform}/{version}`, which is the development artifact root.

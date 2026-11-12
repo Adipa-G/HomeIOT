@@ -19,6 +19,7 @@ dev = [
     # ESP32 >= 1.30 and Pico W >= 1.28; bump when 1.30 stubs are published.
     # Pico-only modules are stubbed in typings/.
     "micropython-esp32-stubs~=1.29.0",
+    "mpy-cross==1.28.*",
 ]
 
 [tool.uv]

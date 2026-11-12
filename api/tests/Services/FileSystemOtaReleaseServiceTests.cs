@@ -281,6 +281,22 @@ public class FileSystemOtaReleaseServiceTests : IDisposable
         Assert.Null(service.ReadReleaseFileText("pico", "1.0.0", "edge/missing.py"));
     }
 
+    [Fact]
+    public void ReadReleaseFileBytes_ReturnsBinaryContent()
+    {
+        CreateRelease("pico", "1.0.0", new[] { ("main.py", "a") });
+        var nested = Path.Combine(_tempRoot, "pico", "1.0.0", "edge", "shared");
+        Directory.CreateDirectory(nested);
+        var mpy = new byte[] { 0x4D, 0x06, 0x00, 0x1F, 0xFF, 0x0A, 0x0D };
+        File.WriteAllBytes(Path.Combine(nested, "x.mpy"), mpy);
+
+        var service = CreateService();
+
+        Assert.Equal(mpy, service.ReadReleaseFileBytes("pico", "1.0.0", "edge/shared/x.mpy"));
+        Assert.Null(service.ReadReleaseFileBytes("pico", "1.0.0", "edge/missing.mpy"));
+        Assert.Null(service.ReadReleaseFileBytes("pico", "1.0.0", "../secret.txt"));
+    }
+
     [Theory]
     [InlineData("../secret.txt")]
     [InlineData("/etc/passwd")]
