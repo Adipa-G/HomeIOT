@@ -44,9 +44,9 @@
     {
       "label": "python: test edge",
       "type": "process",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "command": "uv",
       "args": [
-        "-m",
+        "run",
         "pytest",
         "edge"
       ],
@@ -56,10 +56,10 @@
     {
       "label": "python: typecheck edge",
       "type": "process",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\pyright.exe",
+      "command": "uv",
       "args": [
-        "--pythonpath",
-        "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+        "run",
+        "pyright"
       ],
       "group": "test",
       "problemMatcher": []

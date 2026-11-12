@@ -4,7 +4,7 @@
 
 - **Every code change must include corresponding tests.** When adding or modifying a feature, add or update tests in the same commit.
 - **API (.NET):** Add xUnit tests in `api/tests/`. One test class per production class. Run with `dotnet test api/tests/homeiot.api.tests.csproj`.
-- **Edge (Python):** Add pytest tests in `edge/shared/tests/`. Run with `python -m pytest edge`.
+- **Edge (Python):** Add pytest tests in `edge/shared/tests/`. Run with `uv run pytest edge`.
 - **Web UI (React):** Add Vitest tests in `web-ui/src/test/`. Run with `cd web-ui && npx vitest run`.
 - **Verify all three suites pass** after any change that touches multiple layers.
 
@@ -25,6 +25,7 @@
 ## Python Conventions (edge/)
 
 - MicroPython-compatible code — no CPython-only features.
-- Tests use pytest and run from workspace root: `python -m pytest edge`.
-- Code must pass `pyright` (standard mode, config in `pyrightconfig.json`). Run from workspace root: `pyright` (locally add `--pythonpath .venv/Scripts/python.exe` if the venv is not activated).
+- Python dependencies live in `pyproject.toml` and `uv.lock` at the workspace root. Set up with `uv sync`; add packages with `uv add` (or `uv add --dev` for tooling), never by hand-editing a requirements file.
+- Tests use pytest and run from workspace root: `uv run pytest edge`.
+- Code must pass `pyright` (standard mode, config in `[tool.pyright]` in `pyproject.toml`). Run from workspace root: `uv run pyright`.
 - MicroPython-only imports/attributes (`machine`, `utime`, `time.ticks_ms`, ...) get a targeted `# pyright: ignore[rule]` comment. In tests, build fake MicroPython modules with `fake_module()` from `edge/shared/tests/mocks/fake_module.py`, and have mocks subclass the `edge/shared/hal/interfaces.py` interfaces.
