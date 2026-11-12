@@ -73,3 +73,26 @@ def test_compiled_build_keeps_empty_package_files_as_source(tmp_path: Path):
             assert (artifact_dir / rel_path).stat().st_size > 0
         if rel_path.endswith("__init__.py") and rel_path not in BUNDLE["release_files"]:
             assert (artifact_dir / rel_path).stat().st_size == 0, rel_path
+
+
+def test_rebuilding_a_version_removes_files_from_the_previous_build(tmp_path: Path):
+    # A source build then a compiled build of the same version must not leave
+    # interfaces.py next to interfaces.mpy: MicroPython would load the stale .py.
+    build_artifact.build("pico", "1.0.0", tmp_path, compile_mpy=False)
+    artifact_dir = build_artifact.build("pico", "1.0.0", tmp_path, compile_mpy=True)
+
+    assert (artifact_dir / "edge/shared/hal/interfaces.mpy").exists()
+    assert not (artifact_dir / "edge/shared/hal/interfaces.py").exists()
+    shipped = {p.relative_to(artifact_dir).as_posix() for p in artifact_dir.rglob("*") if p.is_file()}
+    assert shipped == set(_manifest(artifact_dir)) | {"manifest.json"}
+
+
+def test_build_refuses_to_overwrite_a_folder_that_is_not_a_release(tmp_path: Path):
+    unrelated = tmp_path / "pico" / "1.0.0"
+    unrelated.mkdir(parents=True)
+    (unrelated / "notes.txt").write_text("keep me", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="not a release build"):
+        build_artifact.build("pico", "1.0.0", tmp_path, compile_mpy=True)
+
+    assert (unrelated / "notes.txt").read_text(encoding="utf-8") == "keep me"

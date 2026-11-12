@@ -105,11 +105,26 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _clear_previous_build(artifact_dir: Path) -> None:
+    """Remove an earlier build of the same version so no stale files remain.
+
+    Leftovers are not harmless: MicroPython loads foo.py in preference to foo.mpy,
+    and a zipped release folder ships every file in it.
+    """
+    if not artifact_dir.exists():
+        return
+    if not (artifact_dir / "manifest.json").is_file():
+        raise SystemExit(f"{artifact_dir} exists but is not a release build (no manifest.json); refusing to overwrite it.")
+    print(f"Replacing previous build in {artifact_dir}")
+    shutil.rmtree(artifact_dir)
+
+
 def build(platform: str, version: str, out_root: Path, compile_mpy: bool = False) -> Path:
     if compile_mpy:
         _require_mpy_cross()  # fail before writing anything
     root = _project_root()
     artifact_dir = out_root / platform / version
+    _clear_previous_build(artifact_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     files = _collect_files(root, platform)
