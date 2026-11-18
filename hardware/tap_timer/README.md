@@ -13,12 +13,15 @@ can be missed.
 
 On each run the module:
 
+- Turns on the running LED on GPIO 22 at the start of the run and turns it
+  off when the run ends, including when the run fails.
 - Reads the battery voltage from GPIO 26. This pin gets half of VSYS through a
   divider, so the voltage is doubled.
-- Powers the rain sensor from GPIO 4 only while taking a reading, so the
-  probe doesn't corrode.
+- Powers the rain sensor from GPIO 1 only while taking a reading, so the
+  probe doesn't corrode. It waits 1 second after powering the sensor before
+  reading it.
 - Reads the rain sensor's analog output on GPIO 27 as a wetness value from
-  0 (dry) to 1023 (soaked). It also reads the digital output on GPIO 1, which
+  0 (dry) to 1023 (soaked). It also reads the digital output on GPIO 2, which
   is low while wet. The digital reading is only reported.
 - Opens the valve on GPIO 0 from `VALVE_START_TIME` for
   `VALVE_RUN_DURATION_MINUTES`, as long as the current wetness is at or below
@@ -33,8 +36,8 @@ On each run the module:
   schedule, rain and clock sync. It stays open until the variable is set back
   to `false`.
 
-The module stores nothing between runs. It reads the valve and indicator pins
-back to remember what it decided last time. A reboot sets them all low.
+The module stores nothing between runs. It reads the valve pin back to
+remember whether the valve was already open. A reboot sets it low.
 
 The source is kept small on purpose. The Pico W ran out of memory compiling an
 11 KB version of this module.
@@ -43,8 +46,8 @@ The source is kept small on purpose. The Pico W ran out of memory compiling an
 
 | Pin    | On when |
 |--------|---------|
-| GPIO 2 | The current wetness is above `RAIN_THRESHOLD`. |
-| GPIO 3 | Rain skipped today's window. It stays on until midnight. |
+| GPIO 22 | The module is running. |
+| GPIO 21 | The current wetness is above `RAIN_THRESHOLD`. It only shows the latest reading. |
 
 ### Module variables
 

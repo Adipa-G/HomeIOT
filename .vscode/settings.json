@@ -1,0 +1,15 @@
+{
+  // Edge Python tooling lives in edge/ (pyproject.toml, uv.lock, .venv).
+  // Pylance reads pyright config from the workspace root only, so mirror the
+  // edge/pyproject.toml [tool.pyright] settings here for the root workspace.
+  "python.defaultInterpreterPath": "${workspaceFolder}/edge/.venv/Scripts/python.exe",
+  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.include": ["edge"],
+  "python.analysis.exclude": ["**/.venv", "**/__pycache__", "**/.pytest_cache", "**/node_modules"],
+  // MicroPython modules are stub-only (the implementation is in the firmware).
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingModuleSource": "none"
+  },
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["edge"]
+}
