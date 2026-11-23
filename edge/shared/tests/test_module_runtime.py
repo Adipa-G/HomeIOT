@@ -170,6 +170,45 @@ def test_module_runtime_marks_timeout_and_resets_device():
     assert "Module timeout exceeded" in payload["error_message"]
 
 
+def test_module_timeout_ignores_time_spent_before_the_module_runs():
+    system = MockSystem()
+
+    class _StallingLogger:
+        """A log flush that blocks on the network, as when the device is offline."""
+
+        def info(self, message: str, context: dict[str, Any] | None = None) -> None:
+            if message == "Running module":
+                system._time_ms += 6000
+
+        def warn(self, message: str, context: dict[str, Any] | None = None) -> None:
+            pass
+
+        def error(self, message: str, context: dict[str, Any] | None = None) -> None:
+            pass
+
+    fs = MockFileSystem()
+    http = MockHttpClient()
+    config = _config()
+    client = DeviceControlClient(http=http, config=config, fs=fs)
+    runtime = ModuleRuntime(
+        system=system, device_control=client, config=config, logger=_StallingLogger(),
+        utc_now_iso=lambda: "2026-05-28T14:30:00Z",
+    )
+    fs.write_bytes("modules_cache/m1/1.0.0.pkg", b"def run(context):\n    return {'value': 1}\n")
+    runtime.update_assignment(
+        {"modules": [{"module_id": "m1", "version": "1.0.0", "interval_ms": 60000, "timeout_ms": 5000}]},
+        now_ms=1000,
+    )
+
+    result = runtime.tick(now_ms=1000)
+
+    assert result["reset_requested"] is False
+    assert system.reset_calls == 0
+    payload = _post_payloads(http)[0]
+    assert payload["status"] == "success"
+    assert payload["elapsed_ms"] < 5000
+
+
 def test_module_runtime_persists_timeout_marker_when_upload_fails():
     fs = MockFileSystem()
     http = MockHttpClient()

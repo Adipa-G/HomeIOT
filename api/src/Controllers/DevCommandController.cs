@@ -46,6 +46,21 @@ public sealed class DevCommandController : EdgeApiControllerBase
     }
 
     /// <summary>
+    /// Device: claim a command right before running it. The command is removed from the pending
+    /// queue, so a command that resets the device is not delivered again after the reboot.
+    /// Returns 409 when the command is no longer pending.
+    /// </summary>
+    [HttpPost("{commandId}/started")]
+    public ActionResult Started(string commandId)
+    {
+        var requestContext = GetDeviceRequestContext()!;
+        if (!_queue.Start(requestContext.DeviceId, commandId))
+            return Conflict(new ErrorResponse("not_pending", "Command is no longer pending."));
+
+        return Accepted(new DevCommandStartedResponse(CommandId: commandId, Status: "running"));
+    }
+
+    /// <summary>
     /// Device: submit execution result for a command.
     /// </summary>
     [HttpPost("{commandId}/result")]
@@ -53,9 +68,12 @@ public sealed class DevCommandController : EdgeApiControllerBase
     {
         var requestContext = GetDeviceRequestContext()!;
 
-        // Peek before acknowledging to capture the original code.
+        // Peek before acknowledging to capture the original code. A started command has already
+        // left the queue; its code is on the "running" placeholder.
         var pendingEntry = _queue.PeekNext(requestContext.DeviceId);
-        var originalCode = (pendingEntry?.CommandId == commandId) ? pendingEntry.Code : null;
+        var originalCode = (pendingEntry?.CommandId == commandId)
+            ? pendingEntry.Code
+            : _queue.GetResult(commandId)?.Code;
 
         // Acknowledge removes the command from the pending queue so the device stops receiving it.
         _queue.Acknowledge(requestContext.DeviceId, commandId);

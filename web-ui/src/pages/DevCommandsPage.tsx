@@ -7,6 +7,14 @@ import { toast } from '../components/Toast';
 import { ApiError } from '../api/client';
 import { formatUtc } from '../lib/format';
 
+// "running": the device claimed the command but hasn't reported a result,
+// e.g. because the command reset the device.
+function resultVariant(status: string): 'green' | 'yellow' | 'red' {
+  if (status === 'success') return 'green';
+  if (status === 'running') return 'yellow';
+  return 'red';
+}
+
 export default function DevCommandsPage() {
   const qc = useQueryClient();
   const [deviceId, setDeviceId] = useState('');
@@ -159,7 +167,7 @@ export default function DevCommandsPage() {
                       <tr key={r.command_id} className="cursor-pointer hover:bg-gray-50" onClick={() => toggleResult(r.command_id)}>
                         <td className="px-2 py-3 text-center text-gray-400">{expanded ? '▾' : '▸'}</td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.command_id.slice(0, 8)}</td>
-                        <td className="px-4 py-3"><StatusBadge text={r.status} variant={r.status === 'success' ? 'green' : 'red'} /></td>
+                        <td className="px-4 py-3"><StatusBadge text={r.status} variant={resultVariant(r.status)} /></td>
                         <td className="px-4 py-3 text-gray-600">{r.exit_code}</td>
                         <td className="px-4 py-3 text-gray-600">{r.elapsed_ms}ms</td>
                         <td className="px-4 py-3 text-gray-600">{formatUtc(r.finished_at_utc ?? '')}</td>

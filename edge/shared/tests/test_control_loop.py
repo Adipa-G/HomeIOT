@@ -124,6 +124,8 @@ class _FakeDeviceControl:
         self.ensure_calls = 0
         self.prefetch_calls = 0
         self.prefetch_payloads: list[list[Any]] = []
+        self.dev_events: list[str] = []
+        self.start_ok = True
 
     def get_module_assignment(self, _: object) -> dict[str, Any] | None:
         self.assignment_calls += 1
@@ -140,6 +142,14 @@ class _FakeDeviceControl:
         if self.dev_error is not None:
             raise self.dev_error
         return self.command
+
+    def start_dev_command(self, command_id: str) -> bool:
+        self.dev_events.append("start:" + command_id)
+        return self.start_ok
+
+    def report_dev_command_result(self, command_id: str, payload: dict[str, Any]) -> bool:
+        self.dev_events.append("result:" + command_id)
+        return True
 
     @staticmethod
     def should_execute_dev_command(command: object, _: object) -> bool:
@@ -270,6 +280,37 @@ def test_control_loop_development_polls_dev_more_frequently_than_heartbeat():
 
     assert device_control.dev_calls >= 1
     assert presence.calls <= 2
+
+
+def _run_dev_command_loop(device_control: "_FakeDeviceControl") -> None:
+    presence = _FakePresence({"mode": "development", "next_heartbeat_ms": 30000, "dev_poll_interval_ms": 2000})
+    run_control_loop(
+        system=_FakeSystem(),
+        presence=presence,
+        device_control=device_control,
+        module_runtime=_FakeModuleRuntime(),
+        logger=_FakeLogger(),
+        config=_config(),
+        max_iterations=1,
+    )
+
+
+def test_dev_command_is_claimed_before_it_runs():
+    device_control = _FakeDeviceControl(command={"command_id": "cmd-1", "revision_hash": "r1"})
+
+    _run_dev_command_loop(device_control)
+
+    # Claimed first, so a command that resets the device isn't delivered again.
+    assert device_control.dev_events == ["start:cmd-1", "result:cmd-1"]
+
+
+def test_dev_command_not_run_when_claim_fails():
+    device_control = _FakeDeviceControl(command={"command_id": "cmd-1", "revision_hash": "r1"})
+    device_control.start_ok = False
+
+    _run_dev_command_loop(device_control)
+
+    assert device_control.dev_events == ["start:cmd-1"]
 
 
 def test_control_loop_updates_runtime_when_assignment_present():
@@ -1346,6 +1387,34 @@ def test_radio_off_sleep_suspends_wifi_light_sleeps_and_reconnects():
     connected_logs = [data for message, data in logger.info_log if message == "WiFi connected"]
     assert len(connected_logs) == 2
     assert all("connect_ms" in data for data in connected_logs)
+
+
+class _UplinkLogger(_RecordingLogger):
+    def __init__(self):
+        super().__init__()
+        self.uplink: list[str] = []
+
+    def pause_uplink(self) -> None:
+        self.uplink.append("pause")
+
+    def resume_uplink(self) -> None:
+        self.uplink.append("resume")
+
+
+def test_log_uplink_paused_while_radio_is_off_and_resumed_on_reconnect():
+    logger = _UplinkLogger()
+
+    _run_radio_off(_ClockSystem(), _SuspendableNetwork(), logger=logger, iterations=2)
+
+    assert logger.uplink == ["resume", "pause", "resume", "pause"]
+
+
+def test_log_uplink_stays_paused_when_reconnect_fails():
+    logger = _UplinkLogger()
+
+    _run_radio_off(_ClockSystem(), _SuspendableNetwork(fail_connect=True), logger=logger, iterations=2)
+
+    assert logger.uplink == ["resume", "pause", "pause", "pause"]
 
 
 def test_radio_off_sleep_not_used_in_development_mode():

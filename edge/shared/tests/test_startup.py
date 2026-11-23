@@ -106,6 +106,9 @@ class _FakeLogger:
     def flush(self, reason: str) -> None:
         self.events.append("flush:" + reason)
 
+    def pause_uplink(self) -> None:
+        self.events.append("pause_uplink")
+
 
 class _FakeBootManager:
     def __init__(self, events: list[str], state: dict[str, Any] | None = None):
@@ -319,7 +322,8 @@ def test_start_continues_offline_when_wifi_connect_fails():
 
     start(runtime)
 
-    assert events == ["mark_success", "flush:startup"]
+    # Log uploads stay paused offline, so the startup flush doesn't wait on the network.
+    assert events == ["pause_uplink", "mark_success", "flush:startup"]
     assert runtime.clock.sync_calls == 0
     assert "WiFi connection failed; continuing in offline mode" in runtime.logger.warns
     assert "Skipping registration and OTA check while offline" in runtime.logger.warns

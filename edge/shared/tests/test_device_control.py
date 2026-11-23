@@ -56,6 +56,36 @@ def test_report_dev_command_result_posts_to_templated_path():
     assert data["status"] == "success"
 
 
+STARTED_URL = "http://localhost:8000/api/devices/dev-commands/cmd-1/started"
+
+
+def test_start_dev_command_claims_command_on_server():
+    http = MockHttpClient()
+    http.add_json_response("POST", STARTED_URL, 202, {"command_id": "cmd-1", "status": "running"})
+    client = DeviceControlClient(http=http, config=_config())
+
+    assert client.start_dev_command("cmd-1") is True
+    method, url, _, headers = http.calls[0]
+    assert (method, url) == ("POST", STARTED_URL)
+    assert headers["X-Device-ID"] == "esp32-001"
+
+
+def test_start_dev_command_refuses_command_no_longer_pending():
+    http = MockHttpClient()
+    http.add_json_response("POST", STARTED_URL, 409, {"error": "not_pending"})
+    client = DeviceControlClient(http=http, config=_config())
+
+    assert client.start_dev_command("cmd-1") is False
+
+
+def test_start_dev_command_runs_against_server_without_endpoint():
+    http = MockHttpClient()
+    http.add_json_response("POST", STARTED_URL, 404, {})
+    client = DeviceControlClient(http=http, config=_config())
+
+    assert client.start_dev_command("cmd-1") is True
+
+
 def test_get_module_assignment_and_module_result_flow():
     http = MockHttpClient()
     client = DeviceControlClient(http=http, config=_config())

@@ -219,6 +219,10 @@ class ModuleRuntime:
             {"module_id": schedule.module_id, "version": schedule.version, "run_id": run_id, "entrypoint": schedule.entrypoint},
         )
 
+        # Only the module's own run counts towards its timeout: the flash write
+        # and log call above can block on I/O (a log flush while offline waits
+        # for a network timeout), which would otherwise reset a healthy module.
+        run_start_ms = start_ms
         try:
             entrypoint = self._load_entrypoint(schedule)
             context: "dict[str, Any]" = {
@@ -228,6 +232,7 @@ class ModuleRuntime:
                 "run_id": run_id,
                 "system": self._system,
             }
+            run_start_ms = self._system.time_ms()
             returned = entrypoint(context)
             output = self._normalize_output(returned)
         except Exception as exc:
@@ -237,7 +242,7 @@ class ModuleRuntime:
 
         finish_ms = self._system.time_ms()
         finish_utc = self._utc_now_iso()
-        elapsed_ms = max(0, self._system.ticks_diff(finish_ms, start_ms))
+        elapsed_ms = max(0, self._system.ticks_diff(finish_ms, run_start_ms))
 
         if status == "success" and elapsed_ms > schedule.timeout_ms:
             status = "timeout"

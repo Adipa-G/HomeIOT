@@ -221,6 +221,9 @@ def _connect_network(runtime: DeviceRuntime) -> None:
         else:
             logger.warn("NTP time sync failed; timestamps may be inaccurate")
     except Exception as exc:
+        # Hold log uploads until the control loop reconnects; a flush while
+        # offline blocks until the network times out.
+        logger.pause_uplink()
         logger.warn("WiFi connection failed; continuing in offline mode", {"error": str(exc)})
 
 

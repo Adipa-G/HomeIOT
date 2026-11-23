@@ -15,6 +15,7 @@ if TYPE_CHECKING:  # never true on a device; see edge/shared/hal/interfaces.py
 from edge.shared.app.endpoints import (
     DEV_COMMAND_NEXT_PATH,
     DEV_COMMAND_RESULT_PATH_TEMPLATE,
+    DEV_COMMAND_STARTED_PATH_TEMPLATE,
     MODULE_ASSIGNMENT_PATH,
     MODULE_PACKAGE_PATH,
     MODULE_PREFETCH_PATH,
@@ -47,6 +48,23 @@ class DeviceControlClient:
             self._log_warn("Dev command poll failed", {"status_code": response.status_code})
             return None
         return self._parse_json(response.text)
+
+    def start_dev_command(self, command_id: str) -> bool:
+        """Claim a command before running it, so the server stops handing it out.
+
+        Without this, a command that resets the device is fetched and run
+        again after every reboot. Returns False when the server says the
+        command is no longer pending, or the claim failed; don't run it then.
+        """
+        path = DEV_COMMAND_STARTED_PATH_TEMPLATE.replace("{commandId}", str(command_id))
+        response = self._http.post(self._config.api_url + path, {}, headers=self._auth_headers())
+        if response.status_code in (200, 201, 202):
+            return True
+        # An older server has no such endpoint; run the command as before.
+        if response.status_code == 404:
+            return True
+        self._log_warn("Dev command start rejected", {"command_id": command_id, "status_code": response.status_code})
+        return False
 
     def report_dev_command_result(self, command_id: str, payload: "dict[str, Any]") -> bool:
         path = DEV_COMMAND_RESULT_PATH_TEMPLATE.replace("{commandId}", str(command_id))

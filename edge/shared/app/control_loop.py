@@ -203,6 +203,7 @@ class _ControlLoop:
         self.connected = state["connected"]
         if self.network is None:
             return
+        _set_log_uplink(self.logger, self.connected)
         if self.connected:
             self.network_retry_interval_ms = self.network_retry_base_ms
             if state.get("reconnected"):
@@ -323,6 +324,16 @@ class _ControlLoop:
         self._feed_watchdog()
 
     def _run_dev_command(self, command: "dict[str, Any]") -> None:
+        command_id = command.get("command_id")
+        if command_id:
+            try:
+                started = self.device_control.start_dev_command(str(command_id))
+            except Exception as exc:
+                self.logger.warn("Dev command start threw exception", {"command_id": command_id, "error": str(exc)})
+                started = False
+            if not started:
+                # Not claimed, so not run: the next poll fetches it again or whatever replaced it.
+                return
         self.last_dev_revision_hash = command.get("revision_hash", self.last_dev_revision_hash)
         result = execute_dev_command(
             system=self.system,
@@ -377,6 +388,7 @@ class _ControlLoop:
             self.radio_off_sleep_enabled = False
             _sleep(self.system, self.watchdog, self.logger, sleep_ms, self.sleep_chunk_ms)
             return
+        _set_log_uplink(self.logger, False)
 
         stats = _light_sleep(self.system, self.watchdog, self.logger, sleep_ms, self.sleep_chunk_ms)
         self.logger.info(
@@ -556,6 +568,13 @@ def _flush_logs(logger: "Logger", reason: str) -> None:
         flush(reason)
     except Exception:
         pass
+
+
+def _set_log_uplink(logger: "Logger", online: bool) -> None:
+    """Hold log uploads while offline: a log flush then blocks until the network times out."""
+    toggle = getattr(logger, "resume_uplink" if online else "pause_uplink", None)  # EdgeLogger only
+    if callable(toggle):
+        toggle()
 
 
 def _maybe_sync_time(

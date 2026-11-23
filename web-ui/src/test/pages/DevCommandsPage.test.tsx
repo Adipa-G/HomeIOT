@@ -94,4 +94,33 @@ describe('DevCommandsPage', () => {
     });
     expect(screen.getByText('print("hello")')).toBeInTheDocument();
   });
+
+  it('shows a claimed command without a result as running, not failed', async () => {
+    const results = [
+      {
+        command_id: 'abcdefgh-1234-5678-9abc-def012345678',
+        code: 'import machine; machine.reset()',
+        status: 'running',
+        exit_code: 0,
+        elapsed_ms: 0,
+        started_at_utc: null,
+        finished_at_utc: null,
+        stdout: null,
+        stderr: null,
+        data: null,
+        received_at: '2026-05-30T12:00:00Z',
+      },
+    ];
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('devices')) return Promise.resolve(devicesResponse);
+      if (url.includes('results')) return Promise.resolve(results);
+      return Promise.resolve([]);
+    });
+    renderWithProviders(<DevCommandsPage />);
+
+    screen.getByText('Results').click();
+
+    const badge = await screen.findByText('running');
+    expect(badge.className).toContain('bg-yellow-100');
+  });
 });

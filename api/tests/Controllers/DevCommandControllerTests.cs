@@ -114,6 +114,55 @@ public class DevCommandControllerTests
         Assert.Equal(5000, payload.TimeoutMs);
     }
 
+    [Fact]
+    public void Started_PendingCommand_Returns202AndStopsRedelivery()
+    {
+        var queue = new DevCommandQueue();
+        const string deviceId = "pico-01";
+        var entry = queue.Enqueue(deviceId, "import machine; machine.reset()", null);
+        var controller = CreateController(queue, deviceId, "{}");
+
+        var result = controller.Started(entry.CommandId);
+
+        var accepted = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(202, accepted.StatusCode);
+        var payload = Assert.IsType<DevCommandStartedResponse>(accepted.Value);
+        Assert.Equal("running", payload.Status);
+        // After a reset the device polls again and must not get the same command back.
+        Assert.IsType<NoContentResult>(controller.GetNext(null));
+    }
+
+    [Fact]
+    public void Started_CommandNotPending_Returns409()
+    {
+        var queue = new DevCommandQueue();
+        var controller = CreateController(queue, "pico-01", "{}");
+
+        var result = controller.Started("unknown-command");
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.IsType<ErrorResponse>(conflict.Value);
+    }
+
+    [Fact]
+    public void ReportResult_AfterStarted_ReplacesRunningResultAndKeepsCode()
+    {
+        var queue = new DevCommandQueue();
+        const string deviceId = "pico-01";
+        var entry = queue.Enqueue(deviceId, "print('hi')", null);
+        var bodyJson = JsonSerializer.Serialize(new { status = "success", exit_code = 0, stdout = "hi" });
+        var controller = CreateController(queue, deviceId, bodyJson);
+        controller.Started(entry.CommandId);
+
+        controller.ReportResult(entry.CommandId, ParseBody(bodyJson));
+
+        var stored = queue.GetResult(entry.CommandId);
+        Assert.NotNull(stored);
+        Assert.Equal("success", stored.Status);
+        Assert.Equal("print('hi')", stored.Code);
+        Assert.Equal("hi", stored.Stdout);
+    }
+
     private static DevCommandController CreateController(IDevCommandQueue queue, string deviceId, string bodyJson)
     {
         var controller = new DevCommandController(queue)

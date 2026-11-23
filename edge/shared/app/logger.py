@@ -37,7 +37,7 @@ class EdgeLogger:
         self._uplink_paused = False
 
     def pause_uplink(self) -> None:
-        """Temporarily suppress uplink flushes (e.g. during OTA)."""
+        """Hold uplink flushes, e.g. while the network is down."""
         self._uplink_paused = True
 
     def resume_uplink(self) -> None:

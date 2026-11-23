@@ -41,6 +41,31 @@ public sealed class DevCommandQueue : IDevCommandQueue
             _pending.TryRemove(deviceId, out _);
     }
 
+    public bool Start(string deviceId, string commandId)
+    {
+        if (!_pending.TryGetValue(deviceId, out var entry) || entry.CommandId != commandId)
+            return false;
+        // Compare-and-remove, so a command queued in the meantime isn't dropped.
+        if (!_pending.TryRemove(new KeyValuePair<string, DevCommandEntry>(deviceId, entry)))
+            return false;
+
+        _results[commandId] = new DevCommandResultPayload(
+            CommandId: commandId,
+            Code: entry.Code,
+            RevisionHash: entry.RevisionHash,
+            DedupeToken: entry.DedupeToken,
+            Status: "running",
+            StartedAtUtc: null,
+            FinishedAtUtc: null,
+            ElapsedMs: 0,
+            ExitCode: 0,
+            Stdout: null,
+            Stderr: null,
+            Data: null,
+            ReceivedAt: DateTimeOffset.UtcNow);
+        return true;
+    }
+
     public void StoreResult(string commandId, DevCommandResultPayload result) =>
         _results[commandId] = result;
 

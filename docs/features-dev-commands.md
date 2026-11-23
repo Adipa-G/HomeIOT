@@ -149,11 +149,13 @@ When you queue a dev command:
 |------|-------|
 | **T+0s** | Command queued on server, status: `pending` |
 | **T+0-2s** | Device polls for pending commands (default: every 2 seconds) |
-| **T+2-5s** | Device fetches code and executes |
+| **T+2-5s** | Device claims the command (it leaves the pending queue and shows as `running`), then executes it |
 | **T+5-10s** | Device uploads result to server |
-| **T+10s+** | Result available in web UI, status: `completed` |
+| **T+10s+** | Result available in web UI, status: `success`, `error` or `timeout` |
 
 **Total latency:** Usually 5-10 seconds from queue to result.
+
+Each command runs at most once. The device claims it before running it, so a command that resets the device (for example `machine.reset()`) isn't delivered again after the reboot. Such a command stays `running` in the results because the device never reports back. If the claim fails (for example the network drops), the device doesn't run the command and fetches it again on the next poll.
 
 ---
 
@@ -166,7 +168,7 @@ Navigate to **Admin → Dev Commands** to see list of all commands:
 | Column | Description |
 |--------|-------------|
 | **Device** | Target device |
-| **Status** | `pending`, `executing`, `completed`, `failed` |
+| **Status** | `running` (claimed, no result yet), `success`, `error`, `timeout` |
 | **Queued At** | When you created command |
 | **Completed At** | When execution finished |
 
