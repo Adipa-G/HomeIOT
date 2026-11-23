@@ -634,6 +634,38 @@ def test_control_loop_applies_wifi_power_modes_by_mode_when_enabled():
     assert network.power_modes == ["modem"]
 
 
+def test_control_loop_reapplies_wifi_power_mode_after_reconnect():
+    class _DroppingPowerNetwork(_FakePowerNetwork):
+        def __init__(self):
+            super().__init__(connected=True)
+            self.checks = 0
+
+        def is_connected(self) -> bool:
+            self.checks += 1
+            if self.checks == 2:
+                self.connected = False
+            return self.connected
+
+    network = _DroppingPowerNetwork()
+    config = _config()
+    config.power.wifi_power_save_enabled = True
+    config.power.wifi_power_save_production_mode = "modem"
+
+    run_control_loop(
+        system=_FakeSystem(),
+        presence=_FakePresence({"mode": "production", "next_heartbeat_ms": 1000}),
+        device_control=_FakeDeviceControl(assignment=None),
+        module_runtime=_FakeModuleRuntime(),
+        logger=_FakeLogger(),
+        config=config,
+        network=network,
+        max_iterations=3,
+    )
+
+    assert network.connect_calls == 1
+    assert network.power_modes == ["modem", "modem"]
+
+
 def test_requested_network_power_mode_uses_development_override():
     config = _config()
     config.power.wifi_power_save_enabled = True

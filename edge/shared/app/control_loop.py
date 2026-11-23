@@ -205,6 +205,9 @@ class _ControlLoop:
             return
         if self.connected:
             self.network_retry_interval_ms = self.network_retry_base_ms
+            if state.get("reconnected"):
+                # A fresh join can change the radio's power-save mode.
+                self.last_applied_power_mode = None
         else:
             self.next_network_retry_ms = state["next_retry_ms"]
             self.network_retry_interval_ms = state["retry_interval_ms"]
@@ -519,6 +522,7 @@ def _ensure_network_connected(
         )
         return {
             "connected": True,
+            "reconnected": True,
             "next_retry_ms": now_ms,
             "retry_interval_ms": retry_base_ms,
         }

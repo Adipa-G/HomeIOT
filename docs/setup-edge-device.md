@@ -166,7 +166,7 @@ If the device booted without WiFi, its clock is unset (Pico boards start at 2021
 
 Light sleep on Pico boards pauses PWM output and wakes early on pin interrupts. Modules that drive PWM (e.g. a fan) hold their last output level during each sleep, and a pin IRQ left enabled after `run()` returns will wake the board repeatedly.
 
-On Pico W and Pico 2 W the WiFi chip is fully powered off (`WLAN.deinit()`) before sleeping, so each wake also reloads its firmware.
+On Pico W and Pico 2 W the WiFi chip is fully powered off (`WLAN.deinit()`) before sleeping, so each wake also reloads its firmware. Each join runs with power-save off (`PM_NONE`) for reliability, and the configured mode is applied once connected.
 
 `wifi_country` is a per-device setting like `wifi_ssid`. Each device uses the two-letter country code in its own `config.json`, which updates never overwrite. If none is set, it defaults to `AU`. The release `config.json` ships the placeholder `"replace-with-wifi-country"`. The country matters because with the worldwide default the radio only listens passively on channels 12–13, which makes cold reconnects slow or unreliable. If a join times out, the radio is powered down and the error includes the WiFi status code (e.g. `WiFi connection timed out (status=-2)`).
 

@@ -71,3 +71,41 @@ def test_connect_timeout_fully_powers_off_cyw43_chip() -> None:
 
     assert wlan.calls[-1] == "deinit"
     assert net._wlan is None
+
+
+class _JoiningCyw43Wlan(_FakeCyw43Wlan):
+    PM_NONE = 0x10
+    PM_PERFORMANCE = 0xA11142
+    PM_POWERSAVE = 0x11
+
+    def __init__(self, connected: bool = False):
+        super().__init__()
+        self.connected = connected
+
+    def isconnected(self) -> bool:
+        return self.connected
+
+    def config(self, **kwargs: object) -> None:
+        self.calls.append(("pm", kwargs["pm"] == self.PM_NONE))
+
+    def connect(self, ssid: str, password: str) -> None:
+        self.calls.append("connect")
+        self.connected = True
+
+
+def test_connect_joins_with_power_save_disabled() -> None:
+    wlan = _JoiningCyw43Wlan()
+    net = _make_network(wlan)
+
+    net.connect("ssid", "pass", timeout_ms=100)
+
+    assert wlan.calls == [("active", True), "disconnect", ("pm", True), "connect"]
+
+
+def test_connect_leaves_power_save_alone_when_already_connected() -> None:
+    wlan = _JoiningCyw43Wlan(connected=True)
+    net = _make_network(wlan)
+
+    net.connect("ssid", "pass", timeout_ms=100)
+
+    assert wlan.calls == [("active", True)]

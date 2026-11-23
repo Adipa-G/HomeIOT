@@ -55,6 +55,7 @@ class MicroPythonNetwork(INetwork):
         except Exception:
             pass
 
+        self._prepare_join()
         wlan.connect(ssid, password)
 
         import time as _time
@@ -71,6 +72,9 @@ class MicroPythonNetwork(INetwork):
                     pass
                 raise RuntimeError("WiFi connection timed out (status=" + str(status) + ")")
             self._sleep_ms(_time, 200)
+
+    def _prepare_join(self) -> None:
+        """Hook run after the radio is up and before each join attempt."""
 
     def set_country(self, country: str) -> bool:
         code = str(country or "").strip().upper()
